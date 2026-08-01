@@ -29,7 +29,7 @@ const Vehicles: React.FC = () => {
       setVehicleTypes(vtRes.data);
       setCustomers(cRes.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được danh sách phương tiện');
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,8 @@ const Vehicles: React.FC = () => {
       message.success('Xóa thành công');
       fetchData();
     } catch (err) {
-      message.error('Có lỗi xảy ra');
+      const error = err as AxiosError<{ message: string }>;
+      message.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
 

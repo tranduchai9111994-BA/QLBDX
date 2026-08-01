@@ -17,6 +17,8 @@ const CustomerPackages: React.FC = () => {
   const [editingPkg, setEditingPkg] = useState<CustomerPackage | null>(null);
   const [editForm] = Form.useForm();
   const [form] = Form.useForm<CustomerPackageForm>();
+  const selectedCustomerId = Form.useWatch('customerId', form);
+  const selectedVehicleId = Form.useWatch('vehicleId', form);
 
   const fetchData = async () => {
     setLoading(true);
@@ -32,13 +34,29 @@ const CustomerPackages: React.FC = () => {
       setPackages(pRes.data);
       setVehicles(vRes.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được dữ liệu gói dịch vụ khách hàng');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+    const selectedPackage = packages.find((pkg) => pkg.id === form.getFieldValue('packageId'));
+
+    if (selectedVehicle && selectedPackage && selectedVehicle.vehicleTypeId !== selectedPackage.vehicleTypeId) {
+      form.setFieldValue('packageId', undefined);
+    }
+  }, [selectedVehicleId, vehicles, packages, form]);
+
+  const filteredVehicles = vehicles.filter((vehicle) =>
+    (!selectedCustomerId || vehicle.customerId === selectedCustomerId)
+  );
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+  const filteredPackages = packages.filter((pkg) =>
+    !selectedVehicle || pkg.vehicleTypeId === selectedVehicle.vehicleTypeId
+  );
 
   const handleSubmit = async (values: CustomerPackageForm) => {
     try {
@@ -114,7 +132,7 @@ const CustomerPackages: React.FC = () => {
     { title: 'Phương tiện', key: 'vehiclePlate', render: (_: any, r: CustomerPackage) => r.vehicle?.licensePlate || '-' },
     { title: 'Bắt đầu', dataIndex: 'startDate', key: 'startDate', render: (d: string) => dayjs(d).format('DD/MM/YYYY') },
     { title: 'Kết thúc', dataIndex: 'endDate', key: 'endDate', render: (d: string) => dayjs(d).format('DD/MM/YYYY') },
-    { title: 'Trạng thái', dataIndex: 'status', key: 'status', render: (s: string) => s === 'active' ? <Tag className="chip-available">Hoạt động</Tag> : s === 'cancelled' ? <Tag color="red">Đã hủy</Tag> : <Tag>Hết hạn</Tag> },
+    { title: 'Trạng thái', dataIndex: 'status', key: 'status', render: (s: string) => s === 'active' ? <Tag className="chip-available">Hoạt động</Tag> : s === 'pending' ? <Tag color="gold">Chưa hiệu lực</Tag> : s === 'cancelled' ? <Tag color="red">Đã hủy</Tag> : <Tag>Hết hạn</Tag> },
     {
       title: 'Thao tác', key: 'action', width: 160, render: (_: any, r: CustomerPackage) => (
         <div style={{ display: 'flex', gap: 8 }}>
@@ -152,19 +170,23 @@ const CustomerPackages: React.FC = () => {
             <Select
               showSearch
               placeholder="Chọn khách hàng"
+              onChange={() => {
+                form.setFieldValue('vehicleId', undefined);
+                form.setFieldValue('packageId', undefined);
+              }}
               filterOption={(input, option) => String(option?.children).toLowerCase().includes(input.toLowerCase())}
             >
               {customers.map((c) => <Select.Option key={c.id} value={c.id}>{c.fullName} - {c.phone}</Select.Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="packageId" label="Gói dịch vụ" rules={[{ required: true, message: 'Vui lòng chọn gói' }]}>
-            <Select placeholder="Chọn gói">
-              {packages.map((p) => <Select.Option key={p.id} value={p.id}>{p.name} - {Number(p.price).toLocaleString()}đ</Select.Option>)}
+            <Select placeholder={selectedVehicle ? 'Chọn gói theo loại xe' : 'Chọn phương tiện trước để lọc gói'}>
+              {filteredPackages.map((p) => <Select.Option key={p.id} value={p.id}>{p.name} - {Number(p.price).toLocaleString()}đ</Select.Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="vehicleId" label="Phương tiện" rules={[{ required: true, message: 'Vui lòng chọn phương tiện' }]}>
             <Select showSearch placeholder="Chọn phương tiện" filterOption={(input, option) => String(option?.children).toLowerCase().includes(input.toLowerCase())}>
-              {vehicles.filter(v => !form.getFieldValue('customerId') || v.customerId === form.getFieldValue('customerId')).map((v) => <Select.Option key={v.id} value={v.id}>{v.licensePlate} - {v.customer?.fullName || ''}</Select.Option>)}
+              {filteredVehicles.map((v) => <Select.Option key={v.id} value={v.id}>{v.licensePlate} - {v.customer?.fullName || ''}</Select.Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="startDate" label="Ngày bắt đầu" rules={[{ required: true }]} initialValue={dayjs()}>
@@ -201,6 +223,7 @@ const CustomerPackages: React.FC = () => {
             <Form.Item name="status" label="Trạng thái" rules={[{ required: true }]}>
               <Select>
                 <Select.Option value="active">Hoạt động</Select.Option>
+                <Select.Option value="pending">Chưa hiệu lực</Select.Option>
                 <Select.Option value="expired">Hết hạn</Select.Option>
                 <Select.Option value="cancelled">Đã hủy</Select.Option>
               </Select>

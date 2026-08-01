@@ -87,9 +87,9 @@ const App: React.FC = () => {
               <Route path="parking-spots" element={<ParkingSpots />} />
               <Route path="packages" element={<Packages />} />
               <Route path="customer-packages" element={<CustomerPackages />} />
-              <Route path="payments" element={<Payments />} />
-              <Route path="users" element={<Users />} />
-              <Route path="reports" element={<Reports />} />
+              <Route path="payments" element={<AdminRoute><Payments /></AdminRoute>} />
+              <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
+              <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
               <Route path="profile" element={<Profile />} />
               <Route path="activity-logs" element={<AdminRoute><ActivityLogs /></AdminRoute>} />
             </Route>

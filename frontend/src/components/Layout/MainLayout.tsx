@@ -23,6 +23,7 @@ const MainLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isAdmin = user?.role === 'admin';
 
   const menuItems: MenuProps['items'] = [
     { key: '/', icon: <DashboardOutlined />, label: 'Tổng quan' },
@@ -49,10 +50,10 @@ const MainLayout: React.FC = () => {
         { key: '/customer-packages', label: 'Đăng ký gói' },
       ],
     },
-    { key: '/payments', icon: <DollarOutlined />, label: 'Thanh toán' },
-    { key: '/reports', icon: <BarChartOutlined />, label: 'Báo cáo' },
-    ...(user?.role === 'admin'
+    ...(isAdmin
       ? [
+          { key: '/payments', icon: <DollarOutlined />, label: 'Thanh toán' },
+          { key: '/reports', icon: <BarChartOutlined />, label: 'Báo cáo' },
           { key: '/users', icon: <SettingOutlined />, label: 'Người dùng' },
           { key: '/activity-logs', icon: <AuditOutlined />, label: 'Nhật ký hoạt động' },
         ]

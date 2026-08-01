@@ -45,11 +45,11 @@ CREATE TABLE Customers (
 -- =============================================
 CREATE TABLE VehicleTypes (
     Id INT IDENTITY(1,1) PRIMARY KEY,
-    Name NVARCHAR(50) NOT NULL,           -- Xe may, Oto, Xe tai...
+    Name NVARCHAR(50) NOT NULL,           -- Xe máy, Ô tô, Xe tải...
     Description NVARCHAR(200),
-    HourlyRate DECIMAL(10,2) NOT NULL,     -- Gia theo gio
-    DailyRate DECIMAL(10,2) NOT NULL,      -- Gia theo ngay
-    MonthlyRate DECIMAL(10,2) NOT NULL,    -- Gia theo thang
+    HourlyRate DECIMAL(10,2) NOT NULL,     -- Giá theo giờ
+    DailyRate DECIMAL(10,2) NOT NULL,      -- Giá theo ngày
+    MonthlyRate DECIMAL(10,2) NOT NULL,    -- Giá theo tháng
     CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
 
@@ -96,7 +96,7 @@ CREATE TABLE ParkingSpots (
 );
 
 -- =============================================
--- 7. Parking Packages (Ve thang, ve quy, ve nam)
+-- 7. Parking Packages (Vé tháng, vé quý, vé năm)
 -- =============================================
 CREATE TABLE ParkingPackages (
     Id INT IDENTITY(1,1) PRIMARY KEY,
@@ -111,7 +111,7 @@ CREATE TABLE ParkingPackages (
 );
 
 -- =============================================
--- 8. Customer Packages (Dang ky goi)
+-- 8. Customer Packages (Đăng ký gói)
 -- =============================================
 CREATE TABLE CustomerPackages (
     Id INT IDENTITY(1,1) PRIMARY KEY,
@@ -128,7 +128,7 @@ CREATE TABLE CustomerPackages (
 );
 
 -- =============================================
--- 9. Parking Records (Ghi nhan xe ra vao)
+-- 9. Parking Records (Ghi nhận xe ra vào)
 -- =============================================
 CREATE TABLE ParkingRecords (
     Id INT IDENTITY(1,1) PRIMARY KEY,
@@ -151,7 +151,7 @@ CREATE TABLE ParkingRecords (
 );
 
 -- =============================================
--- 10. Payments (Thanh toan)
+-- 10. Payments (Thanh toán)
 -- =============================================
 CREATE TABLE Payments (
     Id INT IDENTITY(1,1) PRIMARY KEY,
@@ -170,16 +170,16 @@ CREATE TABLE Payments (
 );
 
 -- =============================================
--- 11. User Activity Logs (Nhat ky hoat dong)
+-- 11. User Activity Logs (Nhật ký hoạt động)
 -- =============================================
 CREATE TABLE UserActivityLogs (
     Id INT IDENTITY(1,1) PRIMARY KEY,
-    UserId INT,                             -- NULL = chua dang nhap (dang nhap that bai)
+    UserId INT,                             -- NULL = chưa đăng nhập (đăng nhập thất bại)
     Username NVARCHAR(50) NOT NULL,
     Action NVARCHAR(30) NOT NULL,           -- LOGIN, LOGIN_FAILED, LOGOUT, CREATE, UPDATE, DELETE
     Entity NVARCHAR(50),                    -- Users, Customers, Vehicles, ParkingRecords...
-    EntityId INT,                           -- ID ban ghi bi tac dong
-    Details NVARCHAR(1000),                 -- Thong tin bo sung (JSON)
+    EntityId INT,                           -- ID bản ghi bị tác động
+    Details NVARCHAR(1000),                 -- Thông tin bổ sung (JSON)
     IpAddress NVARCHAR(50),
     StatusCode INT,
     CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),

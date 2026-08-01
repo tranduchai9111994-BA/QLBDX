@@ -40,7 +40,7 @@ export class UserController {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      const result = await userService.delete(Number(req.params.id));
+      const result = await userService.delete(Number(req.params.id), req.user!.id);
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

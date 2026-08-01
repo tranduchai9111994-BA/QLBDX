@@ -10,7 +10,7 @@ export const createCustomerPackageSchema = z.object({
 export const updateCustomerPackageSchema = z.object({
   customerId: z.number().int().positive().optional(),
   vehicleId: z.number().int().positive().optional(),
-  status: z.enum(['active', 'expired', 'cancelled']).optional(),
+  status: z.enum(['active', 'expired', 'pending', 'cancelled']).optional(),
 });
 
 export type CreateCustomerPackageInput = z.infer<typeof createCustomerPackageSchema>;

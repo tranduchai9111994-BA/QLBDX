@@ -19,12 +19,12 @@ export class AuthService {
     });
 
     if (!user) {
-      throw { status: 401, message: 'Ten dang nhap hoac mat khau khong dung' };
+      throw { status: 401, message: 'Tên đăng nhập hoặc mật khẩu không đúng' };
     }
 
     const isMatch = await bcrypt.compare(data.password, user.passwordHash);
     if (!isMatch) {
-      throw { status: 401, message: 'Ten dang nhap hoac mat khau khong dung' };
+      throw { status: 401, message: 'Tên đăng nhập hoặc mật khẩu không đúng' };
     }
 
     const token = jwt.sign(
@@ -51,7 +51,18 @@ export class AuthService {
     });
 
     if (existing) {
-      throw { status: 400, message: 'Ten dang nhap da ton tai' };
+      throw { status: 400, message: 'Tên đăng nhập đã tồn tại' };
+    }
+
+    if (data.email) {
+      const existingEmail = await prisma.user.findFirst({
+        where: { email: data.email },
+        select: { id: true },
+      });
+
+      if (existingEmail) {
+        throw { status: 400, message: 'Email đã được sử dụng' };
+      }
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -64,11 +75,11 @@ export class AuthService {
         fullName: data.fullName,
         email: data.email ?? null,
         phone: data.phone ?? null,
-        role: 'admin',
+        role: 'staff',
       },
     });
 
-    return { message: 'Tao tai khoan thanh cong' };
+    return { message: 'Tạo tài khoản nhân viên thành công' };
   }
 
   async getProfile(userId: number) {
@@ -85,7 +96,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw { status: 404, message: 'Khong tim thay nguoi dung' };
+      throw { status: 404, message: 'Không tìm thấy người dùng' };
     }
 
     return user;
@@ -102,7 +113,7 @@ export class AuthService {
     }
 
     await prisma.user.update({ where: { id: userId }, data: updateData });
-    return { message: 'Cap nhat thong tin thanh cong' };
+    return { message: 'Cập nhật thông tin thành công' };
   }
 }
 

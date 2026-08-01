@@ -1,18 +1,18 @@
 -- ============================================================
--- QLBDX - Quan Ly Bai Do Xe
--- Script tao database + du lieu mau (8/7/2026)
--- Yeu cau: SQL Server 2016+
--- Cach chay: Mo trong SSMS > nhan F5 (Execute)
+-- QLBDX - Quản Lý Bãi Đỗ Xe
+-- Script tạo database + dữ liệu mẫu (8/7/2026)
+-- Yêu cầu: SQL Server 2016+
+-- Cách chạy: Mở trong SSMS > nhấn F5 (Execute)
 -- ============================================================
 
--- 1. TAO DATABASE
+-- 1. TẠO DATABASE
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'ParkingManagement')
     CREATE DATABASE ParkingManagement;
 GO
 USE ParkingManagement;
 GO
 
--- 2. XOA BANG CU (neu co) - thu tu nguoc FK
+-- 2. XÓA BẢNG CŨ (nếu có) - thứ tự ngược FK
 IF OBJECT_ID('dbo.UserActivityLogs','U') IS NOT NULL DROP TABLE dbo.UserActivityLogs;
 IF OBJECT_ID('dbo.Payments','U') IS NOT NULL DROP TABLE dbo.Payments;
 IF OBJECT_ID('dbo.ParkingRecords','U') IS NOT NULL DROP TABLE dbo.ParkingRecords;
@@ -26,7 +26,7 @@ IF OBJECT_ID('dbo.Customers','U') IS NOT NULL DROP TABLE dbo.Customers;
 IF OBJECT_ID('dbo.Users','U') IS NOT NULL DROP TABLE dbo.Users;
 GO
 
--- 3. TAO BANG
+-- 3. TẠO BẢNG
 CREATE TABLE [dbo].[Users] ([Id] INT NOT NULL IDENTITY(1,1),[Username] NVARCHAR(50) NOT NULL,[PasswordHash] NVARCHAR(255) NOT NULL,[FullName] NVARCHAR(100) NOT NULL,[Email] NVARCHAR(100),[Phone] NVARCHAR(20),[Role] NVARCHAR(20) NOT NULL CONSTRAINT [Users_Role_df] DEFAULT 'staff',[IsActive] BIT NOT NULL CONSTRAINT [Users_IsActive_df] DEFAULT 1,[CreatedAt] DATETIME2 NOT NULL CONSTRAINT [Users_CreatedAt_df] DEFAULT CURRENT_TIMESTAMP,[UpdatedAt] DATETIME2 NOT NULL CONSTRAINT [Users_UpdatedAt_df] DEFAULT CURRENT_TIMESTAMP,CONSTRAINT [Users_pkey] PRIMARY KEY ([Id]),CONSTRAINT [Users_Username_key] UNIQUE ([Username]));
 CREATE TABLE [dbo].[Customers] ([Id] INT NOT NULL IDENTITY(1,1),[FullName] NVARCHAR(100) NOT NULL,[Phone] NVARCHAR(20) NOT NULL,[Email] NVARCHAR(100),[Address] NVARCHAR(255),[IdentityCard] NVARCHAR(20),[IsActive] BIT NOT NULL CONSTRAINT [Customers_IsActive_df] DEFAULT 1,[CreatedAt] DATETIME2 NOT NULL CONSTRAINT [Customers_CreatedAt_df] DEFAULT CURRENT_TIMESTAMP,[UpdatedAt] DATETIME2 NOT NULL CONSTRAINT [Customers_UpdatedAt_df] DEFAULT CURRENT_TIMESTAMP,CONSTRAINT [Customers_pkey] PRIMARY KEY ([Id]));
 CREATE TABLE [dbo].[VehicleTypes] ([Id] INT NOT NULL IDENTITY(1,1),[Name] NVARCHAR(50) NOT NULL,[Description] NVARCHAR(200),[HourlyRate] DECIMAL(10,2) NOT NULL,[DailyRate] DECIMAL(10,2) NOT NULL,[MonthlyRate] DECIMAL(10,2) NOT NULL,[CreatedAt] DATETIME2 NOT NULL CONSTRAINT [VehicleTypes_CreatedAt_df] DEFAULT CURRENT_TIMESTAMP,CONSTRAINT [VehicleTypes_pkey] PRIMARY KEY ([Id]));
@@ -59,36 +59,36 @@ ALTER TABLE dbo.UserActivityLogs ADD CONSTRAINT UAL_UserId_fkey FOREIGN KEY (Use
 GO
 
 -- ============================================================
--- 5. DU LIEU MAU
+-- 5. DỮ LIỆU MẪU
 -- ============================================================
 
 -- Users
 SET IDENTITY_INSERT dbo.Users ON;
-INSERT INTO dbo.Users(Id,Username,PasswordHash,FullName,Email,Phone,Role,IsActive,CreatedAt,UpdatedAt) VALUES(1,N'admin',N'$2a$10$W9be2UvbxGkO7BkL6GBtXucWKey0GkuZmagzcGm07hQupr6DUc7Su',N'Quan tri vien',N'admin@parking.com',NULL,N'admin',1,'2026-07-08 06:36:24','2026-07-08 06:36:24');
-INSERT INTO dbo.Users(Id,Username,PasswordHash,FullName,Email,Phone,Role,IsActive,CreatedAt,UpdatedAt) VALUES(2,N'nhanvien1',N'$2a$10$gUJssLEHgxa2/K.nTjqc6OMkXi48kEjcf81qh6yioXTD3EDQFkXge',N'Nguyen Van An',N'nv1@parking.com',NULL,N'staff',1,'2026-07-08 06:36:24','2026-07-08 06:36:24');
-INSERT INTO dbo.Users(Id,Username,PasswordHash,FullName,Email,Phone,Role,IsActive,CreatedAt,UpdatedAt) VALUES(3,N'nhanvien2',N'$2a$10$gUJssLEHgxa2/K.nTjqc6OMkXi48kEjcf81qh6yioXTD3EDQFkXge',N'Tran Thi Bich',N'nv2@parking.com',NULL,N'staff',1,'2026-07-08 06:36:24','2026-07-08 06:36:24');
+INSERT INTO dbo.Users(Id,Username,PasswordHash,FullName,Email,Phone,Role,IsActive,CreatedAt,UpdatedAt) VALUES(1,N'admin',N'$2a$10$W9be2UvbxGkO7BkL6GBtXucWKey0GkuZmagzcGm07hQupr6DUc7Su',N'Quản trị viên',N'admin@parking.com',NULL,N'admin',1,'2026-07-08 06:36:24','2026-07-08 06:36:24');
+INSERT INTO dbo.Users(Id,Username,PasswordHash,FullName,Email,Phone,Role,IsActive,CreatedAt,UpdatedAt) VALUES(2,N'nhanvien1',N'$2a$10$gUJssLEHgxa2/K.nTjqc6OMkXi48kEjcf81qh6yioXTD3EDQFkXge',N'Nguyễn Văn An',N'nv1@parking.com',NULL,N'staff',1,'2026-07-08 06:36:24','2026-07-08 06:36:24');
+INSERT INTO dbo.Users(Id,Username,PasswordHash,FullName,Email,Phone,Role,IsActive,CreatedAt,UpdatedAt) VALUES(3,N'nhanvien2',N'$2a$10$gUJssLEHgxa2/K.nTjqc6OMkXi48kEjcf81qh6yioXTD3EDQFkXge',N'Trần Thị Bích',N'nv2@parking.com',NULL,N'staff',1,'2026-07-08 06:36:24','2026-07-08 06:36:24');
 SET IDENTITY_INSERT dbo.Users OFF;
 GO
 
--- Loai xe
+-- Loại xe
 SET IDENTITY_INSERT dbo.VehicleTypes ON;
-INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(1,N'Xe may',N'Xe may, xe gan may',5000,20000,200000,'2026-07-08 06:36:24');
-INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(2,N'O to con',N'O to duoi 9 cho',20000,100000,1500000,'2026-07-08 06:36:24');
-INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(3,N'O to lon',N'O to 9 cho tro len, xe tai',30000,150000,2500000,'2026-07-08 06:36:24');
-INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(4,N'Xe dap',N'Xe dap cac loai',2000,10000,100000,'2026-07-08 06:36:24');
+INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(1,N'Xe máy',N'Xe máy, xe gắn máy',5000,20000,200000,'2026-07-08 06:36:24');
+INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(2,N'Ô tô con',N'Ô tô dưới 9 chỗ',20000,100000,1500000,'2026-07-08 06:36:24');
+INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(3,N'Ô tô lớn',N'Ô tô từ 9 chỗ trở lên, xe tải',30000,150000,2500000,'2026-07-08 06:36:24');
+INSERT INTO dbo.VehicleTypes(Id,Name,Description,HourlyRate,DailyRate,MonthlyRate,CreatedAt) VALUES(4,N'Xe đạp',N'Xe đạp các loại',2000,10000,100000,'2026-07-08 06:36:24');
 SET IDENTITY_INSERT dbo.VehicleTypes OFF;
 GO
 
--- Khu vuc
+-- Khu vực
 SET IDENTITY_INSERT dbo.ParkingZones ON;
-INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(1,N'Khu A',N'Khu vuc xe may',50,'2026-07-08 06:36:24');
-INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(2,N'Khu B',N'Khu vuc o to con',30,'2026-07-08 06:36:24');
-INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(3,N'Khu C',N'Khu vuc o to lon',20,'2026-07-08 06:36:24');
-INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(4,N'Khu D',N'Khu vuc VIP',10,'2026-07-08 06:36:24');
+INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(1,N'Khu A',N'Khu vực xe máy',50,'2026-07-08 06:36:24');
+INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(2,N'Khu B',N'Khu vực ô tô con',30,'2026-07-08 06:36:24');
+INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(3,N'Khu C',N'Khu vực ô tô lớn',20,'2026-07-08 06:36:24');
+INSERT INTO dbo.ParkingZones(Id,Name,Description,TotalSpots,CreatedAt) VALUES(4,N'Khu D',N'Khu vực VIP',10,'2026-07-08 06:36:24');
 SET IDENTITY_INSERT dbo.ParkingZones OFF;
 GO
 
--- Vi tri do xe (110 cho)
+-- Vị trí đỗ xe (110 chỗ)
 SET IDENTITY_INSERT dbo.ParkingSpots ON;
 INSERT INTO dbo.ParkingSpots(Id,ZoneId,SpotNumber,SpotType,Status,CreatedAt) VALUES(1,1,N'A01',N'standard',N'available','2026-07-08 06:36:24');
 INSERT INTO dbo.ParkingSpots(Id,ZoneId,SpotNumber,SpotType,Status,CreatedAt) VALUES(2,1,N'A02',N'standard',N'available','2026-07-08 06:36:24');
@@ -203,85 +203,85 @@ INSERT INTO dbo.ParkingSpots(Id,ZoneId,SpotNumber,SpotType,Status,CreatedAt) VAL
 SET IDENTITY_INSERT dbo.ParkingSpots OFF;
 GO
 
--- Goi ve
+-- Gói vé
 SET IDENTITY_INSERT dbo.ParkingPackages ON;
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(1,N'Ve thang xe may',1,30,200000,N'Goi gui xe may theo thang',1,'2026-07-08 06:36:25');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(2,N'Ve quy xe may',1,90,550000,N'Goi gui xe may theo quy',1,'2026-07-08 06:36:25');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(3,N'Ve nam xe may',1,365,2000000,N'Goi gui xe may theo nam',1,'2026-07-08 06:36:25');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(4,N'Ve thang o to con',2,30,1500000,N'Goi gui o to con theo thang',1,'2026-07-08 06:36:26');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(5,N'Ve quy o to con',2,90,4000000,N'Goi gui o to con theo quy',1,'2026-07-08 06:36:26');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(6,N'Ve nam o to con',2,365,15000000,N'Goi gui o to con theo nam',1,'2026-07-08 06:36:26');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(7,N'Ve thang o to lon',3,30,2500000,N'Goi gui o to lon theo thang',1,'2026-07-08 06:36:26');
-INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(8,N'Ve thang xe dap',4,30,100000,N'Goi gui xe dap theo thang',1,'2026-07-08 06:36:26');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(1,N'Vé tháng xe máy',1,30,200000,N'Gói gửi xe máy theo tháng',1,'2026-07-08 06:36:25');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(2,N'Vé quý xe máy',1,90,550000,N'Gói gửi xe máy theo quý',1,'2026-07-08 06:36:25');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(3,N'Vé năm xe máy',1,365,2000000,N'Gói gửi xe máy theo năm',1,'2026-07-08 06:36:25');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(4,N'Vé tháng ô tô con',2,30,1500000,N'Gói gửi ô tô con theo tháng',1,'2026-07-08 06:36:26');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(5,N'Vé quý ô tô con',2,90,4000000,N'Gói gửi ô tô con theo quý',1,'2026-07-08 06:36:26');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(6,N'Vé năm ô tô con',2,365,15000000,N'Gói gửi ô tô con theo năm',1,'2026-07-08 06:36:26');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(7,N'Vé tháng ô tô lớn',3,30,2500000,N'Gói gửi ô tô lớn theo tháng',1,'2026-07-08 06:36:26');
+INSERT INTO dbo.ParkingPackages(Id,Name,VehicleTypeId,DurationDays,Price,Description,IsActive,CreatedAt) VALUES(8,N'Vé tháng xe đạp',4,30,100000,N'Gói gửi xe đạp theo tháng',1,'2026-07-08 06:36:26');
 SET IDENTITY_INSERT dbo.ParkingPackages OFF;
 GO
 
--- Khach hang (25)
+-- Khách hàng (25)
 SET IDENTITY_INSERT dbo.Customers ON;
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(1,N'Nguyen Van Hung',N'0901234001',N'hung.nv@email.com',N'12 Ly Thuong Kiet, Q1',N'079201001234',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(2,N'Tran Thi Mai',N'0912345002',N'mai.tt@email.com',N'45 Nguyen Hue, Q1',N'079202002345',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(3,N'Le Van Duc',N'0923456003',N'duc.lv@email.com',N'78 Le Loi, Q1',N'079201003456',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(4,N'Pham Thi Lan',N'0934567004',N'lan.pt@email.com',N'90 Tran Hung Dao, Q5',N'079202004567',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(5,N'Hoang Van Minh',N'0945678005',N'minh.hv@email.com',N'23 Cach Mang Thang 8, Q3',N'079201005678',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(6,N'Nguyen Thi Hoa',N'0956789006',N'hoa.nt@email.com',N'56 Dien Bien Phu, BT',N'079202006789',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(7,N'Vo Van Long',N'0967890007',N'long.vv@email.com',N'34 Nguyen Dinh Chieu, Q3',N'079201007890',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(8,N'Dang Thi Thu',N'0978901008',N'thu.dt@email.com',N'67 Hai Ba Trung, Q1',N'079202008901',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(9,N'Bui Van Cuong',N'0989012009',N'cuong.bv@email.com',N'89 Pasteur, Q1',N'079201009012',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(10,N'Do Thi Nga',N'0990123010',N'nga.dt@email.com',N'12 Nam Ky Khoi Nghia, Q3',N'079202010123',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(11,N'Tran Van Khanh',N'0901234011',N'khanh.tv@email.com',N'45 Vo Van Tan, Q3',N'079201011234',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(12,N'Le Thi Phuong',N'0912345012',N'phuong.lt@email.com',N'78 Ba Thang Hai, Q10',N'079202012345',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(13,N'Phan Van Toan',N'0923456013',N'toan.pv@email.com',N'90 Ly Tu Trong, Q1',N'079201013456',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(14,N'Nguyen Thi Thuy',N'0934567014',N'thuy.nt@email.com',N'23 Nguyen Thi Minh Khai, Q1',N'079202014567',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(15,N'Cao Van Binh',N'0945678015',N'binh.cv@email.com',N'56 Truong Dinh, Q3',N'079201015678',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(16,N'Ly Thi Kim',N'0956789016',N'kim.lt@email.com',N'34 Pham Ngu Lao, Q1',N'079202016789',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(17,N'Nguyen Van Tung',N'0967890017',N'tung.nv2@email.com',N'67 Bui Vien, Q1',N'079201017890',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(18,N'Tran Thi Loan',N'0978901018',N'loan.tt@email.com',N'89 De Tham, Q1',N'079202018901',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(19,N'Dinh Van Nghia',N'0989012019',N'nghia.dv@email.com',N'12 Cong Quynh, Q1',N'079201019012',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(20,N'Vo Thi Xuan',N'0990123020',N'xuan.vt@email.com',N'45 Nguyen Cu Trinh, Q1',N'079202020123',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(21,N'Nguyen Hoang Nam',N'0901234021',N'nam.nh@email.com',N'78 Nguyen Trai, Q1',N'079201021234',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(22,N'Tran Van Quang',N'0912345022',N'quang.tv2@email.com',N'90 Ham Nghi, Q1',N'079201022345',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(23,N'Le Thi Dung',N'0923456023',N'dung.lt@email.com',N'23 Nguyen Huu Canh, BT',N'079202023456',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(24,N'Pham Van Loc',N'0934567024',N'loc.pv@email.com',N'56 Doan Van Bo, Q4',N'079201024567',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(25,N'Hoang Thi Nhung',N'0945678025',N'nhung.ht@email.com',N'34 Ton That Thuyet, Q4',N'079202025678',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(1,N'Nguyễn Văn Hùng',N'0901234001',N'hung.nv@email.com',N'12 Lý Thường Kiệt, Q1',N'079201001234',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(2,N'Trần Thị Mai',N'0912345002',N'mai.tt@email.com',N'45 Nguyễn Huệ, Q1',N'079202002345',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(3,N'Lê Văn Đức',N'0923456003',N'duc.lv@email.com',N'78 Lê Lợi, Q1',N'079201003456',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(4,N'Phạm Thị Lan',N'0934567004',N'lan.pt@email.com',N'90 Trần Hưng Đạo, Q5',N'079202004567',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(5,N'Hoàng Văn Minh',N'0945678005',N'minh.hv@email.com',N'23 Cách Mạng Tháng 8, Q3',N'079201005678',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(6,N'Nguyễn Thị Hoa',N'0956789006',N'hoa.nt@email.com',N'56 Điện Biên Phủ, BT',N'079202006789',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(7,N'Võ Văn Long',N'0967890007',N'long.vv@email.com',N'34 Nguyễn Đình Chiểu, Q3',N'079201007890',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(8,N'Đặng Thị Thu',N'0978901008',N'thu.dt@email.com',N'67 Hai Bà Trưng, Q1',N'079202008901',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(9,N'Bùi Văn Cường',N'0989012009',N'cuong.bv@email.com',N'89 Pasteur, Q1',N'079201009012',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(10,N'Đỗ Thị Nga',N'0990123010',N'nga.dt@email.com',N'12 Nam Kỳ Khởi Nghĩa, Q3',N'079202010123',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(11,N'Trần Văn Khánh',N'0901234011',N'khanh.tv@email.com',N'45 Võ Văn Tần, Q3',N'079201011234',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(12,N'Lê Thị Phương',N'0912345012',N'phuong.lt@email.com',N'78 Ba Tháng Hai, Q10',N'079202012345',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(13,N'Phan Văn Toàn',N'0923456013',N'toan.pv@email.com',N'90 Lý Tự Trọng, Q1',N'079201013456',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(14,N'Nguyễn Thị Thủy',N'0934567014',N'thuy.nt@email.com',N'23 Nguyễn Thị Minh Khai, Q1',N'079202014567',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(15,N'Cao Văn Bình',N'0945678015',N'binh.cv@email.com',N'56 Trương Định, Q3',N'079201015678',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(16,N'Lý Thị Kim',N'0956789016',N'kim.lt@email.com',N'34 Phạm Ngũ Lão, Q1',N'079202016789',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(17,N'Nguyễn Văn Tùng',N'0967890017',N'tung.nv2@email.com',N'67 Bùi Viện, Q1',N'079201017890',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(18,N'Trần Thị Loan',N'0978901018',N'loan.tt@email.com',N'89 Đề Thám, Q1',N'079202018901',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(19,N'Đinh Văn Nghĩa',N'0989012019',N'nghia.dv@email.com',N'12 Cống Quỳnh, Q1',N'079201019012',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(20,N'Võ Thị Xuân',N'0990123020',N'xuan.vt@email.com',N'45 Nguyễn Cư Trinh, Q1',N'079202020123',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(21,N'Nguyễn Hoàng Nam',N'0901234021',N'nam.nh@email.com',N'78 Nguyễn Trãi, Q1',N'079201021234',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(22,N'Trần Văn Quang',N'0912345022',N'quang.tv2@email.com',N'90 Hàm Nghi, Q1',N'079201022345',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(23,N'Lê Thị Dung',N'0923456023',N'dung.lt@email.com',N'23 Nguyễn Hữu Cảnh, BT',N'079202023456',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(24,N'Phạm Văn Lộc',N'0934567024',N'loc.pv@email.com',N'56 Đoàn Văn Bơ, Q4',N'079201024567',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Customers(Id,FullName,Phone,Email,Address,IdentityCard,IsActive,CreatedAt,UpdatedAt) VALUES(25,N'Hoàng Thị Nhung',N'0945678025',N'nhung.ht@email.com',N'34 Tôn Thất Thuyết, Q4',N'079202025678',1,'2026-07-08 06:36:26','2026-07-08 06:36:26');
 SET IDENTITY_INSERT dbo.Customers OFF;
 GO
 
 -- Xe (30)
 SET IDENTITY_INSERT dbo.Vehicles ON;
 INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(1,1,1,N'59B1-12345',N'Honda',N'Wave Alpha',N'Xanh','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(2,2,1,N'51G3-45678',N'Yamaha',N'Exciter',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(3,3,1,N'59P2-78901',N'Honda',N'Air Blade',N'Bac','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(4,4,1,N'51H4-23456',N'Honda',N'SH',N'Do','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(5,5,1,N'59N1-56789',N'Yamaha',N'Nouvo',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(2,2,1,N'51G3-45678',N'Yamaha',N'Exciter',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(3,3,1,N'59P2-78901',N'Honda',N'Air Blade',N'Bạc','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(4,4,1,N'51H4-23456',N'Honda',N'SH',N'Đỏ','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(5,5,1,N'59N1-56789',N'Yamaha',N'Nouvo',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
 INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(6,6,1,N'51K2-89012',N'Suzuki',N'Satria',N'Xanh','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(7,7,1,N'59C3-34567',N'Honda',N'Vision',N'Vang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(8,8,1,N'51D4-67890',N'Piaggio',N'Liberty',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(9,9,1,N'59E1-12340',N'Kymco',N'Like',N'Hong','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(10,10,1,N'51F2-45671',N'Honda',N'Lead',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(11,11,1,N'59L3-78902',N'Yamaha',N'Sirius',N'Do','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(12,12,1,N'51M4-23463',N'Honda',N'Future',N'Bac','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(7,7,1,N'59C3-34567',N'Honda',N'Vision',N'Vàng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(8,8,1,N'51D4-67890',N'Piaggio',N'Liberty',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(9,9,1,N'59E1-12340',N'Kymco',N'Like',N'Hồng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(10,10,1,N'51F2-45671',N'Honda',N'Lead',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(11,11,1,N'59L3-78902',N'Yamaha',N'Sirius',N'Đỏ','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(12,12,1,N'51M4-23463',N'Honda',N'Future',N'Bạc','2026-07-08 06:36:26','2026-07-08 06:36:26');
 INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(13,13,1,N'59R1-56784',N'Suzuki',N'Smash',N'Xanh','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(14,14,1,N'51S2-89015',N'Honda',N'Winner X',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(15,15,1,N'59T3-34566',N'Yamaha',N'Grande',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(16,1,2,N'51A-12345',N'Toyota',N'Vios',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(17,3,2,N'59A-23456',N'Honda',N'City',N'Bac','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(18,5,2,N'51B-34567',N'Mazda',N'CX-5',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(19,7,2,N'59B-45678',N'Hyundai',N'Accent',N'Do','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(20,9,2,N'51C-56789',N'Kia',N'Morning',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(21,16,2,N'59C-67890',N'Toyota',N'Fortuner',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(22,17,2,N'51D-78901',N'Ford',N'EcoSport',N'Bac','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(14,14,1,N'51S2-89015',N'Honda',N'Winner X',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(15,15,1,N'59T3-34566',N'Yamaha',N'Grande',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(16,1,2,N'51A-12345',N'Toyota',N'Vios',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(17,3,2,N'59A-23456',N'Honda',N'City',N'Bạc','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(18,5,2,N'51B-34567',N'Mazda',N'CX-5',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(19,7,2,N'59B-45678',N'Hyundai',N'Accent',N'Đỏ','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(20,9,2,N'51C-56789',N'Kia',N'Morning',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(21,16,2,N'59C-67890',N'Toyota',N'Fortuner',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(22,17,2,N'51D-78901',N'Ford',N'EcoSport',N'Bạc','2026-07-08 06:36:26','2026-07-08 06:36:26');
 INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(23,18,2,N'59D-89012',N'VinFast',N'VF8',N'Xanh','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(24,19,2,N'51E-90123',N'Mitsubishi',N'Xpander',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(25,20,2,N'59E-01234',N'Toyota',N'Camry',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(26,21,3,N'51FA-1234',N'Hyundai',N'County',N'Vang','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(27,22,3,N'59FA-2345',N'Toyota',N'Coaster',N'Trang','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(24,19,2,N'51E-90123',N'Mitsubishi',N'Xpander',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(25,20,2,N'59E-01234',N'Toyota',N'Camry',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(26,21,3,N'51FA-1234',N'Hyundai',N'County',N'Vàng','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(27,22,3,N'59FA-2345',N'Toyota',N'Coaster',N'Trắng','2026-07-08 06:36:26','2026-07-08 06:36:26');
 INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(28,23,3,N'51H-01234',N'Isuzu',N'NPR',N'Xanh','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(29,24,4,N'XD-001',N'Giant',N'ATX',N'Do','2026-07-08 06:36:26','2026-07-08 06:36:26');
-INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(30,25,4,N'XD-002',N'Trek',N'FX3',N'Den','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(29,24,4,N'XD-001',N'Giant',N'ATX',N'Đỏ','2026-07-08 06:36:26','2026-07-08 06:36:26');
+INSERT INTO dbo.Vehicles(Id,CustomerId,VehicleTypeId,LicensePlate,Brand,Model,Color,CreatedAt,UpdatedAt) VALUES(30,25,4,N'XD-002',N'Trek',N'FX3',N'Đen','2026-07-08 06:36:26','2026-07-08 06:36:26');
 SET IDENTITY_INSERT dbo.Vehicles OFF;
 GO
 
--- Goi ve khach hang (20)
+-- Gói vé khách hàng (20)
 SET IDENTITY_INSERT dbo.CustomerPackages ON;
 INSERT INTO dbo.CustomerPackages(Id,CustomerId,PackageId,VehicleId,StartDate,EndDate,Status,CreatedAt) VALUES(1,1,3,1,'2024-01-20 00:00:00','2025-01-19 00:00:00',N'expired','2024-01-20 06:36:30');
 INSERT INTO dbo.CustomerPackages(Id,CustomerId,PackageId,VehicleId,StartDate,EndDate,Status,CreatedAt) VALUES(2,1,5,16,'2025-01-14 00:00:00','2025-04-14 00:00:00',N'expired','2025-01-14 06:36:30');
@@ -306,7 +306,7 @@ INSERT INTO dbo.CustomerPackages(Id,CustomerId,PackageId,VehicleId,StartDate,End
 SET IDENTITY_INSERT dbo.CustomerPackages OFF;
 GO
 
--- Lich su do xe (1493 luot)
+-- Lịch sử đỗ xe (1493 lượt)
 SET IDENTITY_INSERT dbo.ParkingRecords ON;
 INSERT INTO dbo.ParkingRecords(Id,VehicleId,LicensePlate,VehicleTypeId,ParkingSpotId,EntryTime,ExitTime,Duration,Fee,Status,Notes,CreatedBy,CreatedAt) VALUES(1,17,N'59A-23456',2,53,'2024-01-29 04:51:00','2024-01-29 05:59:00',68,40000,N'completed',NULL,1,'2024-01-29 04:51:00');
 INSERT INTO dbo.ParkingRecords(Id,VehicleId,LicensePlate,VehicleTypeId,ParkingSpotId,EntryTime,ExitTime,Duration,Fee,Status,Notes,CreatedBy,CreatedAt) VALUES(2,6,N'51K2-89012',1,13,'2024-01-17 06:07:00','2024-01-17 09:31:00',204,20000,N'completed',NULL,3,'2024-01-17 06:07:00');
@@ -1811,7 +1811,7 @@ INSERT INTO dbo.ParkingRecords(Id,VehicleId,LicensePlate,VehicleTypeId,ParkingSp
 SET IDENTITY_INSERT dbo.ParkingRecords OFF;
 GO
 
--- Thanh toan (1259)
+-- Thanh toán (1259)
 SET IDENTITY_INSERT dbo.Payments ON;
 INSERT INTO dbo.Payments(Id,ParkingRecordId,CustomerPackageId,Amount,PaymentMethod,PaymentType,Status,PaidAt,CreatedBy,Notes) VALUES(1,1,NULL,40000,N'card',N'parking',N'completed','2024-01-29 05:59:00',1,NULL);
 INSERT INTO dbo.Payments(Id,ParkingRecordId,CustomerPackageId,Amount,PaymentMethod,PaymentType,Status,PaidAt,CreatedBy,Notes) VALUES(2,2,NULL,20000,N'cash',N'parking',N'completed','2024-01-17 09:31:00',1,NULL);
@@ -3083,13 +3083,13 @@ GO
 
 
 -- ============================================================
--- HOAN TAT: 3 users | 25 KH | 30 xe | 1493 luot do | 1259 GD
--- Tai khoan dang nhap:
---   admin      / admin123  (quan tri vien)
---   nhanvien1  / staff123  (nhan vien)
---   nhanvien2  / staff123  (nhan vien)
+-- HOÀN TẤT: 3 users | 25 KH | 30 xe | 1493 lượt đỗ | 1259 GD
+-- Tài khoản đăng nhập:
+--   admin      / admin123  (quản trị viên)
+--   nhanvien1  / staff123  (nhân viên)
+--   nhanvien2  / staff123  (nhân viên)
 -- ============================================================
-PRINT N'[OK] Database ParkingManagement da setup xong!';
-SELECT N'Tong records:' AS [Info], COUNT(*) AS [So luong] FROM dbo.ParkingRecords
-UNION ALL SELECT N'Tong thanh toan:', COUNT(*) FROM dbo.Payments
-UNION ALL SELECT N'Tong khach hang:', COUNT(*) FROM dbo.Customers;
+PRINT N'[OK] Database ParkingManagement đã setup xong!';
+SELECT N'Tổng records:' AS [Info], COUNT(*) AS [Số lượng] FROM dbo.ParkingRecords
+UNION ALL SELECT N'Tổng thanh toán:', COUNT(*) FROM dbo.Payments
+UNION ALL SELECT N'Tổng khách hàng:', COUNT(*) FROM dbo.Customers;

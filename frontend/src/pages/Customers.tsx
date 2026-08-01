@@ -19,7 +19,7 @@ const Customers: React.FC = () => {
       const res = await api.get<Customer[]>('/customers', { params: { search: searchTerm } });
       setCustomers(res.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được danh sách khách hàng');
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,8 @@ const Customers: React.FC = () => {
       message.success('Xóa thành công');
       fetchCustomers(search);
     } catch (err) {
-      message.error('Có lỗi xảy ra');
+      const error = err as AxiosError<{ message: string }>;
+      message.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
 
@@ -118,13 +119,13 @@ const Customers: React.FC = () => {
           <Form.Item name="fullName" label="Họ tên" rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="phone" label="Số điện thoại" rules={[{ required: true, message: 'Vui lòng nhập SĐT' }]}>
+          <Form.Item name="phone" label="Số điện thoại" rules={[{ required: true, message: 'Vui lòng nhập SĐT' }, { pattern: /^[0-9\s.+-]{8,15}$/, message: 'Số điện thoại không hợp lệ' }]}>
             <Input />
           </Form.Item>
           <Form.Item name="email" label="Email">
             <Input />
           </Form.Item>
-          <Form.Item name="identityCard" label="CMND/CCCD">
+          <Form.Item name="identityCard" label="CMND/CCCD" rules={[{ pattern: /^[0-9]{9,12}$/, message: 'CMND/CCCD phải gồm 9-12 chữ số' }]}>
             <Input />
           </Form.Item>
           <Form.Item name="address" label="Địa chỉ">

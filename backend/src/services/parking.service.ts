@@ -1,8 +1,41 @@
 import { Decimal } from '@prisma/client/runtime/library';
 import prisma from '../config/prisma';
 import { ParkingEntryInput, ParkingExitInput } from '../validators/parking.validator';
+import {
+  areLicensePlatesEqual,
+  isSpotCompatibleWithVehicleType,
+  normalizeLicensePlate,
+} from '../utils/businessRules';
 
 export class ParkingService {
+  private async findVehicleByNormalizedPlate(licensePlate: string) {
+    const normalizedPlate = normalizeLicensePlate(licensePlate);
+    const vehicles = await prisma.vehicle.findMany({
+      include: {
+        vehicleType: { select: { name: true } },
+      },
+    });
+
+    return vehicles.find((vehicle) => areLicensePlatesEqual(vehicle.licensePlate, normalizedPlate)) ?? null;
+  }
+
+  private async hasActivePackage(vehicleId: number) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const pkgCheck = await prisma.customerPackage.findFirst({
+      where: {
+        vehicleId,
+        status: { not: 'cancelled' },
+        startDate: { lte: today },
+        endDate: { gte: today },
+      },
+      orderBy: { endDate: 'asc' },
+    });
+
+    return !!pkgCheck;
+  }
+
   async findAll(status?: string) {
     return prisma.parkingRecord.findMany({
       where: {
@@ -30,59 +63,81 @@ export class ParkingService {
   }
 
   async entry(data: ParkingEntryInput, createdByUserId: number) {
+    const normalizedPlate = normalizeLicensePlate(data.licensePlate);
+
     // Check if vehicle is already parked
-    const alreadyParked = await prisma.parkingRecord.findFirst({
-      where: { licensePlate: data.licensePlate, status: 'parked' },
+    const parkedRecords = await prisma.parkingRecord.findMany({
+      where: { status: 'parked' },
+      select: { id: true, licensePlate: true },
     });
+    const alreadyParked = parkedRecords.find((record) => areLicensePlatesEqual(record.licensePlate, normalizedPlate));
 
     if (alreadyParked) {
       throw { status: 400, message: 'Xe này đang đỗ trong bãi' };
     }
 
-    // Check if the entire lot is full (has spots configured but none available)
-    const [totalSpots, availableSpots] = await Promise.all([
-      prisma.parkingSpot.count(),
-      prisma.parkingSpot.count({ where: { status: 'available' } }),
+    const [vehicle, requestedVehicleType, selectedSpot, availableSpots] = await Promise.all([
+      this.findVehicleByNormalizedPlate(normalizedPlate),
+      prisma.vehicleType.findUnique({
+        where: { id: data.vehicleTypeId },
+        select: { id: true, name: true },
+      }),
+      prisma.parkingSpot.findUnique({
+        where: { id: data.parkingSpotId },
+        include: {
+          zone: {
+            select: { name: true, description: true },
+          },
+        },
+      }),
+      prisma.parkingSpot.findMany({
+        where: { status: 'available' },
+        include: {
+          zone: {
+            select: { name: true, description: true },
+          },
+        },
+      }),
     ]);
 
-    if (totalSpots > 0 && availableSpots === 0) {
-      throw { status: 400, message: 'Bãi đỗ xe đã đầy, không thể nhận thêm xe' };
+    if (!requestedVehicleType) {
+      throw { status: 400, message: 'Loại xe không tồn tại' };
     }
 
-    // If a specific spot was requested, verify it is still available
-    if (data.parkingSpotId) {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: data.parkingSpotId },
-        select: { status: true, spotNumber: true },
-      });
-      if (!spot || spot.status !== 'available') {
-        throw { status: 400, message: `Chỗ đỗ này đã được sử dụng hoặc không khả dụng` };
-      }
+    const effectiveVehicleTypeId = vehicle?.vehicleTypeId ?? data.vehicleTypeId;
+    const effectiveVehicleTypeName = vehicle?.vehicleType.name ?? requestedVehicleType.name;
+    const compatibleAvailableSpots = availableSpots.filter((spot) =>
+      isSpotCompatibleWithVehicleType(spot, effectiveVehicleTypeName)
+    );
+
+    if (compatibleAvailableSpots.length === 0) {
+      throw { status: 400, message: `Đã hết chỗ đỗ phù hợp cho loại xe ${effectiveVehicleTypeName}` };
     }
 
-    // Check if vehicle exists in system
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { licensePlate: data.licensePlate },
-    });
+    if (!selectedSpot || selectedSpot.status !== 'available') {
+      throw { status: 400, message: 'Chỗ đỗ đã được sử dụng hoặc không khả dụng' };
+    }
+
+    if (!isSpotCompatibleWithVehicleType(selectedSpot, effectiveVehicleTypeName)) {
+      throw { status: 400, message: `Chỗ đỗ đã chọn không phù hợp với loại xe ${effectiveVehicleTypeName}` };
+    }
 
     const record = await prisma.parkingRecord.create({
       data: {
         vehicleId: vehicle?.id ?? null,
-        licensePlate: data.licensePlate,
-        vehicleTypeId: data.vehicleTypeId,
-        parkingSpotId: data.parkingSpotId ?? null,
+        licensePlate: normalizedPlate,
+        vehicleTypeId: effectiveVehicleTypeId,
+        parkingSpotId: data.parkingSpotId,
         notes: data.notes ?? null,
         createdBy: createdByUserId,
       },
     });
 
     // Update parking spot status
-    if (data.parkingSpotId) {
-      await prisma.parkingSpot.update({
-        where: { id: data.parkingSpotId },
-        data: { status: 'occupied' },
-      });
-    }
+    await prisma.parkingSpot.update({
+      where: { id: data.parkingSpotId },
+      data: { status: 'occupied' },
+    });
 
     return { message: 'Ghi nhận xe vào thành công', id: record.id };
   }
@@ -110,18 +165,7 @@ export class ParkingService {
     let hasPackage = false;
 
     if (record.vehicleId) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const pkgCheck = await prisma.customerPackage.findFirst({
-        where: {
-          vehicleId: record.vehicleId,
-          status: 'active',
-          startDate: { lte: today },
-          endDate: { gte: today },
-        },
-      });
-      hasPackage = !!pkgCheck;
+      hasPackage = await this.hasActivePackage(record.vehicleId);
     }
 
     if (!hasPackage) {
@@ -209,7 +253,7 @@ export class ParkingService {
       const pkgCheck = await prisma.customerPackage.findFirst({
         where: {
           vehicleId: record.vehicleId,
-          status: 'active',
+          status: { not: 'cancelled' },
           startDate: { lte: today },
           endDate: { gte: today },
         },

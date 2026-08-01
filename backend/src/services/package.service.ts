@@ -13,6 +13,29 @@ export class PackageService {
   }
 
   async create(data: CreatePackageInput) {
+    const [vehicleType, duplicatePackage] = await Promise.all([
+      prisma.vehicleType.findUnique({
+        where: { id: data.vehicleTypeId },
+        select: { id: true },
+      }),
+      prisma.parkingPackage.findFirst({
+        where: {
+          name: data.name,
+          vehicleTypeId: data.vehicleTypeId,
+          isActive: true,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!vehicleType) {
+      throw { status: 400, message: 'Loại xe không tồn tại' };
+    }
+
+    if (duplicatePackage) {
+      throw { status: 400, message: 'Gói dịch vụ cùng tên cho loại xe này đã tồn tại' };
+    }
+
     const pkg = await prisma.parkingPackage.create({
       data: {
         name: data.name,
@@ -27,6 +50,45 @@ export class PackageService {
   }
 
   async update(id: number, data: UpdatePackageInput) {
+    const [pkg, vehicleType, duplicatePackage, packageUsage] = await Promise.all([
+      prisma.parkingPackage.findUnique({
+        where: { id },
+        select: { id: true, vehicleTypeId: true },
+      }),
+      prisma.vehicleType.findUnique({
+        where: { id: data.vehicleTypeId },
+        select: { id: true },
+      }),
+      prisma.parkingPackage.findFirst({
+        where: {
+          name: data.name,
+          vehicleTypeId: data.vehicleTypeId,
+          NOT: { id },
+        },
+        select: { id: true },
+      }),
+      prisma.customerPackage.findFirst({
+        where: { packageId: id },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!pkg) {
+      throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
+    }
+
+    if (!vehicleType) {
+      throw { status: 400, message: 'Loại xe không tồn tại' };
+    }
+
+    if (duplicatePackage) {
+      throw { status: 400, message: 'Gói dịch vụ cùng tên cho loại xe này đã tồn tại' };
+    }
+
+    if (packageUsage && pkg.vehicleTypeId !== data.vehicleTypeId) {
+      throw { status: 400, message: 'Gói đã được đăng ký, không thể đổi loại xe của gói' };
+    }
+
     await prisma.parkingPackage.update({
       where: { id },
       data: {
@@ -43,20 +105,23 @@ export class PackageService {
   }
 
   async delete(id: number) {
-    // Gỡ liên kết customer packages và payments trước
-    const customerPkgs = await prisma.customerPackage.findMany({
-      where: { packageId: id },
-      select: { id: true },
-    });
-
-    if (customerPkgs.length > 0) {
-      const cpIds = customerPkgs.map(cp => cp.id);
-      await prisma.payment.deleteMany({
-        where: { customerPackageId: { in: cpIds } },
-      });
-      await prisma.customerPackage.deleteMany({
+    const [pkg, customerPackageUsage] = await Promise.all([
+      prisma.parkingPackage.findUnique({
+        where: { id },
+        select: { id: true, isActive: true },
+      }),
+      prisma.customerPackage.findFirst({
         where: { packageId: id },
-      });
+        select: { id: true },
+      }),
+    ]);
+
+    if (!pkg) {
+      throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
+    }
+
+    if (customerPackageUsage) {
+      throw { status: 400, message: 'Gói đã phát sinh đăng ký/thanh toán, hãy chuyển sang ngừng áp dụng thay vì xóa' };
     }
 
     await prisma.parkingPackage.delete({

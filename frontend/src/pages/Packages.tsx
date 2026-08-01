@@ -23,7 +23,7 @@ const Packages: React.FC = () => {
       setPackages(pRes.data);
       setVehicleTypes(vtRes.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được danh sách gói dịch vụ');
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ const Packages: React.FC = () => {
   const handleDelete = (id: number) => {
     Modal.confirm({
       title: 'Xác nhận xóa',
-      content: 'Xóa gói sẽ xóa luôn các đăng ký và thanh toán liên quan. Bạn có chắc?',
+      content: 'Nếu gói đã được sử dụng, hệ thống sẽ chặn xóa và yêu cầu ngừng áp dụng thay vì xóa cứng.',
       okText: 'Xóa',
       cancelText: 'Hủy',
       okButtonProps: { danger: true },

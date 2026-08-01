@@ -5,7 +5,7 @@ const licensePlateRegex = /^\d{2}[A-Z]\d{4,5}$/;
 export const parkingEntrySchema = z.object({
   licensePlate: z.string().min(1, 'Vui lòng nhập biển số xe').regex(licensePlateRegex, 'Biển số không đúng định dạng (VD: 29A87642)'),
   vehicleTypeId: z.number().int().positive('Vui lòng chọn loại xe'),
-  parkingSpotId: z.number().int().positive().optional().nullable(),
+  parkingSpotId: z.number().int().positive('Vui lòng chọn chỗ đỗ'),
   notes: z.string().optional().nullable(),
 });
 

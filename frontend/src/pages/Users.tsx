@@ -20,7 +20,7 @@ const Users: React.FC = () => {
       const res = await api.get<User[]>('/users');
       setUsers(res.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được danh sách người dùng');
     } finally {
       setLoading(false);
     }
@@ -62,7 +62,7 @@ const Users: React.FC = () => {
   const handleDelete = (id: number) => {
     Modal.confirm({
       title: 'Xác nhận xóa',
-      content: 'Bạn có chắc muốn xóa người dùng này?',
+      content: 'Nếu người dùng đã phát sinh dữ liệu, hệ thống sẽ chuyển sang ngừng hoạt động thay vì xóa cứng.',
       okText: 'Xóa',
       cancelText: 'Hủy',
       onOk: async () => {

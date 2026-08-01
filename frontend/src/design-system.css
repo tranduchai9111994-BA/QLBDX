@@ -466,7 +466,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 3px;
+  width: 4px;
   height: 100%;
   background: var(--primary);
   border-radius: 0 2px 2px 0;
@@ -480,9 +480,18 @@ body {
 .stat-card.stat-error::after { background: var(--error); }
 .stat-card.stat-info::after { background: var(--info); }
 
+.stat-card .ant-statistic-title {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant) !important;
+  margin-bottom: var(--spacing-sm) !important;
+}
+
 /* Chart card */
 .chart-card .ant-card-head-title {
-  font-size: 0.85rem !important;
+  font-size: 0.9rem !important;
   font-weight: 600;
 }
 

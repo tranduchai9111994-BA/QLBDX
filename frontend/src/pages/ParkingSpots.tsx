@@ -46,7 +46,7 @@ const ParkingSpots: React.FC = () => {
       setSpots(sRes.data);
       setZones(zRes.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được dữ liệu bãi đỗ xe');
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,7 @@ const ParkingSpots: React.FC = () => {
   const handleDeleteZone = (id: number) => {
     Modal.confirm({
       title: 'Xác nhận xóa khu vực',
-      content: 'Xóa khu vực sẽ xóa tất cả chỗ đỗ bên trong. Bạn có chắc?',
+      content: 'Nếu khu vực còn chỗ đỗ hoặc đã phát sinh lịch sử gửi xe, hệ thống sẽ chặn xóa để bảo toàn dữ liệu.',
       okText: 'Xóa',
       cancelText: 'Hủy',
       okButtonProps: { danger: true },
@@ -142,7 +142,7 @@ const ParkingSpots: React.FC = () => {
   const handleDeleteSpot = (id: number) => {
     Modal.confirm({
       title: 'Xác nhận xóa chỗ đỗ',
-      content: 'Bạn có chắc muốn xóa chỗ đỗ này?',
+      content: 'Nếu chỗ đỗ đang được dùng hoặc đã có lịch sử, hệ thống sẽ chặn xóa.',
       okText: 'Xóa',
       cancelText: 'Hủy',
       okButtonProps: { danger: true },

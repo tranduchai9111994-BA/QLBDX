@@ -1,38 +1,97 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Form, Input, Select, Button, Card, message, Row, Col, Tag, Table, Alert } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { VehicleType, ParkingSpot, Vehicle, ParkingEntryForm, ParkingRecord, PackageCheckResult } from '../types';
 
+const normalizeText = (value?: string) =>
+  (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const getVehicleCategory = (vehicleTypeName?: string) => {
+  const normalized = normalizeText(vehicleTypeName);
+  if (normalized.includes('xe may') || normalized.includes('xe dap') || normalized.includes('motor') || normalized.includes('bicycle')) {
+    return 'two-wheel';
+  }
+  if (normalized.includes('o to lon') || normalized.includes('xe tai') || normalized.includes('bus')) {
+    return 'large-car';
+  }
+  if (normalized.includes('o to') || normalized.includes('car')) {
+    return 'car';
+  }
+  return 'any';
+};
+
+const getSpotCategory = (spot: ParkingSpot) => {
+  const normalized = normalizeText(`${spot.zone?.name || ''} ${spot.spotNumber} ${spot.spotType}`);
+  if (normalized.includes('vip') || normalized.startsWith('d')) return 'any';
+  if (normalized.includes('xe may') || normalized.startsWith('a')) return 'two-wheel';
+  if (normalized.includes('o to lon') || normalized.startsWith('c')) return 'large-car';
+  if (normalized.includes('o to') || normalized.startsWith('b')) return 'car';
+  return 'any';
+};
+
+const isSpotCompatible = (spot: ParkingSpot, vehicleTypeName?: string) => {
+  const spotCategory = getSpotCategory(spot);
+  const vehicleCategory = getVehicleCategory(vehicleTypeName);
+  return spotCategory === 'any' || vehicleCategory === 'any' || spotCategory === vehicleCategory;
+};
+
 const ParkingEntry: React.FC = () => {
   const [form] = Form.useForm<ParkingEntryForm>();
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
-  const [totalSpots, setTotalSpots] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [vehicleInfo, setVehicleInfo] = useState<Vehicle | null>(null);
   const [packageCheck, setPackageCheck] = useState<PackageCheckResult | null>(null);
   const [parkedRecords, setParkedRecords] = useState<ParkingRecord[]>([]);
+  const selectedVehicleTypeId = Form.useWatch('vehicleTypeId', form);
 
   const fetchData = async () => {
     try {
-      const [vtRes, spRes, allSpRes, prRes] = await Promise.all([
+      const [vtRes, spRes, prRes] = await Promise.all([
         api.get<VehicleType[]>('/vehicle-types'),
-        api.get<ParkingSpot[]>('/parking-spots', { params: { status: 'available' } }),
         api.get<ParkingSpot[]>('/parking-spots'),
         api.get<ParkingRecord[]>('/parking', { params: { status: 'parked' } }),
       ]);
       setVehicleTypes(vtRes.data);
       setSpots(spRes.data);
-      setTotalSpots(allSpRes.data.length);
       setParkedRecords(prRes.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được dữ liệu chỗ đỗ');
     }
   };
 
   useEffect(() => { fetchData(); }, []);
+  const selectedVehicleTypeName = useMemo(
+    () => vehicleInfo?.vehicleType?.name || vehicleTypes.find((type) => type.id === selectedVehicleTypeId)?.name,
+    [selectedVehicleTypeId, vehicleInfo, vehicleTypes]
+  );
+
+  const availableSpots = useMemo(
+    () => spots.filter((spot) => spot.status === 'available'),
+    [spots]
+  );
+
+  const compatibleAvailableSpots = useMemo(
+    () => availableSpots.filter((spot) => isSpotCompatible(spot, selectedVehicleTypeName)),
+    [availableSpots, selectedVehicleTypeName]
+  );
+
+  const compatibleTotalSpots = useMemo(
+    () => spots.filter((spot) => isSpotCompatible(spot, selectedVehicleTypeName)).length,
+    [spots, selectedVehicleTypeName]
+  );
+
+  useEffect(() => {
+    const currentSpotId = form.getFieldValue('parkingSpotId');
+    if (currentSpotId && !compatibleAvailableSpots.some((spot) => spot.id === currentSpotId)) {
+      form.setFieldValue('parkingSpotId', undefined);
+    }
+  }, [compatibleAvailableSpots, form]);
 
   const normalizePlate = (val: string) => val.replace(/[-\s.]/g, '').toUpperCase();
 
@@ -76,8 +135,10 @@ const ParkingEntry: React.FC = () => {
     }
   };
 
-  const zoneGroups = Array.from(new Set(spots.map(s => s.zone?.name))).filter(Boolean);
-  const isFull = totalSpots > 0 && spots.length === 0;
+  const zoneGroups = Array.from(new Set(compatibleAvailableSpots.map(s => s.zone?.name))).filter(Boolean);
+  const currentAvailableCount = compatibleAvailableSpots.length;
+  const currentTotalCount = compatibleTotalSpots || spots.length;
+  const isFull = currentTotalCount > 0 && currentAvailableCount === 0;
 
   const parkedColumns = [
     { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', render: (t: string) => <Tag className="plate-tag">{t}</Tag> },
@@ -103,8 +164,12 @@ const ParkingEntry: React.FC = () => {
           type="error"
           showIcon
           icon={<WarningOutlined />}
-          message="Bãi đỗ xe đã đầy"
-          description={`Tất cả ${totalSpots} ô đậu đều đang được sử dụng. Không thể nhận thêm xe cho đến khi có xe ra.`}
+          message={selectedVehicleTypeName ? `Đã hết chỗ phù hợp cho ${selectedVehicleTypeName}` : 'Bãi đỗ xe đã đầy'}
+          description={
+            selectedVehicleTypeName
+              ? `Hiện không còn ô đậu phù hợp cho ${selectedVehicleTypeName}. Vui lòng chờ có xe ra hoặc chọn lại loại xe đúng với biển số đã đăng ký.`
+              : 'Hiện không còn ô đậu trống để nhận thêm xe.'
+          }
           style={{ marginBottom: 20, borderRadius: 8 }}
         />
       )}
@@ -133,10 +198,11 @@ const ParkingEntry: React.FC = () => {
                   ))}
                 </Select>
               </Form.Item>
-              <Form.Item label="Chỗ đỗ" name="parkingSpotId">
-                <Select placeholder="Chọn chỗ đỗ (tùy chọn)" allowClear showSearch
+              <Form.Item label="Chỗ đỗ" name="parkingSpotId" rules={[{ required: true, message: 'Vui lòng chọn chỗ đỗ' }]}>
+                <Select placeholder={selectedVehicleTypeName ? `Chọn chỗ đỗ cho ${selectedVehicleTypeName}` : 'Chọn loại xe trước rồi chọn chỗ đỗ'} showSearch
+                  disabled={!selectedVehicleTypeId || compatibleAvailableSpots.length === 0}
                   filterOption={(input, option) => String(option?.children).toLowerCase().includes(input.toLowerCase())}>
-                  {spots.map((s) => (
+                  {compatibleAvailableSpots.map((s) => (
                     <Select.Option key={s.id} value={s.id}>{s.zone?.name} — {s.spotNumber}</Select.Option>
                   ))}
                 </Select>
@@ -177,17 +243,17 @@ const ParkingEntry: React.FC = () => {
             <div style={{
               fontSize: '2rem',
               fontWeight: 700,
-              color: isFull ? 'var(--error)' : spots.length <= Math.ceil(totalSpots * 0.1) ? 'var(--warning)' : 'var(--primary)',
+              color: isFull ? 'var(--error)' : currentAvailableCount <= Math.ceil(currentTotalCount * 0.1) ? 'var(--warning)' : 'var(--primary)',
               marginBottom: 16,
             }}>
-              {spots.length}
+              {currentAvailableCount}
               <span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--on-surface-variant)', marginLeft: 8 }}>
-                / {totalSpots}
+                / {currentTotalCount}
               </span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {zoneGroups.map(zone => (
-                <Tag key={zone} className="chip-available" style={{ borderRadius: 9999 }}>{zone}: {spots.filter(s => s.zone?.name === zone).length}</Tag>
+                <Tag key={zone} className="chip-available" style={{ borderRadius: 9999 }}>{zone}: {compatibleAvailableSpots.filter(s => s.zone?.name === zone).length}</Tag>
               ))}
             </div>
           </Card>

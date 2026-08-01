@@ -27,6 +27,15 @@ export class ParkingZoneService {
   }
 
   async create(data: CreateParkingZoneInput) {
+    const existingZone = await prisma.parkingZone.findFirst({
+      where: { name: data.name },
+      select: { id: true },
+    });
+
+    if (existingZone) {
+      throw { status: 400, message: 'Tên khu vực đã tồn tại' };
+    }
+
     const zone = await prisma.parkingZone.create({
       data: {
         name: data.name,
@@ -38,6 +47,28 @@ export class ParkingZoneService {
   }
 
   async update(id: number, data: UpdateParkingZoneInput) {
+    const [zone, duplicateZone] = await Promise.all([
+      prisma.parkingZone.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+      prisma.parkingZone.findFirst({
+        where: {
+          name: data.name,
+          NOT: { id },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!zone) {
+      throw { status: 404, message: 'Không tìm thấy khu vực' };
+    }
+
+    if (duplicateZone) {
+      throw { status: 400, message: 'Tên khu vực đã tồn tại' };
+    }
+
     await prisma.parkingZone.update({
       where: { id },
       data: {
@@ -50,23 +81,41 @@ export class ParkingZoneService {
   }
 
   async delete(id: number) {
-    // Gỡ liên kết parking records với các spots trong zone
-    const spotIds = await prisma.parkingSpot.findMany({
-      where: { zoneId: id },
-      select: { id: true },
-    });
+    const [zone, spotsInZone, occupiedSpot, historyUsage] = await Promise.all([
+      prisma.parkingZone.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+      prisma.parkingSpot.count({
+        where: { zoneId: id },
+      }),
+      prisma.parkingSpot.findFirst({
+        where: { zoneId: id, status: 'occupied' },
+        select: { id: true },
+      }),
+      prisma.parkingRecord.findFirst({
+        where: {
+          parkingSpot: { zoneId: id },
+        },
+        select: { id: true },
+      }),
+    ]);
 
-    if (spotIds.length > 0) {
-      await prisma.parkingRecord.updateMany({
-        where: { parkingSpotId: { in: spotIds.map(s => s.id) } },
-        data: { parkingSpotId: null },
-      });
+    if (!zone) {
+      throw { status: 404, message: 'Không tìm thấy khu vực' };
     }
 
-    // Delete all spots in this zone first
-    await prisma.parkingSpot.deleteMany({
-      where: { zoneId: id },
-    });
+    if (occupiedSpot) {
+      throw { status: 400, message: 'Khu vực đang có chỗ đỗ được sử dụng, không thể xóa' };
+    }
+
+    if (historyUsage) {
+      throw { status: 400, message: 'Khu vực đã phát sinh lịch sử gửi xe, không thể xóa cứng' };
+    }
+
+    if (spotsInZone > 0) {
+      throw { status: 400, message: 'Khu vực vẫn còn chỗ đỗ, hãy xóa hoặc chuyển toàn bộ chỗ đỗ trước' };
+    }
 
     await prisma.parkingZone.delete({
       where: { id },

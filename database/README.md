@@ -18,11 +18,13 @@ Kết nối vào SQL Server với thông tin:
 1. Mở file `setup.sql` trong SSMS (`File > Open > File...`)
 2. Nhấn **F5** hoặc nút **Execute**
 3. Chờ khoảng 5–10 giây
+4. Nếu muốn đồng bộ thêm dữ liệu demo theo rule nghiệp vụ mới, chạy tiếp `demo_business_patch.sql`
 
 Script sẽ tự động:
 - Tạo database `ParkingManagement` (nếu chưa có)
 - Xóa bảng cũ và tạo lại toàn bộ schema
 - Chèn dữ liệu mẫu từ 2024 đến nay
+- Script `demo_business_patch.sql` sẽ chuẩn hóa biển số, đồng bộ trạng thái gói/chỗ đỗ và thêm gói `pending` nếu thiếu
 
 ### Bước 3 — Cấu hình backend
 Mở file `backend/.env`, kiểm tra connection string:

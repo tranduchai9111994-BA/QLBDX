@@ -18,7 +18,7 @@ const VehicleTypes: React.FC = () => {
       const res = await api.get<VehicleType[]>('/vehicle-types');
       setTypes(res.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được danh sách loại xe');
     } finally {
       setLoading(false);
     }

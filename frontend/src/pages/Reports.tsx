@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DatePicker, Row, Col, Table, message, Select, Statistic, Radio } from 'antd';
-import { DollarOutlined, CarOutlined, RiseOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Card, DatePicker, Row, Col, Table, message, Select, Statistic, Radio, Button } from 'antd';
+import { DollarOutlined, CarOutlined, RiseOutlined, BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
+import * as XLSX from 'xlsx';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
@@ -148,6 +149,32 @@ const Reports: React.FC = () => {
     { label: 'Toàn bộ', range: [dayjs('2024-01-01'), dayjs()] as [Dayjs, Dayjs], group: 'month' as GroupBy },
   ];
 
+  const exportExcel = () => {
+    const revenueSheet = XLSX.utils.json_to_sheet(
+      revenue.map((item) => ({
+        'Kỳ': formatPeriodLabel(item.period, groupBy),
+        'Doanh thu gửi lẻ (đ)': Number(item.parkingRevenue),
+        'Doanh thu gói (đ)': Number(item.packageRevenue),
+        'Tổng doanh thu (đ)': Number(item.totalRevenue),
+        'Số giao dịch': Number(item.totalTransactions),
+      }))
+    );
+    const vehicleSheet = XLSX.utils.json_to_sheet(
+      vehicleStats.map((item) => ({
+        'Loại xe': item.vehicleType,
+        'Số lượt': item.totalRecords,
+        'Doanh thu (đ)': Number(item.totalFees),
+      }))
+    );
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, revenueSheet, 'Doanh thu');
+    XLSX.utils.book_append_sheet(workbook, vehicleSheet, 'Loai xe');
+    XLSX.writeFile(
+      workbook,
+      `bao-cao-thong-ke_${dateRange[0].format('DDMMYYYY')}-${dateRange[1].format('DDMMYYYY')}.xlsx`
+    );
+  };
+
   return (
     <div>
       <h2 className="page-title">Báo cáo thống kê</h2>
@@ -189,6 +216,9 @@ const Reports: React.FC = () => {
             </button>
           ))}
         </div>
+        <Button icon={<DownloadOutlined />} onClick={exportExcel} disabled={revenue.length === 0 && vehicleStats.length === 0}>
+          Xuất Excel
+        </Button>
       </div>
 
       {/* Summary cards */}

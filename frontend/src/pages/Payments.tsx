@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, DatePicker, Select, Tag, Button } from 'antd';
+import { Table, Card, DatePicker, Select, Tag, Button, message } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -36,7 +36,7 @@ const Payments: React.FC = () => {
       const res = await api.get<Payment[]>(url, { params });
       setPayments(res.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được lịch sử thanh toán');
     } finally {
       setLoading(false);
     }
