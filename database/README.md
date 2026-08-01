@@ -47,8 +47,10 @@ Chỉnh `user`, `password` hoặc tên server nếu khác.
 
 ## Tài khoản đăng nhập
 
-| Username | Password | Vai trò |
-|----------|----------|---------|
-| `admin` | `admin123` | Quản trị viên |
-| `nhanvien1` | `staff123` | Nhân viên |
-| `nhanvien2` | `staff123` | Nhân viên |
+| Username | Email | Password | Vai trò |
+|----------|-------|----------|---------|
+| `admin` | `admin@parking.com` | `admin123` | Quản trị viên |
+| `nhanvien1` | `nv1@parking.com` | `staff123` | Nhân viên |
+| `nhanvien2` | `nv2@parking.com` | `staff123` | Nhân viên |
+
+API `POST /api/auth/login` hỗ trợ đăng nhập bằng `username` hoặc `email`.

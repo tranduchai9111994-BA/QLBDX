@@ -35,18 +35,16 @@ npm run dev
 ```
 Server chạy tại: http://localhost:5000
 
-### 3. Tạo tài khoản admin
-Gửi POST request:
-```
-POST http://localhost:5000/api/auth/register
-Content-Type: application/json
+### 3. Tài khoản demo mặc định
+Sau khi seed dữ liệu bằng `npm run prisma:seed` trong thư mục `backend`, hệ thống tạo sẵn các tài khoản:
 
-{
-  "username": "admin",
-  "password": "admin123",
-  "fullName": "Quản trị viên"
-}
-```
+- `admin` / `admin123` (`admin@parking.com`)
+- `nhanvien1` / `staff123` (`nv1@parking.com`)
+- `nhanvien2` / `staff123` (`nv2@parking.com`)
+
+Form đăng nhập và API `POST /api/auth/login` đều hỗ trợ nhập **username hoặc email** vào trường `username`.
+
+> Lưu ý: endpoint `/api/auth/register` hiện yêu cầu đăng nhập bằng tài khoản `admin`, nên không dùng để bootstrap admin ban đầu.
 
 ### 4. Frontend
 ```bash
@@ -88,6 +86,5 @@ npm start
 ```
 
 ## Tài khoản mặc định
-- **Username:** admin
-- **Password:** admin123
-(Cần tạo qua API register trước khi đăng nhập)
+- **Username:** `admin` hoặc **Email:** `admin@parking.com`
+- **Password:** `admin123`
