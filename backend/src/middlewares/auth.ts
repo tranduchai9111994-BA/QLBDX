@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import prisma from '../config/prisma';
 
 export interface JwtPayload {
   id: number;
@@ -17,7 +18,7 @@ declare global {
   }
 }
 
-export const auth = (req: Request, res: Response, next: NextFunction): void => {
+export const auth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ message: 'Không có token xác thực' });
@@ -27,7 +28,28 @@ export const auth = (req: Request, res: Response, next: NextFunction): void => {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
-    req.user = decoded;
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        fullName: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      res.status(401).json({ message: 'Tài khoản không còn hiệu lực' });
+      return;
+    }
+
+    req.user = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      fullName: user.fullName,
+    };
     next();
   } catch {
     res.status(401).json({ message: 'Token không hợp lệ' });

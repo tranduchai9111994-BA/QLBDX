@@ -46,6 +46,18 @@ export class ReportController {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
     }
   }
+
+  async getAlerts(req: Request, res: Response): Promise<void> {
+    try {
+      const longParkingHours = req.query.longParkingHours
+        ? Number(req.query.longParkingHours)
+        : undefined;
+      const result = await reportService.getAlerts(longParkingHours);
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
 }
 
 export const reportController = new ReportController();

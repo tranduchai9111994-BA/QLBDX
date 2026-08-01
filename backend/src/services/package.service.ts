@@ -2,9 +2,58 @@ import prisma from '../config/prisma';
 import { CreatePackageInput, UpdatePackageInput } from '../validators/package.validator';
 
 export class PackageService {
-  async findAll() {
+  async findAll(params: {
+    search?: string;
+    vehicleTypeId?: number;
+    isActive?: boolean;
+    includeInactive?: boolean;
+    minPrice?: number;
+    maxPrice?: number;
+    minDuration?: number;
+    maxDuration?: number;
+  }) {
+    const {
+      search,
+      vehicleTypeId,
+      isActive,
+      includeInactive,
+      minPrice,
+      maxPrice,
+      minDuration,
+      maxDuration,
+    } = params;
+
     return prisma.parkingPackage.findMany({
-      where: { isActive: true },
+      where: {
+        ...(!includeInactive && typeof isActive !== 'boolean' ? { isActive: true } : {}),
+        ...(typeof isActive === 'boolean' ? { isActive } : {}),
+        ...(vehicleTypeId ? { vehicleTypeId } : {}),
+        ...((typeof minPrice === 'number' || typeof maxPrice === 'number')
+          ? {
+              price: {
+                ...(typeof minPrice === 'number' ? { gte: minPrice } : {}),
+                ...(typeof maxPrice === 'number' ? { lte: maxPrice } : {}),
+              },
+            }
+          : {}),
+        ...((typeof minDuration === 'number' || typeof maxDuration === 'number')
+          ? {
+              durationDays: {
+                ...(typeof minDuration === 'number' ? { gte: minDuration } : {}),
+                ...(typeof maxDuration === 'number' ? { lte: maxDuration } : {}),
+              },
+            }
+          : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search } },
+                { description: { contains: search } },
+                { vehicleType: { name: { contains: search } } },
+              ],
+            }
+          : {}),
+      },
       include: {
         vehicleType: { select: { name: true } },
       },

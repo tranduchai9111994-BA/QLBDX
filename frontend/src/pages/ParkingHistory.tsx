@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, DatePicker, Input, Tag, Button } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Table, Card, DatePicker, Input, Tag, Button, Select, Space, message } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/axios';
-import { ParkingRecord } from '../types';
+import { ParkingRecord, ParkingZone, VehicleType } from '../types';
 
 const { RangePicker } = DatePicker;
 
@@ -11,12 +11,18 @@ interface Filters {
   from: string | null;
   to: string | null;
   licensePlate: string;
+  search: string;
+  zoneId?: number;
+  vehicleTypeId?: number;
 }
 
 const ParkingHistory: React.FC = () => {
   const [records, setRecords] = useState<ParkingRecord[]>([]);
+  const [zones, setZones] = useState<ParkingZone[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [filters, setFilters] = useState<Filters>({ from: null, to: null, licensePlate: '' });
+  const [searchInput, setSearchInput] = useState('');
+  const [filters, setFilters] = useState<Filters>({ from: null, to: null, licensePlate: '', search: '' });
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -25,16 +31,25 @@ const ParkingHistory: React.FC = () => {
       if (filters.from) params.from = filters.from;
       if (filters.to) params.to = filters.to;
       if (filters.licensePlate) params.licensePlate = filters.licensePlate;
-      const res = await api.get<ParkingRecord[]>('/parking/history', { params });
-      setRecords(res.data);
+      if (filters.search) params.search = filters.search;
+      if (filters.zoneId) params.zoneId = filters.zoneId;
+      if (filters.vehicleTypeId) params.vehicleTypeId = filters.vehicleTypeId;
+      const [historyRes, zonesRes, vehicleTypesRes] = await Promise.all([
+        api.get<ParkingRecord[]>('/parking/history', { params }),
+        api.get<ParkingZone[]>('/parking-zones'),
+        api.get<VehicleType[]>('/vehicle-types'),
+      ]);
+      setRecords(historyRes.data);
+      setZones(zonesRes.data);
+      setVehicleTypes(vehicleTypesRes.data);
     } catch (err) {
-      console.error(err);
+      message.error('Không tải được lịch sử xe ra vào');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchRecords(); }, []);
+  useEffect(() => { fetchRecords(); }, [filters]);
 
   const columns = [
     { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', render: (t: string) => <Tag className="plate-tag">{t}</Tag> },
@@ -54,19 +69,44 @@ const ParkingHistory: React.FC = () => {
     });
   };
 
+  const resetFilters = () => {
+    setSearchInput('');
+    setFilters({ from: null, to: null, licensePlate: '', search: '' });
+  };
+
   return (
     <div>
       <h2 className="page-title">Lịch sử xe ra vào</h2>
       <Card>
         <div className="toolbar">
-          <RangePicker onChange={handleDateChange} format="DD/MM/YYYY" placeholder={['Từ ngày', 'Đến ngày']} />
-          <Input.Search
-            placeholder="Tìm biển số..."
-            style={{ width: 220 }}
-            onSearch={(v) => { setFilters({ ...filters, licensePlate: v }); }}
-            allowClear
-          />
-          <Button type="primary" icon={<SearchOutlined />} onClick={fetchRecords}>Tìm kiếm</Button>
+          <Space wrap>
+            <RangePicker onChange={handleDateChange} format="DD/MM/YYYY" placeholder={['Từ ngày', 'Đến ngày']} />
+            <Input.Search
+              placeholder="Tìm biển số, khách, khu..."
+              style={{ width: 280 }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onSearch={(value) => setFilters({ ...filters, search: value.trim(), licensePlate: '' })}
+              allowClear
+            />
+            <Select
+              value={filters.zoneId}
+              allowClear
+              placeholder="Lọc theo khu"
+              style={{ width: 180 }}
+              onChange={(value) => setFilters({ ...filters, zoneId: value })}
+              options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
+            />
+            <Select
+              value={filters.vehicleTypeId}
+              allowClear
+              placeholder="Lọc theo loại xe"
+              style={{ width: 180 }}
+              onChange={(value) => setFilters({ ...filters, vehicleTypeId: value })}
+              options={vehicleTypes.map((vehicleType) => ({ value: vehicleType.id, label: vehicleType.name }))}
+            />
+            <Button icon={<ReloadOutlined />} onClick={resetFilters}>Xóa bộ lọc</Button>
+          </Space>
         </div>
         <Table columns={columns} dataSource={records} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
       </Card>

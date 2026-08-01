@@ -2,9 +2,25 @@ import { Request, Response } from 'express';
 import { packageService } from '../services/package.service';
 
 export class PackageController {
-  async findAll(_req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response): Promise<void> {
     try {
-      const result = await packageService.findAll();
+      const isActiveQuery = req.query.isActive as string | undefined;
+      const parseNumber = (value: unknown) => {
+        if (value === undefined || value === null || value === '') return undefined;
+        const numericValue = Number(value);
+        return Number.isNaN(numericValue) ? undefined : numericValue;
+      };
+
+      const result = await packageService.findAll({
+        search: req.query.search as string | undefined,
+        vehicleTypeId: parseNumber(req.query.vehicleTypeId),
+        isActive: isActiveQuery === undefined ? undefined : isActiveQuery === 'true',
+        includeInactive: req.query.includeInactive === 'true',
+        minPrice: parseNumber(req.query.minPrice),
+        maxPrice: parseNumber(req.query.maxPrice),
+        minDuration: parseNumber(req.query.minDuration),
+        maxDuration: parseNumber(req.query.maxDuration),
+      });
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

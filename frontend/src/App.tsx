@@ -20,6 +20,7 @@ import Reports from './pages/Reports';
 import VehicleTypes from './pages/VehicleTypes';
 import Profile from './pages/Profile';
 import ActivityLogs from './pages/ActivityLogs';
+import Alerts from './pages/Alerts';
 
 interface PrivateRouteProps {
   children: ReactNode;
@@ -88,6 +89,7 @@ const App: React.FC = () => {
               <Route path="packages" element={<Packages />} />
               <Route path="customer-packages" element={<CustomerPackages />} />
               <Route path="payments" element={<AdminRoute><Payments /></AdminRoute>} />
+              <Route path="alerts" element={<AdminRoute><Alerts /></AdminRoute>} />
               <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
               <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
               <Route path="profile" element={<Profile />} />

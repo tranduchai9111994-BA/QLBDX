@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Card, Modal, Form, Input, InputNumber, message, Popconfirm, Space } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Button, Card, Modal, Form, Input, InputNumber, message, Popconfirm, Space, Tag } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { VehicleType, VehicleTypeForm } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 const VehicleTypes: React.FC = () => {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin';
   const [types, setTypes] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [modal, setModal] = useState<boolean>(false);
   const [editing, setEditing] = useState<VehicleType | null>(null);
+  const [search, setSearch] = useState('');
   const [form] = Form.useForm<VehicleTypeForm>();
 
   const fetchData = async () => {
@@ -77,27 +81,59 @@ const VehicleTypes: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', render: (_: any, r: VehicleType) => (
         <Space>
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
-          <Popconfirm title="Xác nhận xóa loại xe này?" onConfirm={() => handleDelete(r.id)} okText="Xóa" cancelText="Hủy">
-            <Button icon={<DeleteOutlined />} danger size="small">Xóa</Button>
-          </Popconfirm>
+          {canManage ? (
+            <>
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
+              <Popconfirm title="Xác nhận xóa loại xe này?" onConfirm={() => handleDelete(r.id)} okText="Xóa" cancelText="Hủy">
+                <Button icon={<DeleteOutlined />} danger size="small">Xóa</Button>
+              </Popconfirm>
+            </>
+          ) : (
+            <Tag color="default">Chỉ quản trị được sửa</Tag>
+          )}
         </Space>
       ),
     },
   ];
+
+  const filteredTypes = types.filter((type) => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return true;
+    return [
+      type.name,
+      type.description,
+      String(type.hourlyRate),
+      String(type.dailyRate),
+      String(type.monthlyRate),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
 
   return (
     <div>
       <h2 className="page-title">Quản lý loại xe</h2>
       <Card>
         <div className="toolbar">
+          <Space wrap>
+            <Input.Search
+              placeholder="Tìm tên loại, mô tả, mức giá..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              allowClear
+              style={{ width: 320 }}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => setSearch('')}>Xóa bộ lọc</Button>
+          </Space>
           <div className="toolbar-right">
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-              Thêm loại xe
-            </Button>
+            {canManage && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+                Thêm loại xe
+              </Button>
+            )}
           </div>
         </div>
-        <Table columns={columns} dataSource={types} rowKey="id" loading={loading} />
+        <Table columns={columns} dataSource={filteredTypes} rowKey="id" loading={loading} />
       </Card>
 
       <Modal

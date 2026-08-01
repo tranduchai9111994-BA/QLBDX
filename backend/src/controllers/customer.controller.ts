@@ -4,7 +4,12 @@ import { customerService } from '../services/customer.service';
 export class CustomerController {
   async findAll(req: Request, res: Response): Promise<void> {
     try {
-      const result = await customerService.findAll(req.query.search as string | undefined);
+      const isActiveQuery = req.query.isActive as string | undefined;
+      const result = await customerService.findAll({
+        search: req.query.search as string | undefined,
+        isActive: isActiveQuery === undefined ? undefined : isActiveQuery === 'true',
+        includeInactive: req.query.includeInactive === 'true',
+      });
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

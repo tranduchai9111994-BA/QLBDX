@@ -67,6 +67,7 @@ const ActivityLogs: React.FC = () => {
       };
       if (f.action) params.action = f.action;
       if (f.entity) params.entity = f.entity;
+      if (f.username) params.username = f.username;
       if (f.dateRange) {
         params.from = f.dateRange[0].startOf('day').toISOString();
         params.to = f.dateRange[1].endOf('day').toISOString();

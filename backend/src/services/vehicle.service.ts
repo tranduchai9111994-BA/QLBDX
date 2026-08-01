@@ -15,23 +15,49 @@ export class VehicleService {
     return vehicles.find((vehicle) => areLicensePlatesEqual(vehicle.licensePlate, normalizedPlate)) ?? null;
   }
 
-  async findAll(search?: string, customerId?: number) {
-    return prisma.vehicle.findMany({
+  async findAll(params: {
+    search?: string;
+    customerId?: number;
+    vehicleTypeId?: number;
+    parkingStatus?: 'parked' | 'outside';
+  }) {
+    const { search, customerId, vehicleTypeId, parkingStatus } = params;
+
+    const vehicles = await prisma.vehicle.findMany({
       where: {
         ...(search && {
           OR: [
             { licensePlate: { contains: search } },
             { customer: { fullName: { contains: search } } },
+            { brand: { contains: search } },
+            { model: { contains: search } },
           ],
         }),
         ...(customerId && { customerId }),
+        ...(vehicleTypeId && { vehicleTypeId }),
+        ...(parkingStatus === 'parked'
+          ? { parkingRecords: { some: { status: 'parked' } } }
+          : {}),
+        ...(parkingStatus === 'outside'
+          ? { parkingRecords: { none: { status: 'parked' } } }
+          : {}),
       },
       include: {
         customer: { select: { fullName: true } },
         vehicleType: { select: { name: true } },
+        parkingRecords: {
+          where: { status: 'parked' },
+          select: { id: true },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return vehicles.map((vehicle) => ({
+      ...vehicle,
+      parkingStatus: vehicle.parkingRecords.length > 0 ? 'parked' : 'outside',
+    }));
   }
 
   async findByPlate(plate: string) {

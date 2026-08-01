@@ -16,6 +16,7 @@ import {
   HistoryOutlined,
   AppstoreOutlined,
   AuditOutlined,
+  AlertOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 
@@ -53,6 +54,7 @@ const MainLayout: React.FC = () => {
     ...(isAdmin
       ? [
           { key: '/payments', icon: <DollarOutlined />, label: 'Thanh toán' },
+          { key: '/alerts', icon: <AlertOutlined />, label: 'Cảnh báo' },
           { key: '/reports', icon: <BarChartOutlined />, label: 'Báo cáo' },
           { key: '/users', icon: <SettingOutlined />, label: 'Người dùng' },
           { key: '/activity-logs', icon: <AuditOutlined />, label: 'Nhật ký hoạt động' },

@@ -15,6 +15,14 @@ function addMinutes(d: Date, m: number): Date {
 function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * 86_400_000);
 }
+function endOfDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+}
+function atDate(year: number, month: number, day: number, hour: number, minute = 0): Date {
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
 function normalizePlate(plate: string): string {
   return plate.replace(/[-.\s]/g, '').toUpperCase();
 }
@@ -506,6 +514,256 @@ async function seedActivityLogs() {
 }
 
 // ──────────────────────────────────────
+// DENSE DEMO DATA FOR 01-02/08/2026
+// ──────────────────────────────────────
+async function seedDenseAug2026Demo(vehicles: { id: number; vehicleTypeId: number; licensePlate: string }[]) {
+  const demoTag = '[DEMO_AUG2026]';
+  const userIds = (await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  })).map((user) => user.id);
+  const actorIds = userIds.length > 0 ? userIds : [1];
+
+  const spots = await prisma.parkingSpot.findMany({
+    orderBy: [{ zoneId: 'asc' }, { spotNumber: 'asc' }],
+    select: { id: true, zoneId: true, spotNumber: true },
+  });
+
+  const typeToSpotPool: Record<number, number[]> = {
+    1: spots.filter((spot) => spot.zoneId === 1).map((spot) => spot.id),
+    2: spots.filter((spot) => spot.zoneId === 2).map((spot) => spot.id),
+    3: spots.filter((spot) => spot.zoneId === 3).map((spot) => spot.id),
+    4: spots.filter((spot) => spot.zoneId === 1).map((spot) => spot.id),
+  };
+  const vipSpotIds = spots.filter((spot) => spot.zoneId === 4).map((spot) => spot.id);
+
+  const vehiclePool = [...vehicles].sort((a, b) => a.id - b.id);
+  const hourlyRateMap: Record<number, number> = { 1: 5000, 2: 20000, 3: 30000, 4: 2000 };
+  const methods = ['cash', 'transfer', 'card'];
+
+  const oldDemoRecords = await prisma.parkingRecord.findMany({
+    where: { notes: { contains: demoTag } },
+    select: { id: true },
+  });
+  if (oldDemoRecords.length > 0) {
+    await prisma.payment.deleteMany({
+      where: {
+        OR: [
+          { notes: { contains: demoTag } },
+          { parkingRecordId: { in: oldDemoRecords.map((record) => record.id) } },
+        ],
+      },
+    });
+    await prisma.parkingRecord.deleteMany({
+      where: { id: { in: oldDemoRecords.map((record) => record.id) } },
+    });
+  }
+
+  const completedSchedules = [
+    { day: 1, countsByHour: [2, 3, 4, 4, 4, 5, 5, 4, 5, 5, 5, 5, 4, 3, 2] },
+    { day: 2, countsByHour: [1, 2, 2, 3, 3, 4, 3, 3, 3, 2, 2, 2] },
+  ];
+  const completedRecordsData: any[] = [];
+  let completedIndex = 0;
+
+  for (const schedule of completedSchedules) {
+    const startHour = 6;
+    schedule.countsByHour.forEach((count, hourOffset) => {
+      const hour = startHour + hourOffset;
+      for (let i = 0; i < count; i++) {
+        const vehicle = vehiclePool[completedIndex % vehiclePool.length];
+        const entryMinute = (i * 11 + completedIndex * 7) % 60;
+        const durationMinutes = [35, 50, 65, 80, 95, 120, 145, 180][completedIndex % 8];
+        const entryTime = atDate(2026, 8, schedule.day, hour, entryMinute);
+        const exitTime = addMinutes(entryTime, durationMinutes);
+        const fee = Math.ceil(durationMinutes / 60) * (hourlyRateMap[vehicle.vehicleTypeId] || 5000);
+        const spotPool = typeToSpotPool[vehicle.vehicleTypeId] || typeToSpotPool[1];
+        const parkingSpotId = spotPool[(completedIndex * 3 + i) % spotPool.length];
+
+        completedRecordsData.push({
+          vehicleId: vehicle.id,
+          licensePlate: vehicle.licensePlate,
+          vehicleTypeId: vehicle.vehicleTypeId,
+          parkingSpotId,
+          entryTime,
+          exitTime,
+          duration: durationMinutes,
+          fee,
+          status: 'completed',
+          notes: `${demoTag} completed ${schedule.day === 1 ? 'today' : 'tomorrow'}`,
+          createdBy: actorIds[completedIndex % actorIds.length],
+          createdAt: entryTime,
+        });
+        completedIndex += 1;
+      }
+    });
+  }
+
+  if (completedRecordsData.length > 0) {
+    await prisma.parkingRecord.createMany({ data: completedRecordsData });
+  }
+
+  const createdCompletedRecords = await prisma.parkingRecord.findMany({
+    where: {
+      notes: { contains: demoTag },
+      status: 'completed',
+    },
+    select: { id: true, fee: true, exitTime: true },
+    orderBy: { id: 'asc' },
+  });
+
+  if (createdCompletedRecords.length > 0) {
+    await prisma.payment.createMany({
+      data: createdCompletedRecords.map((record, index) => ({
+        parkingRecordId: record.id,
+        amount: record.fee || 0,
+        paymentMethod: methods[index % methods.length],
+        paymentType: 'parking',
+        status: 'completed',
+        paidAt: record.exitTime || new Date(),
+        createdBy: actorIds[index % actorIds.length],
+        notes: `${demoTag} parking payment`,
+      })),
+    });
+  }
+
+  const parkedVehicleSelections = [
+    { vehicle: vehiclePool[0], spotId: vipSpotIds[0], entryTime: atDate(2026, 8, 1, 8, 15) },
+    { vehicle: vehiclePool[1], spotId: vipSpotIds[1], entryTime: atDate(2026, 8, 1, 8, 40) },
+    { vehicle: vehiclePool[2], spotId: vipSpotIds[2], entryTime: atDate(2026, 8, 1, 9, 5) },
+    { vehicle: vehiclePool[3], spotId: vipSpotIds[3], entryTime: atDate(2026, 8, 1, 9, 30) },
+    { vehicle: vehiclePool[4], spotId: vipSpotIds[4], entryTime: atDate(2026, 8, 1, 10, 10) },
+    { vehicle: vehiclePool[5], spotId: vipSpotIds[5], entryTime: atDate(2026, 8, 1, 11, 20) },
+    { vehicle: vehiclePool[15], spotId: vipSpotIds[6], entryTime: atDate(2026, 8, 1, 12, 0) },
+    { vehicle: vehiclePool[16], spotId: vipSpotIds[7], entryTime: atDate(2026, 8, 1, 13, 45) },
+    { vehicle: vehiclePool[20], spotId: vipSpotIds[8], entryTime: atDate(2026, 8, 1, 14, 25) },
+    { vehicle: vehiclePool[23], spotId: vipSpotIds[9], entryTime: atDate(2026, 8, 1, 15, 5) },
+    { vehicle: vehiclePool[24], spotId: typeToSpotPool[4][0], entryTime: atDate(2026, 8, 1, 16, 10) },
+    { vehicle: vehiclePool[17], spotId: typeToSpotPool[2][0], entryTime: atDate(2026, 8, 1, 17, 20) },
+    { vehicle: vehiclePool[18], spotId: typeToSpotPool[2][1], entryTime: atDate(2026, 8, 1, 18, 0) },
+    { vehicle: vehiclePool[21], spotId: typeToSpotPool[3][0], entryTime: atDate(2026, 8, 1, 19, 30) },
+  ].filter((item) => item.vehicle && item.spotId);
+
+  await prisma.parkingRecord.createMany({
+    data: parkedVehicleSelections.map((item, index) => ({
+      vehicleId: item.vehicle.id,
+      licensePlate: item.vehicle.licensePlate,
+      vehicleTypeId: item.vehicle.vehicleTypeId,
+      parkingSpotId: item.spotId,
+      entryTime: item.entryTime,
+      status: 'parked',
+      notes: `${demoTag} parked overnight`,
+      createdBy: actorIds[index % actorIds.length],
+      createdAt: item.entryTime,
+    })),
+  });
+
+  await prisma.parkingSpot.updateMany({
+    where: { status: { not: 'maintenance' } },
+    data: { status: 'available' },
+  });
+  const activeParkedSpots = await prisma.parkingRecord.findMany({
+    where: { status: 'parked', parkingSpotId: { not: null } },
+    select: { parkingSpotId: true },
+  });
+  const occupiedSpotIds = Array.from(new Set(activeParkedSpots.map((record) => record.parkingSpotId).filter(Boolean) as number[]));
+  if (occupiedSpotIds.length > 0) {
+    await prisma.parkingSpot.updateMany({
+      where: { id: { in: occupiedSpotIds } },
+      data: { status: 'occupied' },
+    });
+  }
+  const maintenanceSpots = [5, 55, 105].filter((spotId) => !occupiedSpotIds.includes(spotId));
+  if (maintenanceSpots.length > 0) {
+    await prisma.parkingSpot.updateMany({
+      where: { id: { in: maintenanceSpots } },
+      data: { status: 'maintenance' },
+    });
+  }
+
+  const packageTemplates = [
+    { vehicleTypeId: 1, endDate: endOfDay(atDate(2026, 8, 2, 0, 0)) },
+    { vehicleTypeId: 1, endDate: endOfDay(atDate(2026, 8, 4, 0, 0)) },
+    { vehicleTypeId: 2, endDate: endOfDay(atDate(2026, 8, 5, 0, 0)) },
+    { vehicleTypeId: 3, endDate: endOfDay(atDate(2026, 8, 7, 0, 0)) },
+  ];
+
+  let packageDemoCount = 0;
+  for (const template of packageTemplates) {
+    const activePackage = await prisma.parkingPackage.findFirst({
+      where: { vehicleTypeId: template.vehicleTypeId, isActive: true },
+      orderBy: { durationDays: 'asc' },
+    });
+    if (!activePackage) continue;
+
+    const candidateVehicles = await prisma.vehicle.findMany({
+      where: { vehicleTypeId: template.vehicleTypeId },
+      include: { customer: { select: { id: true, isActive: true } } },
+      orderBy: { id: 'asc' },
+    });
+
+    const startDate = atDate(2026, 7, 10 + packageDemoCount, 0, 0);
+    const normalizedStartDate = new Date(startDate);
+    normalizedStartDate.setHours(0, 0, 0, 0);
+
+    for (const candidate of candidateVehicles) {
+      if (!candidate.customer.isActive) continue;
+
+      const overlapping = await prisma.customerPackage.findFirst({
+        where: {
+          vehicleId: candidate.id,
+          status: { not: 'cancelled' },
+          startDate: { lte: template.endDate },
+          endDate: { gte: normalizedStartDate },
+        },
+      });
+      if (overlapping) continue;
+
+      const existingSameWindow = await prisma.customerPackage.findFirst({
+        where: {
+          vehicleId: candidate.id,
+          packageId: activePackage.id,
+          startDate: normalizedStartDate,
+          endDate: template.endDate,
+        },
+      });
+      if (existingSameWindow) break;
+
+      const createdPackage = await prisma.customerPackage.create({
+        data: {
+          customerId: candidate.customer.id,
+          packageId: activePackage.id,
+          vehicleId: candidate.id,
+          startDate: normalizedStartDate,
+          endDate: template.endDate,
+          status: 'active',
+          createdAt: normalizedStartDate,
+        },
+      });
+
+      await prisma.payment.create({
+        data: {
+          customerPackageId: createdPackage.id,
+          amount: activePackage.price,
+          paymentMethod: methods[packageDemoCount % methods.length],
+          paymentType: 'package',
+          status: 'completed',
+          paidAt: normalizedStartDate,
+          createdBy: actorIds[packageDemoCount % actorIds.length],
+          notes: `${demoTag} package payment`,
+        },
+      });
+
+      packageDemoCount += 1;
+      break;
+    }
+  }
+
+  console.log(`✓ Dense demo 01-02/08/2026: ${completedRecordsData.length} completed, ${parkedVehicleSelections.length} parked, ${packageDemoCount} expiring packages`);
+}
+
+// ──────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────
 async function main() {
@@ -514,6 +772,7 @@ async function main() {
   const vehicles = await seedCustomersAndVehicles();
   await seedParkingHistory(vehicles);
   await seedCustomerPackages(vehicles);
+  await seedDenseAug2026Demo(vehicles);
   await seedActivityLogs();
   console.log('\n✅ SEED HOÀN TẤT!');
   console.log('   - 25 khách hàng, 30 xe các loại');

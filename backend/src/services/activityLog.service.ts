@@ -26,6 +26,7 @@ export class ActivityLogService {
     userId?: number;
     action?: string;
     entity?: string;
+    username?: string;
     from?: string;
     to?: string;
   }) {
@@ -37,6 +38,7 @@ export class ActivityLogService {
     if (params.userId) where.userId = params.userId;
     if (params.action) where.action = params.action;
     if (params.entity) where.entity = params.entity;
+    if (params.username) where.username = { contains: params.username };
     if (params.from || params.to) {
       where.createdAt = {};
       if (params.from) where.createdAt.gte = new Date(params.from);

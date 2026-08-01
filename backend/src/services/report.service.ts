@@ -172,6 +172,201 @@ export class ReportService {
       .map(([hour, count]) => ({ hour, count }))
       .sort((a, b) => a.hour - b.hour);
   }
+
+  async getAlerts(longParkingHours = 24) {
+    const now = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const next7Days = new Date(today);
+    next7Days.setDate(next7Days.getDate() + 7);
+    const longParkingThreshold = new Date(now.getTime() - longParkingHours * 60 * 60 * 1000);
+
+    const [
+      expiringPackages,
+      inconsistentPackages,
+      zones,
+      longParkedRecords,
+      inconsistentOccupiedSpots,
+      suspiciousPayments,
+    ] = await Promise.all([
+      prisma.customerPackage.findMany({
+        where: {
+          status: 'active',
+          endDate: { gte: today, lte: next7Days },
+        },
+        include: {
+          customer: { select: { fullName: true } },
+          vehicle: { select: { licensePlate: true } },
+          parkingPackage: { select: { name: true } },
+        },
+        orderBy: { endDate: 'asc' },
+        take: 12,
+      }),
+      prisma.customerPackage.findMany({
+        where: {
+          status: 'active',
+          OR: [
+            { endDate: { lt: today } },
+            { startDate: { gt: today } },
+          ],
+        },
+        include: {
+          customer: { select: { fullName: true } },
+          vehicle: { select: { licensePlate: true } },
+          parkingPackage: { select: { name: true } },
+        },
+        orderBy: { endDate: 'asc' },
+        take: 12,
+      }),
+      prisma.parkingZone.findMany({
+        include: {
+          parkingSpots: { select: { status: true } },
+        },
+        orderBy: { id: 'asc' },
+      }),
+      prisma.parkingRecord.findMany({
+        where: {
+          status: 'parked',
+          entryTime: { lte: longParkingThreshold },
+        },
+        include: {
+          vehicle: { select: { customer: { select: { fullName: true } } } },
+          parkingSpot: {
+            select: {
+              spotNumber: true,
+              zone: { select: { name: true } },
+            },
+          },
+          vehicleType: { select: { name: true } },
+        },
+        orderBy: { entryTime: 'asc' },
+        take: 20,
+      }),
+      prisma.parkingSpot.findMany({
+        where: {
+          status: 'occupied',
+          parkingRecords: {
+            none: { status: 'parked' },
+          },
+        },
+        include: {
+          zone: { select: { name: true } },
+        },
+        orderBy: [{ zoneId: 'asc' }, { spotNumber: 'asc' }],
+        take: 20,
+      }),
+      prisma.payment.findMany({
+        where: {
+          OR: [
+            { amount: { lte: 0 } },
+            { amount: { gte: 5000000 } },
+            {
+              paymentType: 'parking',
+              amount: { gte: 300000 },
+            },
+          ],
+        },
+        include: {
+          parkingRecord: { select: { licensePlate: true } },
+          customerPackage: {
+            select: {
+              vehicle: { select: { licensePlate: true } },
+            },
+          },
+          creator: { select: { fullName: true } },
+        },
+        orderBy: { paidAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    const alerts = [
+      ...expiringPackages.map((pkg) => ({
+        id: `package-expiring-${pkg.id}`,
+        severity: 'warning',
+        category: 'package',
+        title: 'Gói sắp hết hạn',
+        description: `${pkg.vehicle?.licensePlate || 'Không rõ biển số'} • ${pkg.customer?.fullName || 'Khách hàng'} • ${pkg.parkingPackage?.name || 'Gói dịch vụ'} hết hạn ngày ${pkg.endDate.toLocaleDateString('vi-VN')}.`,
+        occurredAt: pkg.endDate,
+        relatedPath: '/customer-packages',
+      })),
+      ...inconsistentPackages.map((pkg) => ({
+        id: `package-inconsistent-${pkg.id}`,
+        severity: 'danger',
+        category: 'package',
+        title: 'Gói active bị lệch trạng thái',
+        description: `${pkg.vehicle?.licensePlate || 'Không rõ biển số'} vẫn đang lưu trạng thái active nhưng mốc hiệu lực không còn đúng.`,
+        occurredAt: pkg.endDate,
+        relatedPath: '/customer-packages',
+      })),
+      ...zones
+        .map((zone) => {
+          const total = zone.parkingSpots.length;
+          const available = zone.parkingSpots.filter((spot) => spot.status === 'available').length;
+          if (total === 0) return null;
+          if (available === 0) {
+            return {
+              id: `zone-full-${zone.id}`,
+              severity: 'danger',
+              category: 'parking',
+              title: 'Khu vực đã đầy',
+              description: `${zone.name} hiện không còn chỗ trống (${total}/${total} chỗ đang sử dụng hoặc bảo trì).`,
+              occurredAt: now,
+              relatedPath: '/parking-spots',
+            };
+          }
+          if (available <= 2 || available / total <= 0.1) {
+            return {
+              id: `zone-near-full-${zone.id}`,
+              severity: 'warning',
+              category: 'parking',
+              title: 'Khu vực sắp đầy',
+              description: `${zone.name} chỉ còn ${available}/${total} chỗ trống.`,
+              occurredAt: now,
+              relatedPath: '/parking-spots',
+            };
+          }
+          return null;
+        })
+        .filter(Boolean),
+      ...longParkedRecords.map((record) => ({
+        id: `parking-long-${record.id}`,
+        severity: 'warning',
+        category: 'parking',
+        title: 'Xe đỗ quá lâu',
+        description: `${record.licensePlate} (${record.vehicleType.name}) đã ở trong bãi từ ${record.entryTime.toLocaleString('vi-VN')} tại ${record.parkingSpot?.zone?.name || 'khu chưa rõ'} - ${record.parkingSpot?.spotNumber || 'chưa gán chỗ'}.`,
+        occurredAt: record.entryTime,
+        relatedPath: '/parking/history',
+      })),
+      ...inconsistentOccupiedSpots.map((spot) => ({
+        id: `spot-inconsistent-${spot.id}`,
+        severity: 'danger',
+        category: 'parking',
+        title: 'Chỗ đỗ occupied bị lệch dữ liệu',
+        description: `${spot.zone?.name || 'Khu chưa rõ'} - ${spot.spotNumber} đang là occupied nhưng không có lượt xe active.`,
+        occurredAt: now,
+        relatedPath: '/parking-spots',
+      })),
+      ...suspiciousPayments.map((payment) => ({
+        id: `payment-suspicious-${payment.id}`,
+        severity: Number(payment.amount) <= 0 ? 'danger' : 'warning',
+        category: 'payment',
+        title: 'Thanh toán bất thường',
+        description: `Giao dịch #${payment.id} có số tiền ${Number(payment.amount).toLocaleString('vi-VN')}đ cho xe ${payment.parkingRecord?.licensePlate || payment.customerPackage?.vehicle?.licensePlate || 'không rõ'} .`,
+        occurredAt: payment.paidAt,
+        relatedPath: '/payments',
+      })),
+    ]
+      .filter(Boolean)
+      .sort((a: any, b: any) => {
+        const severityOrder = { danger: 0, warning: 1, info: 2 };
+        const severityDiff = severityOrder[a.severity as keyof typeof severityOrder] - severityOrder[b.severity as keyof typeof severityOrder];
+        if (severityDiff !== 0) return severityDiff;
+        return new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
+      });
+
+    return alerts;
+  }
 }
 
 export const reportService = new ReportService();

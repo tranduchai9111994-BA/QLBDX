@@ -10,18 +10,24 @@ export class CustomerService {
     return identityCard ? identityCard.replace(/\s/g, '') : null;
   }
 
-  async findAll(search?: string) {
+  async findAll(params: { search?: string; isActive?: boolean; includeInactive?: boolean }) {
+    const { search, isActive, includeInactive } = params;
+    const where: any = {
+      ...(!includeInactive && typeof isActive !== 'boolean' ? { isActive: true } : {}),
+      ...(typeof isActive === 'boolean' ? { isActive } : {}),
+    };
+
+    if (search) {
+      where.OR = [
+        { fullName: { contains: search } },
+        { phone: { contains: search } },
+        { identityCard: { contains: search } },
+        { email: { contains: search } },
+      ];
+    }
+
     return prisma.customer.findMany({
-      where: {
-        isActive: true,
-        ...(search && {
-          OR: [
-            { fullName: { contains: search } },
-            { phone: { contains: search } },
-            { identityCard: { contains: search } },
-          ],
-        }),
-      },
+      where,
       orderBy: { createdAt: 'desc' },
     });
   }

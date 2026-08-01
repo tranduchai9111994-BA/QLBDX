@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, Tag, Select, Row, Col, Badge, Button, Modal, Form, Input, message, Tabs } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Card, Tag, Select, Row, Col, Badge, Button, Modal, Form, Input, message, Tabs, Space } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { ParkingSpot, ParkingZone, ParkingZoneForm, ParkingSpotForm, ParkingSpotUpdateForm } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 const statusLabels: Record<string, string> = {
   available: 'Trống',
@@ -19,10 +20,16 @@ const spotTypeLabels: Record<string, string> = {
 };
 
 const ParkingSpots: React.FC = () => {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin';
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [zones, setZones] = useState<ParkingZone[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
+  const [spotSearch, setSpotSearch] = useState('');
+  const [zoneSearch, setZoneSearch] = useState('');
+  const [spotStatusFilter, setSpotStatusFilter] = useState<string | undefined>();
+  const [spotTypeFilter, setSpotTypeFilter] = useState<string | undefined>();
 
   // Zone modal
   const [zoneModal, setZoneModal] = useState<boolean>(false);
@@ -170,8 +177,14 @@ const ParkingSpots: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', width: 160, render: (_: any, r: ParkingSpot) => (
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<EditOutlined />} onClick={() => handleEditSpot(r)} size="small">Sửa</Button>
-          <Button icon={<DeleteOutlined />} onClick={() => handleDeleteSpot(r.id)} size="small" danger>Xóa</Button>
+          {canManage ? (
+            <>
+              <Button icon={<EditOutlined />} onClick={() => handleEditSpot(r)} size="small">Sửa</Button>
+              <Button icon={<DeleteOutlined />} onClick={() => handleDeleteSpot(r.id)} size="small" danger>Xóa</Button>
+            </>
+          ) : (
+            <Tag color="default">Chỉ quản trị được sửa</Tag>
+          )}
         </div>
       ),
     },
@@ -186,19 +199,43 @@ const ParkingSpots: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', width: 160, render: (_: any, r: ParkingZone) => (
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<EditOutlined />} onClick={() => handleEditZone(r)} size="small">Sửa</Button>
-          <Button icon={<DeleteOutlined />} onClick={() => handleDeleteZone(r.id)} size="small" danger>Xóa</Button>
+          {canManage ? (
+            <>
+              <Button icon={<EditOutlined />} onClick={() => handleEditZone(r)} size="small">Sửa</Button>
+              <Button icon={<DeleteOutlined />} onClick={() => handleDeleteZone(r.id)} size="small" danger>Xóa</Button>
+            </>
+          ) : (
+            <Tag color="default">Chỉ quản trị được sửa</Tag>
+          )}
         </div>
       ),
     },
   ];
+
+  const filteredSpotRows = spots.filter((spot) => {
+    if (spotStatusFilter && spot.status !== spotStatusFilter) return false;
+    if (spotTypeFilter && spot.spotType !== spotTypeFilter) return false;
+    const keyword = spotSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return [spot.spotNumber, spot.zone?.name, spotTypeLabels[spot.spotType], statusLabels[spot.status]]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
+
+  const filteredZones = zones.filter((zone) => {
+    const keyword = zoneSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return [zone.name, zone.description]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
 
   return (
     <div>
       <h2 className="page-title">Quản lý bãi đỗ xe</h2>
 
       <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
-        {zones.map((z) => (
+        {filteredZones.map((z) => (
           <Col xs={24} sm={12} lg={6} key={z.id}>
             <Card className={`zone-card${z.id === selectedZone ? ' zone-selected' : ''}`}
               onClick={() => setSelectedZone(z.id === selectedZone ? null : z.id)}>
@@ -222,16 +259,46 @@ const ParkingSpots: React.FC = () => {
             children: (
               <>
                 <div className="toolbar">
-                  <Select placeholder="Lọc theo khu vực" style={{ width: 220 }} value={selectedZone} onChange={setSelectedZone} allowClear>
-                    {zones.map((z) => <Select.Option key={z.id} value={z.id}>{z.name}</Select.Option>)}
-                  </Select>
-                  <div className="toolbar-right">
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingSpot(null); spotForm.resetFields(); if (selectedZone) spotForm.setFieldsValue({ zoneId: selectedZone }); setSpotModal(true); }}>
-                      Thêm chỗ đỗ
+                  <Space wrap>
+                    <Input.Search
+                      placeholder="Tìm mã chỗ, khu, trạng thái..."
+                      value={spotSearch}
+                      onChange={(e) => setSpotSearch(e.target.value)}
+                      allowClear
+                      style={{ width: 280 }}
+                    />
+                    <Select placeholder="Lọc theo khu vực" style={{ width: 220 }} value={selectedZone} onChange={setSelectedZone} allowClear>
+                      {zones.map((z) => <Select.Option key={z.id} value={z.id}>{z.name}</Select.Option>)}
+                    </Select>
+                    <Select
+                      placeholder="Lọc theo trạng thái"
+                      style={{ width: 180 }}
+                      value={spotStatusFilter}
+                      onChange={setSpotStatusFilter}
+                      allowClear
+                      options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))}
+                    />
+                    <Select
+                      placeholder="Lọc theo loại chỗ"
+                      style={{ width: 180 }}
+                      value={spotTypeFilter}
+                      onChange={setSpotTypeFilter}
+                      allowClear
+                      options={Object.entries(spotTypeLabels).map(([value, label]) => ({ value, label }))}
+                    />
+                    <Button icon={<ReloadOutlined />} onClick={() => { setSpotSearch(''); setSelectedZone(null); setSpotStatusFilter(undefined); setSpotTypeFilter(undefined); }}>
+                      Xóa bộ lọc
                     </Button>
+                  </Space>
+                  <div className="toolbar-right">
+                    {canManage && (
+                      <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingSpot(null); spotForm.resetFields(); if (selectedZone) spotForm.setFieldsValue({ zoneId: selectedZone }); setSpotModal(true); }}>
+                        Thêm chỗ đỗ
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <Table columns={spotColumns} dataSource={spots} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
+                <Table columns={spotColumns} dataSource={filteredSpotRows} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
               </>
             ),
           },
@@ -241,13 +308,25 @@ const ParkingSpots: React.FC = () => {
             children: (
               <>
                 <div className="toolbar">
+                  <Space wrap>
+                    <Input.Search
+                      placeholder="Tìm tên khu vực, mô tả..."
+                      value={zoneSearch}
+                      onChange={(e) => setZoneSearch(e.target.value)}
+                      allowClear
+                      style={{ width: 280 }}
+                    />
+                    <Button icon={<ReloadOutlined />} onClick={() => setZoneSearch('')}>Xóa bộ lọc</Button>
+                  </Space>
                   <div className="toolbar-right">
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingZone(null); zoneForm.resetFields(); setZoneModal(true); }}>
-                      Thêm khu vực
-                    </Button>
+                    {canManage && (
+                      <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingZone(null); zoneForm.resetFields(); setZoneModal(true); }}>
+                        Thêm khu vực
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <Table columns={zoneColumns} dataSource={zones} rowKey="id" loading={loading} />
+                <Table columns={zoneColumns} dataSource={filteredZones} rowKey="id" loading={loading} />
               </>
             ),
           },

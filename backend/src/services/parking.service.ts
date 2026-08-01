@@ -36,10 +36,38 @@ export class ParkingService {
     return !!pkgCheck;
   }
 
-  async findAll(status?: string) {
+  async findAll(params: {
+    status?: string;
+    search?: string;
+    zoneId?: number;
+    vehicleTypeId?: number;
+    from?: string;
+    to?: string;
+  }) {
+    const { status, search, zoneId, vehicleTypeId, from, to } = params;
     return prisma.parkingRecord.findMany({
       where: {
         status: status || 'parked',
+        ...(vehicleTypeId ? { vehicleTypeId } : {}),
+        ...(zoneId ? { parkingSpot: { zoneId } } : {}),
+        ...((from || to)
+          ? {
+              entryTime: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
+              },
+            }
+          : {}),
+        ...(search
+          ? {
+              OR: [
+                { licensePlate: { contains: search } },
+                { vehicle: { customer: { fullName: { contains: search } } } },
+                { parkingSpot: { spotNumber: { contains: search } } },
+                { parkingSpot: { zone: { name: { contains: search } } } },
+              ],
+            }
+          : {}),
       },
       include: {
         vehicleType: { select: { name: true } },
@@ -282,13 +310,39 @@ export class ParkingService {
     return { fee, hasPackage, durationMinutes, packageEndDate, daysUntilExpiry };
   }
 
-  async history(from?: string, to?: string, licensePlate?: string) {
+  async history(params: {
+    from?: string;
+    to?: string;
+    licensePlate?: string;
+    zoneId?: number;
+    vehicleTypeId?: number;
+    search?: string;
+  }) {
+    const { from, to, licensePlate, zoneId, vehicleTypeId, search } = params;
     return prisma.parkingRecord.findMany({
       where: {
         status: 'completed',
-        ...(from && { entryTime: { gte: new Date(from) } }),
-        ...(to && { entryTime: { lte: new Date(to) } }),
+        ...((from || to)
+          ? {
+              entryTime: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
+              },
+            }
+          : {}),
         ...(licensePlate && { licensePlate: { contains: licensePlate } }),
+        ...(vehicleTypeId ? { vehicleTypeId } : {}),
+        ...(zoneId ? { parkingSpot: { zoneId } } : {}),
+        ...(search
+          ? {
+              OR: [
+                { licensePlate: { contains: search } },
+                { vehicle: { customer: { fullName: { contains: search } } } },
+                { parkingSpot: { spotNumber: { contains: search } } },
+                { parkingSpot: { zone: { name: { contains: search } } } },
+              ],
+            }
+          : {}),
       },
       include: {
         vehicleType: { select: { name: true } },
@@ -296,6 +350,11 @@ export class ParkingService {
           select: {
             spotNumber: true,
             zone: { select: { name: true } },
+          },
+        },
+        vehicle: {
+          select: {
+            customer: { select: { fullName: true } },
           },
         },
       },

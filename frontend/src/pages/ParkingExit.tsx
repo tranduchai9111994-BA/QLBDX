@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Card, message, Modal, Select, Tag, Input, Alert } from 'antd';
+import { Table, Button, Card, message, Modal, Select, Tag, Input, Alert, Space } from 'antd';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
-import { ParkingRecord, ParkingExitRequest } from '../types';
+import { ParkingRecord, ParkingExitRequest, ParkingZone, VehicleType } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 interface ExitResponse {
@@ -44,7 +44,14 @@ const ParkingExit: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [exitModal, setExitModal] = useState<ParkingRecord | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
-  const [searchPlate, setSearchPlate] = useState<string>('');
+  const [zones, setZones] = useState<ParkingZone[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [filters, setFilters] = useState({
+    search: '',
+    zoneId: undefined as number | undefined,
+    vehicleTypeId: undefined as number | undefined,
+  });
   const [previewFee, setPreviewFee] = useState<PreviewFee | null>(null);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
@@ -108,8 +115,19 @@ const ParkingExit: React.FC = () => {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await api.get<ParkingRecord[]>('/parking', { params: { status: 'parked' } });
-      setRecords(res.data);
+      const params: Record<string, string | number> = { status: 'parked' };
+      if (filters.search) params.search = filters.search;
+      if (filters.zoneId) params.zoneId = filters.zoneId;
+      if (filters.vehicleTypeId) params.vehicleTypeId = filters.vehicleTypeId;
+
+      const [recordsRes, zonesRes, vehicleTypesRes] = await Promise.all([
+        api.get<ParkingRecord[]>('/parking', { params }),
+        api.get<ParkingZone[]>('/parking-zones'),
+        api.get<VehicleType[]>('/vehicle-types'),
+      ]);
+      setRecords(recordsRes.data);
+      setZones(zonesRes.data);
+      setVehicleTypes(vehicleTypesRes.data);
     } catch (err) {
       message.error('Không tải được danh sách xe trong bãi');
     } finally {
@@ -117,7 +135,7 @@ const ParkingExit: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchRecords(); }, []);
+  useEffect(() => { fetchRecords(); }, [filters]);
 
   const handleExit = async () => {
     if (!exitModal) return;
@@ -147,10 +165,6 @@ const ParkingExit: React.FC = () => {
       message.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
-
-  const filteredRecords = records.filter(r =>
-    !searchPlate || r.licensePlate.toLowerCase().includes(searchPlate.toLowerCase())
-  );
 
   const columns = [
     { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', render: (t: string) => <Tag className="plate-tag">{t}</Tag> },
@@ -193,14 +207,36 @@ const ParkingExit: React.FC = () => {
       <Card>
         <div className="toolbar">
           <Input.Search
-            placeholder="Tìm biển số xe..."
+            placeholder="Tìm biển số, khách, khu..."
             style={{ width: 300 }}
-            value={searchPlate}
-            onChange={(e) => setSearchPlate(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
             allowClear
           />
+          <Space wrap>
+            <Select
+              value={filters.zoneId}
+              allowClear
+              placeholder="Lọc theo khu"
+              style={{ width: 180 }}
+              onChange={(value) => setFilters((prev) => ({ ...prev, zoneId: value }))}
+              options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
+            />
+            <Select
+              value={filters.vehicleTypeId}
+              allowClear
+              placeholder="Lọc theo loại xe"
+              style={{ width: 180 }}
+              onChange={(value) => setFilters((prev) => ({ ...prev, vehicleTypeId: value }))}
+              options={vehicleTypes.map((vehicleType) => ({ value: vehicleType.id, label: vehicleType.name }))}
+            />
+            <Button onClick={() => { setSearchInput(''); setFilters({ search: '', zoneId: undefined, vehicleTypeId: undefined }); }}>
+              Xóa bộ lọc
+            </Button>
+          </Space>
         </div>
-        <Table columns={columns} dataSource={filteredRecords} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+        <Table columns={columns} dataSource={records} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
       </Card>
 
       <Modal title="Xác nhận xe ra" open={!!exitModal} onOk={handleExit} onCancel={() => setExitModal(null)} okText="Xác nhận" cancelText="Hủy">

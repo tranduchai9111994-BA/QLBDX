@@ -4,9 +4,12 @@ import { vehicleService } from '../services/vehicle.service';
 export class VehicleController {
   async findAll(req: Request, res: Response): Promise<void> {
     try {
-      const search = req.query.search as string | undefined;
-      const customerId = req.query.customerId ? Number(req.query.customerId) : undefined;
-      const result = await vehicleService.findAll(search, customerId);
+      const result = await vehicleService.findAll({
+        search: req.query.search as string | undefined,
+        customerId: req.query.customerId ? Number(req.query.customerId) : undefined,
+        vehicleTypeId: req.query.vehicleTypeId ? Number(req.query.vehicleTypeId) : undefined,
+        parkingStatus: req.query.parkingStatus as 'parked' | 'outside' | undefined,
+      });
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

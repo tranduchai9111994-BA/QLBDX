@@ -72,16 +72,49 @@ export class CustomerPackageService {
     return { vehicle, pkg };
   }
 
-  async findAll(customerId?: number, status?: string) {
+  async findAll(params: {
+    customerId?: number;
+    status?: string;
+    search?: string;
+    packageId?: number;
+    vehicleTypeId?: number;
+    fromDate?: string;
+    toDate?: string;
+  }) {
     await this.syncExpiredStatuses();
+    const { customerId, status, search, packageId, vehicleTypeId, fromDate, toDate } = params;
 
     const packages = await prisma.customerPackage.findMany({
       where: {
         ...(customerId && { customerId }),
+        ...(packageId && { packageId }),
+        ...(vehicleTypeId
+          ? {
+              vehicle: { vehicleTypeId },
+            }
+          : {}),
+        ...((fromDate || toDate)
+          ? {
+              startDate: {
+                ...(fromDate ? { gte: new Date(fromDate) } : {}),
+                ...(toDate ? { lte: new Date(`${toDate}T23:59:59.999`) } : {}),
+              },
+            }
+          : {}),
+        ...(search
+          ? {
+              OR: [
+                { customer: { fullName: { contains: search } } },
+                { customer: { phone: { contains: search } } },
+                { vehicle: { licensePlate: { contains: search } } },
+                { parkingPackage: { name: { contains: search } } },
+              ],
+            }
+          : {}),
       },
       include: {
         customer: { select: { fullName: true, phone: true } },
-        parkingPackage: { select: { name: true, price: true } },
+        parkingPackage: { select: { id: true, name: true, price: true, vehicleTypeId: true } },
         vehicle: { select: { licensePlate: true, vehicleTypeId: true } },
       },
       orderBy: { createdAt: 'desc' },

@@ -69,6 +69,7 @@ export interface Vehicle {
   brand?: string;
   model?: string;
   color?: string;
+  parkingStatus?: 'parked' | 'outside';
   customer?: { fullName: string };
   vehicleType?: { name: string };
   createdAt: string;
@@ -153,7 +154,7 @@ export interface CustomerPackage {
   endDate: string;
   status: string;
   customer?: { fullName: string; phone?: string };
-  parkingPackage?: { name: string; price: number };
+  parkingPackage?: { id?: number; name: string; price: number; vehicleTypeId?: number };
   vehicle?: { licensePlate: string };
   createdAt: string;
 }
@@ -210,6 +211,7 @@ export interface Payment {
   notes?: string;
   creator?: { fullName: string };
   parkingRecord?: { licensePlate: string; entryTime: string; exitTime?: string };
+  customerPackage?: { vehicle?: { licensePlate: string } };
 }
 
 // Dashboard Stats
@@ -250,7 +252,9 @@ export interface UserForm {
   username: string;
   fullName: string;
   email?: string;
+  phone?: string;
   role: string;
+  isActive?: boolean;
   password?: string;
 }
 
@@ -286,4 +290,14 @@ export interface ActivityLogPage {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface AlertItem {
+  id: string;
+  severity: 'info' | 'warning' | 'danger';
+  category: string;
+  title: string;
+  description: string;
+  occurredAt: string;
+  relatedPath?: string;
 }
