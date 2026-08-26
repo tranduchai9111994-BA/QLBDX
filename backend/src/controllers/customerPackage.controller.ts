@@ -54,6 +54,15 @@ export class CustomerPackageController {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
     }
   }
+
+  async recommend(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await customerPackageService.getPackageRecommendation(Number(req.params.customerId));
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
 }
 
 export const customerPackageController = new CustomerPackageController();

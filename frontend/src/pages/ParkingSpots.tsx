@@ -5,6 +5,7 @@ import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { ParkingSpot, ParkingZone, ParkingZoneForm, ParkingSpotForm, ParkingSpotUpdateForm } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const statusLabels: Record<string, string> = {
   available: 'Trống',
@@ -21,6 +22,7 @@ const spotTypeLabels: Record<string, string> = {
 
 const ParkingSpots: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const canManage = user?.role === 'admin';
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [zones, setZones] = useState<ParkingZone[]>([]);
@@ -40,6 +42,8 @@ const ParkingSpots: React.FC = () => {
   const [spotModal, setSpotModal] = useState<boolean>(false);
   const [editingSpot, setEditingSpot] = useState<ParkingSpot | null>(null);
   const [spotForm] = Form.useForm<ParkingSpotForm & ParkingSpotUpdateForm>();
+  const [spotSubmitting, setSpotSubmitting] = useState(false);
+  const [zoneSubmitting, setZoneSubmitting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -63,6 +67,7 @@ const ParkingSpots: React.FC = () => {
 
   // === Zone CRUD ===
   const handleZoneSubmit = async (values: ParkingZoneForm) => {
+    setZoneSubmitting(true);
     try {
       if (editingZone) {
         await api.put(`/parking-zones/${editingZone.id}`, values);
@@ -78,6 +83,8 @@ const ParkingSpots: React.FC = () => {
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setZoneSubmitting(false);
     }
   };
 
@@ -110,6 +117,7 @@ const ParkingSpots: React.FC = () => {
 
   // === Spot CRUD ===
   const handleSpotSubmit = async (values: any) => {
+    setSpotSubmitting(true);
     try {
       if (editingSpot) {
         await api.put(`/parking-spots/${editingSpot.id}`, {
@@ -132,6 +140,8 @@ const ParkingSpots: React.FC = () => {
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setSpotSubmitting(false);
     }
   };
 
@@ -232,7 +242,7 @@ const ParkingSpots: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Quản lý bãi đỗ xe</h2>
+      <h2 className="page-title">{t('pageParkingSpots')}</h2>
 
       <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
         {filteredZones.map((z) => (
@@ -341,6 +351,7 @@ const ParkingSpots: React.FC = () => {
         onOk={() => zoneForm.submit()}
         okText={editingZone ? 'Cập nhật' : 'Thêm'}
         cancelText="Hủy"
+        okButtonProps={{ loading: zoneSubmitting }}
       >
         <Form form={zoneForm} layout="vertical" onFinish={handleZoneSubmit}>
           <Form.Item name="name" label="Tên khu vực" rules={[{ required: true, message: 'Vui lòng nhập tên khu vực' }]}>
@@ -360,6 +371,7 @@ const ParkingSpots: React.FC = () => {
         onOk={() => spotForm.submit()}
         okText={editingSpot ? 'Cập nhật' : 'Thêm'}
         cancelText="Hủy"
+        okButtonProps={{ loading: spotSubmitting }}
       >
         <Form form={spotForm} layout="vertical" onFinish={handleSpotSubmit}>
           {!editingSpot && (

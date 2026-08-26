@@ -118,45 +118,66 @@ body {
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl) !important;
 }
 
-/* Tables: clean, no borders */
+/* ── Tables: vibrant zebra + accent ───────────────────────────── */
 .ant-table {
   background: transparent !important;
 }
 .ant-table-wrapper .ant-table-container {
   border: none !important;
   border-radius: var(--radius-default) !important;
+  overflow: hidden !important;
 }
+/* Header: gradient accent */
 .ant-table-thead > tr > th,
 .ant-table-thead > tr > td {
-  background: var(--surface-container-low) !important;
+  background: linear-gradient(135deg, #0e3a6e 0%, #005daa 100%) !important;
   border-bottom: none !important;
-  font-weight: 600 !important;
-  color: var(--on-surface-variant) !important;
-  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  color: #fff !important;
+  font-size: 0.72rem !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.04em !important;
-  padding: var(--spacing-md) var(--spacing-lg) !important;
+  letter-spacing: 0.06em !important;
+  padding: 12px 16px !important;
 }
 .ant-table-thead > tr > th::before {
   display: none !important;
 }
+/* Odd rows: white */
+.ant-table-tbody > tr:nth-child(odd) > td {
+  background: #ffffff !important;
+}
+/* Even rows: very light blue-tint */
+.ant-table-tbody > tr:nth-child(even) > td {
+  background: #eef4ff !important;
+}
 .ant-table-tbody > tr > td {
-  border-bottom: none !important;
-  padding: var(--spacing-md) var(--spacing-lg) !important;
+  border-bottom: 1px solid #f0f4ff !important;
+  padding: 11px 16px !important;
   font-size: 0.875rem !important;
   color: var(--on-surface) !important;
+  transition: background 0.12s ease !important;
 }
-.ant-table-tbody > tr:nth-child(even) {
-  background: var(--surface-container-low) !important;
-}
+/* Hover: vivid blue wash */
 .ant-table-tbody > tr:hover > td {
-  background: var(--surface-container-high) !important;
-}
-.ant-table-tbody > tr {
-  transition: background 0.15s ease;
+  background: #d6e8ff !important;
 }
 .ant-table-cell-row-hover {
-  background: var(--surface-container-high) !important;
+  background: #d6e8ff !important;
+}
+/* Left accent bar on first column */
+.ant-table-tbody > tr > td:first-child {
+  border-left: 3px solid transparent !important;
+  transition: border-color 0.12s ease !important;
+}
+.ant-table-tbody > tr:hover > td:first-child {
+  border-left-color: var(--primary) !important;
+}
+/* Pagination area */
+.ant-table-pagination {
+  padding: 8px 16px !important;
+  background: #f5f8ff !important;
+  border-radius: 0 0 var(--radius-default) var(--radius-default) !important;
+  margin: 0 !important;
 }
 
 /* Buttons */
@@ -495,6 +516,356 @@ body {
   font-weight: 600;
 }
 
+/* =============================================
+   DASHBOARD
+   ============================================= */
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 22px 24px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(0, 117, 213, 0.18), transparent 42%),
+    linear-gradient(135deg, #0b2f57 0%, #005daa 52%, #1d4f91 100%);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(0, 53, 110, 0.22);
+  overflow: hidden;
+  position: relative;
+}
+
+.dashboard-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -40px -60px auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.dashboard-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+
+.dashboard-hero-title {
+  margin: 0 0 6px !important;
+  color: #fff !important;
+  font-size: 1.55rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-hero-sub {
+  margin: 0 0 16px;
+  opacity: 0.88;
+  font-size: 0.92rem;
+}
+
+.dashboard-hero-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.dashboard-quick-btn {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #fff !important;
+}
+
+.dashboard-quick-btn:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  color: #fff !important;
+}
+
+.dashboard-refresh-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  font-size: 0.75rem !important;
+  border-radius: 999px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  margin-left: auto;
+}
+
+.dashboard-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+}
+
+.dashboard-hero-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-meter-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.dashboard-meter-value {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.dashboard-meter-value strong {
+  font-size: 1.35rem;
+  color: #fff;
+}
+
+.dashboard-meter-value span {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 500;
+}
+
+.dashboard-meter-hint {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  opacity: 0.9;
+  max-width: 200px;
+}
+
+.dashboard-meter-near-full {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #ffd591;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.dashboard-kpi .ant-statistic-content-value {
+  font-size: 1.75rem !important;
+}
+
+.dashboard-kpi-foot {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--on-surface-variant);
+}
+
+.kpi-warn {
+  color: var(--warning);
+  font-weight: 500;
+}
+
+.dashboard-kpi-suffix {
+  font-size: 0.9rem;
+  color: var(--on-surface-variant);
+  font-weight: 500;
+}
+
+.dashboard-mini-stat {
+  border-radius: 12px !important;
+  background: var(--surface-container-lowest) !important;
+}
+
+.dashboard-panel {
+  border-radius: 14px !important;
+  height: 100%;
+}
+
+.dashboard-panel .ant-card-head-title {
+  font-weight: 600;
+}
+
+.dashboard-zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dashboard-zone-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashboard-zone-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dashboard-zone-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+}
+
+.dashboard-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+}
+
+.dashboard-list-title {
+  font-weight: 600;
+}
+
+.dashboard-list-sub {
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.dashboard-alert-item {
+  align-items: flex-start !important;
+}
+
+.dashboard-empty-chart {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Parked vehicles grid */
+.dashboard-parked-item {
+  background: var(--surface-container-low);
+  border-radius: var(--radius-default);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease;
+}
+
+.dashboard-parked-item:hover {
+  background: var(--surface-container);
+}
+
+.dashboard-parked-item.parked-long {
+  border-left-color: var(--warning);
+  background: var(--warning-container);
+}
+
+.dashboard-parked-item.parked-critical {
+  border-left-color: var(--error);
+  background: var(--error-container);
+}
+
+.dashboard-parked-plate {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--on-surface);
+  letter-spacing: 0.02em;
+}
+
+.dashboard-parked-meta {
+  font-size: 0.78rem;
+  color: var(--on-surface-variant);
+  margin-top: 2px;
+}
+
+.dashboard-parked-time {
+  font-size: 0.78rem;
+  color: var(--on-surface-variant);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.parked-time-warn {
+  color: var(--error);
+  font-weight: 600;
+}
+
+/* Chart caption */
+.dashboard-chart-caption {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+
+/* Vehicle type breakdown table */
+.dashboard-vehicle-table {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-vehicle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  padding: 4px 0;
+}
+
+.dashboard-vehicle-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dashboard-vehicle-name {
+  flex: 1;
+  color: var(--on-surface);
+}
+
+.dashboard-vehicle-count {
+  color: var(--on-surface-variant);
+  min-width: 56px;
+  text-align: right;
+}
+
+.dashboard-vehicle-rev {
+  color: var(--primary);
+  font-weight: 600;
+  min-width: 90px;
+  text-align: right;
+}
+
+@media (max-width: 992px) {
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+
+  .dashboard-hero-meter {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
 /* Toolbar / filter bar */
 .toolbar {
   display: flex;
@@ -607,6 +978,14 @@ body {
   font-weight: 600;
 }
 
+/* ParkingExit: monthly vehicle row highlight */
+.exit-row-monthly td {
+  background: #f0faf3 !important;
+}
+.exit-row-monthly:hover td {
+  background: #d9f2e0 !important;
+}
+
 /* License plate tag - special styling */
 .plate-tag {
   background: var(--info-container) !important;
@@ -615,6 +994,23 @@ body {
   font-size: 0.8rem !important;
   letter-spacing: 0.02em !important;
   padding: 3px 12px !important;
+}
+
+/* ── Row state highlights ──────────────────────────────────────── */
+/* Expired package rows */
+tr.row-expired > td {
+  background: #fff1f0 !important;
+  color: #cf1322 !important;
+}
+tr.row-expired:hover > td {
+  background: #ffd6d6 !important;
+}
+/* Expiring soon (≤7 days) */
+tr.row-expiring-soon > td {
+  background: #fffbe6 !important;
+}
+tr.row-expiring-soon:hover > td {
+  background: #fff1b8 !important;
 }
 
 /* Empty state */

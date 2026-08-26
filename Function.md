@@ -20,12 +20,13 @@ Cảnh báo / Validation:
 
 ---
 
-### FUNC-AUTH-002 – Đăng ký người dùng
+### FUNC-AUTH-002 – Đăng ký người dùng (chỉ admin)
 
 Mô tả:
-Tạo tài khoản người dùng mới với vai trò mặc định là admin và lưu mật khẩu dưới dạng hash.
+Tạo tài khoản người dùng mới. Endpoint yêu cầu đăng nhập bằng tài khoản `admin` — không public. Role mặc định nếu không truyền là `staff`. Mật khẩu được lưu dưới dạng hash bcrypt.
 
 Cảnh báo / Validation:
+- Chỉ admin được phép gọi API này
 - username không được bỏ trống
 - password tối thiểu 6 ký tự
 - fullName không được bỏ trống
@@ -563,14 +564,15 @@ Cảnh báo / Validation:
 
 ---
 
-### FUNC-CPKG-004 – Xóa gói dịch vụ
+### FUNC-CPKG-004 – Huỷ gói dịch vụ (soft cancel)
 
 Mô tả:
-Xóa một đăng ký gói dịch vụ và các thanh toán liên quan.
+Đánh dấu gói dịch vụ là `cancelled` thay vì xóa cứng. Gói đã mua vẫn giữ trong hệ thống để theo dõi lịch sử và thanh toán liên quan không bị mất.
 
 Cảnh báo / Validation:
 - Chỉ admin được phép truy cập
 - ID phải là số nguyên hợp lệ
+- Gói đang `expired` không cần cancel
 
 | Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
 |------------|------------|----------|------|
@@ -677,6 +679,49 @@ Cảnh báo / Validation:
 | from | string | Không | Ngày bắt đầu lọc |
 | to | string | Không | Ngày kết thúc lọc |
 | licensePlate | string | Không | Lọc theo biển số |
+
+---
+
+### FUNC-PARK-006 – Checkout ngoại lệ
+
+Mô tả:
+Ghi nhận xe ra theo luồng ngoại lệ (mất vé, miễn phí đặc biệt, ghi đè phí). Backend lưu lý do và ghi chú vào `ParkingRecord`, tạo `Payment` nếu có phí thực tế. Bản ghi vẫn được ghi đầy đủ để audit trail.
+
+API: `POST /api/parking/exit-exception`
+
+Cảnh báo / Validation:
+- Yêu cầu xác thực bằng JWT
+- parkingRecordId phải là số nguyên dương
+- bản ghi phải tồn tại và đang có status `parked`
+- exceptionReason không được bỏ trống
+- overrideFee nếu có phải >= 0
+- waiveFee và overrideFee không đồng thời dùng
+
+| Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
+|------------|------------|----------|------|
+| parkingRecordId | number | Có | ID bản ghi đỗ xe |
+| exceptionReason | string | Có | Lý do ngoại lệ |
+| exceptionNote | string | Không | Ghi chú thêm |
+| waiveFee | boolean | Không | Miễn phí hoàn toàn |
+| overrideFee | number | Không | Phí ghi đè (nếu không miễn) |
+| paymentMethod | enum | Không | cash/card/transfer |
+
+---
+
+### FUNC-PARK-007 – Tra cứu lịch sử theo biển số
+
+Mô tả:
+Lấy toàn bộ lịch sử gửi xe của một biển số cụ thể (gồm tất cả trạng thái: parked, completed). Trả về tóm tắt thống kê: tổng lượt, đang trong bãi, hoàn thành, ngoại lệ.
+
+API: `GET /api/parking/plate-history/:plate`
+
+Cảnh báo / Validation:
+- Yêu cầu xác thực bằng JWT
+- plate không được rỗng, được chuẩn hóa trước khi tra cứu
+
+| Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
+|------------|------------|----------|------|
+| plate | string (path param) | Có | Biển số xe |
 
 ---
 
@@ -880,10 +925,45 @@ Cảnh báo / Validation:
 ### FUNC-REP-004 – Báo cáo thống kê theo giờ
 
 Mô tả:
-Đếm số lượt vào theo từng giờ trong ngày hiện tại.
+Đếm số lượt vào theo từng giờ trong ngày, hỗ trợ lọc theo khoảng ngày.
 
 Cảnh báo / Validation:
 - Chỉ admin được phép truy cập
+
+| Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
+|------------|------------|----------|------|
+| from | string | Không | Ngày bắt đầu (mặc định hôm nay) |
+| to | string | Không | Ngày kết thúc (mặc định hôm nay) |
+
+---
+
+### FUNC-REP-005 – Báo cáo phương thức thanh toán
+
+Mô tả:
+Tổng hợp doanh thu và số giao dịch theo phương thức thanh toán (tiền mặt, thẻ, chuyển khoản) và loại (gửi xe lẻ, mua gói). Dùng cho biểu đồ và bảng trong trang Reports.
+
+API: `GET /api/reports/payment-methods`
+
+Cảnh báo / Validation:
+- Chỉ admin được phép truy cập
+
+| Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
+|------------|------------|----------|------|
+| fromDate | string | Không | Ngày bắt đầu lọc |
+| toDate | string | Không | Ngày kết thúc lọc |
+
+---
+
+## ALERT
+
+### FUNC-ALERT-001 – Xem cảnh báo hệ thống
+
+Mô tả:
+Trả về danh sách các cảnh báo vận hành bất thường. Phân loại theo mức độ (warning, critical) và loại (xe đỗ lâu, khu đầy, gói sắp hết hạn, dữ liệu lệch...). Dashboard admin hiển thị top 5; trang `/alerts` hiển thị toàn bộ với filter.
+
+Cảnh báo / Validation:
+- Chỉ admin được phép truy cập
+- Dữ liệu tính theo thời gian thực từ DB
 
 | Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
 |------------|------------|----------|------|

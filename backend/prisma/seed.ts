@@ -49,6 +49,18 @@ async function seedMasterData() {
     update: { passwordHash: hs, fullName: 'Trần Thị Bích', email: 'nv2@parking.com', role: 'staff', isActive: true },
     create: { username: 'nhanvien2', passwordHash: hs, fullName: 'Trần Thị Bích', email: 'nv2@parking.com', role: 'staff' },
   });
+  // Staff bị khoá — demo tính năng deactivate
+  await prisma.user.upsert({
+    where: { username: 'nhanvien3' },
+    update: { passwordHash: hs, fullName: 'Lê Văn Cường', email: 'nv3@parking.com', role: 'staff', isActive: false },
+    create: { username: 'nhanvien3', passwordHash: hs, fullName: 'Lê Văn Cường', email: 'nv3@parking.com', role: 'staff', isActive: false },
+  });
+  // Admin phụ — demo tính năng quản lý nhiều admin
+  await prisma.user.upsert({
+    where: { username: 'giamdoc' },
+    update: { passwordHash: hp, fullName: 'Giám đốc Bãi', email: 'gd@parking.com', role: 'admin', isActive: true },
+    create: { username: 'giamdoc', passwordHash: hp, fullName: 'Giám đốc Bãi', email: 'gd@parking.com', role: 'admin', isActive: true },
+  });
 
   for (const [i, vt] of [
     { name: 'Xe máy', description: 'Xe máy, xe gắn máy', hourlyRate: 5000, dailyRate: 20000, monthlyRate: 200000 },
@@ -779,7 +791,7 @@ async function main() {
   console.log('   - Dữ liệu lịch sử từ 01/2024 đến nay (~1200+ biến động xe)');
   console.log('   - Gói active / sắp hết hạn / expired / chưa tới ngày áp dụng');
   console.log('   - 300 nhật ký hoạt động');
-  console.log('   - Tài khoản: admin/admin123, nhanvien1/staff123, nhanvien2/staff123');
+  console.log('   - Tài khoản: admin/admin123, giamdoc/admin123, nhanvien1/staff123, nhanvien2/staff123, nhanvien3/staff123 (khoá)');
 }
 
 main()

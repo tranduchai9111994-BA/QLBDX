@@ -12,5 +12,6 @@ router.post('/', auth, activityLogger('CustomerPackages'), validate(createCustom
 router.put('/:id', auth, adminOnly, activityLogger('CustomerPackages'), validate(updateCustomerPackageSchema), (req, res) => customerPackageController.update(req, res));
 router.delete('/:id', auth, adminOnly, activityLogger('CustomerPackages'), (req, res) => customerPackageController.delete(req, res));
 router.get('/check/:vehicleId', auth, (req, res) => customerPackageController.checkActivePackage(req, res));
+router.get('/recommend/:customerId', auth, (req, res) => customerPackageController.recommend(req, res));
 
 export default router;

@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Table, Card, DatePicker, Select, Input, Tag, Tooltip, Button, Row, Col, Statistic,
+  Table, Card, DatePicker, Select, Input, Tag, Tooltip, Button, Row, Col, Statistic, Space,
 } from 'antd';
+import { useLanguage } from '../context/LanguageContext';
 import {
   LoginOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
   WarningOutlined, FileSearchOutlined, SearchOutlined, ReloadOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons';
+import * as XLSX from 'xlsx';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/axios';
@@ -46,6 +49,7 @@ interface Filters {
 
 const ActivityLogs: React.FC = () => {
   const [data, setData] = useState<ActivityLog[]>([]);
+  const { t } = useLanguage();
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -120,9 +124,52 @@ const ActivityLogs: React.FC = () => {
   const statusFailed  = data.filter(d => d.statusCode !== null && d.statusCode !== undefined && d.statusCode >= 400).length;
   const statusOther   = data.filter(d => !d.statusCode).length;
 
+  const handleExportCsv = () => {
+    if (!data.length) return;
+    const header = ['Thời gian', 'Người dùng', 'Hành động', 'Đối tượng', 'Thực thể ID', 'IP', 'HTTP', 'Mô tả'];
+    const rows = data.map(d => [
+      dayjs(d.createdAt).format('DD/MM/YYYY HH:mm:ss'),
+      d.username,
+      ACTION_CONFIG[d.action]?.label || d.action,
+      ENTITY_LABELS[d.entity || ''] || d.entity || '',
+      d.entityId || '',
+      d.ipAddress || '',
+      d.statusCode || '',
+      d.details || '',
+    ]);
+    const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `activity-logs-${dayjs().format('YYYYMMDD')}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    if (!data.length) return;
+    const headers = ['Thời gian', 'Người dùng', 'Họ tên', 'Hành động', 'Đối tượng', 'Thực thể ID', 'IP', 'HTTP Status', 'Nội dung'];
+    const rows = data.map(d => [
+      dayjs(d.createdAt).format('DD/MM/YYYY HH:mm:ss'),
+      d.username,
+      d.user?.fullName || '',
+      ACTION_CONFIG[d.action]?.label || d.action,
+      ENTITY_LABELS[d.entity || ''] || d.entity || '',
+      d.entityId || '',
+      d.ipAddress || '',
+      d.statusCode != null ? d.statusCode : '',
+      d.details || '',
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map((h, i) => ({
+      wch: Math.max(h.length + 2, ...rows.map(r => String(r[i] ?? '').length + 1)),
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Nhật ký hoạt động');
+    XLSX.writeFile(wb, `activity-logs-${dayjs().format('YYYYMMDD')}.xlsx`);
+  };
+
   const columns: ColumnsType<ActivityLog> = [
     {
-      title: 'Thời gian',
+      title: t('colTime'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 160,
@@ -133,7 +180,7 @@ const ActivityLogs: React.FC = () => {
       ),
     },
     {
-      title: 'Người dùng',
+      title: t('colUser'),
       key: 'user',
       width: 170,
       render: (_: unknown, record: ActivityLog) => (
@@ -148,7 +195,7 @@ const ActivityLogs: React.FC = () => {
       ),
     },
     {
-      title: 'Hành động',
+      title: 'Action',
       dataIndex: 'action',
       key: 'action',
       width: 130,
@@ -224,7 +271,7 @@ const ActivityLogs: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Nhật ký hoạt động</h2>
+      <h2 className="page-title">{t('pageActivityLogs')}</h2>
 
       {/* Summary cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
@@ -336,9 +383,23 @@ const ActivityLogs: React.FC = () => {
           </Col>
           <Col xs={8} sm={4} md={4} style={{ display: 'flex', gap: 8 }}>
             <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
-              Tìm
+              {t('btnSearch')}
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={handleReset} />
+            <Tooltip title={t('btnReset')}>
+              <Button icon={<ReloadOutlined />} onClick={handleReset} />
+            </Tooltip>
+          </Col>
+          <Col xs={24} style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Space>
+              <Button onClick={handleExportCsv}>{t('btnExport')} CSV</Button>
+              <Button
+                icon={<FileExcelOutlined />}
+                onClick={handleExportExcel}
+                style={{ color: '#217346', borderColor: '#217346' }}
+              >
+                Xuất Excel
+              </Button>
+            </Space>
           </Col>
         </Row>
       </Card>

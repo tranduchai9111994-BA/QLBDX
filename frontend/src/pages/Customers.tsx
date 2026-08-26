@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, message, Popconfirm, Select, Tag, Space } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { Customer, CustomerForm } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import ImportModal, { ColumnDef } from '../components/ImportModal';
 
 const Customers: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const isAdmin = user?.role === 'admin';
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -19,6 +22,7 @@ const Customers: React.FC = () => {
     status: 'all',
   });
   const [form] = Form.useForm<CustomerForm>();
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchCustomers = async () => {
     setLoading(true);
@@ -85,29 +89,65 @@ const Customers: React.FC = () => {
     setFilters({ search: '', status: 'all' });
   };
 
+  /* ── Import ─────────────────────────────────────────────────── */
+  const importColumns: ColumnDef[] = [
+    { key: 'fullName',     label: 'Họ tên',       required: true, example: 'Nguyễn Văn A' },
+    { key: 'phone',        label: 'Số điện thoại', required: true, example: '0912345678',   note: '8-15 chữ số' },
+    { key: 'email',        label: 'Email',          required: false, example: 'a@mail.com' },
+    { key: 'identityCard', label: 'CMND/CCCD',     required: false, example: '001234567890', note: '9-12 chữ số' },
+    { key: 'address',      label: 'Địa chỉ',       required: false, example: '123 Phố Huế, Hà Nội' },
+  ];
+
+  const handleImport = async (rows: Record<string, string>[]) => {
+    let success = 0;
+    const errors: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2;
+      if (!row.fullName || !row.phone) {
+        errors.push(`Dòng ${rowNum}: Thiếu Họ tên hoặc SĐT`);
+        continue;
+      }
+      try {
+        await api.post('/customers', {
+          fullName: row.fullName,
+          phone: row.phone,
+          email: row.email || undefined,
+          identityCard: row.identityCard || undefined,
+          address: row.address || undefined,
+        });
+        success++;
+      } catch (err) {
+        const error = err as AxiosError<{ message: string }>;
+        errors.push(`Dòng ${rowNum}: ${error.response?.data?.message ?? 'Lỗi không xác định'}`);
+      }
+    }
+    if (success > 0) fetchCustomers();
+    return { success, errors };
+  };
+
   const columns = [
-    { title: 'Họ tên', dataIndex: 'fullName', key: 'fullName', render: (t: string) => <span style={{ fontWeight: 500 }}>{t}</span> },
-    { title: 'Số điện thoại', dataIndex: 'phone', key: 'phone' },
-    { title: 'Email', dataIndex: 'email', key: 'email', render: (t?: string) => t || '-' },
-    { title: 'CMND/CCCD', dataIndex: 'identityCard', key: 'identityCard', render: (t?: string) => t || '-' },
-    { title: 'Địa chỉ', dataIndex: 'address', key: 'address', render: (t?: string) => t || '-' },
+    { title: t('fieldName'), dataIndex: 'fullName', key: 'fullName', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { title: t('fieldPhone'), dataIndex: 'phone', key: 'phone' },
+    { title: t('fieldEmail'), dataIndex: 'email', key: 'email', render: (v?: string) => v || '-' },
+    { title: t('colIdentityCard'), dataIndex: 'identityCard', key: 'identityCard', render: (v?: string) => v || '-' },
+    { title: t('fieldAddress'), dataIndex: 'address', key: 'address', render: (v?: string) => v || '-' },
     {
-      title: 'Trạng thái',
-      dataIndex: 'isActive',
-      key: 'isActive',
-      render: (isActive: boolean) => isActive ? <Tag color="green">Đang hoạt động</Tag> : <Tag>Ngừng hoạt động</Tag>,
+      title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive',
+      render: (isActive: boolean) => isActive
+        ? <Tag color="green">{t('statusActive')}</Tag>
+        : <Tag>{t('statusInactive')}</Tag>,
     },
     {
-      title: 'Thao tác', key: 'action', width: 220, render: (_: any, r: Customer) => (
+      title: t('fieldAction'), key: 'action', width: 220,
+      render: (_: unknown, r: Customer) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
+          <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
           {isAdmin ? (
-            <Popconfirm title="Ngừng hoạt động khách hàng này?" onConfirm={() => handleDelete(r.id)}>
-              <Button icon={<DeleteOutlined />} danger size="small" disabled={!r.isActive}>Ngừng hoạt động</Button>
+            <Popconfirm title={t('confirmDelete')} onConfirm={() => handleDelete(r.id)}>
+              <Button icon={<DeleteOutlined />} danger size="small" disabled={!r.isActive}>{t('statusInactive')}</Button>
             </Popconfirm>
-          ) : (
-            <Tag color="default">Chỉ admin được ngừng</Tag>
-          )}
+          ) : null}
         </div>
       ),
     },
@@ -115,7 +155,7 @@ const Customers: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Quản lý khách hàng</h2>
+      <h2 className="page-title">{t('pageCustomers')}</h2>
       <Card>
         <div className="toolbar">
           <Space wrap>
@@ -140,21 +180,32 @@ const Customers: React.FC = () => {
             <Button icon={<ReloadOutlined />} onClick={resetFilters}>Xóa bộ lọc</Button>
           </Space>
           <div className="toolbar-right">
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-              Thêm khách hàng
-            </Button>
+            <Space>
+              <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+                {t('btnAddCustomer')}
+              </Button>
+            </Space>
           </div>
         </div>
         <Table columns={columns} dataSource={customers} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
       </Card>
 
+      <ImportModal
+        open={importOpen}
+        title="Khách hàng"
+        columns={importColumns}
+        onImport={handleImport}
+        onClose={() => setImportOpen(false)}
+      />
+
       <Modal
-        title={editing ? 'Sửa khách hàng' : 'Thêm khách hàng'}
+        title={editing ? t('btnEdit') + ' ' + t('menuCustomers').toLowerCase() : t('btnAddCustomer')}
         open={modal}
         onCancel={() => { setModal(false); setEditing(null); form.resetFields(); }}
         onOk={() => form.submit()}
-        okText={editing ? 'Cập nhật' : 'Thêm'}
-        cancelText="Hủy"
+        okText={editing ? t('btnUpdate') : t('btnAdd')}
+        cancelText={t('btnCancel')}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="fullName" label="Họ tên" rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>

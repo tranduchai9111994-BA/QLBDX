@@ -3,7 +3,8 @@ import { Form, Input, Select, Button, Card, message, Row, Col, Tag, Table, Alert
 import { WarningOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
-import { VehicleType, ParkingSpot, Vehicle, ParkingEntryForm, ParkingRecord, PackageCheckResult } from '../types';
+import { VehicleType, ParkingSpot, Vehicle, ParkingEntryForm, ParkingRecord, PackageCheckResult, SmartLookupInsights, SmartLookupResult } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 
 const normalizeText = (value?: string) =>
   (value || '')
@@ -41,12 +42,14 @@ const isSpotCompatible = (spot: ParkingSpot, vehicleTypeName?: string) => {
 };
 
 const ParkingEntry: React.FC = () => {
+  const { t } = useLanguage();
   const [form] = Form.useForm<ParkingEntryForm>();
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [vehicleInfo, setVehicleInfo] = useState<Vehicle | null>(null);
   const [packageCheck, setPackageCheck] = useState<PackageCheckResult | null>(null);
+  const [smartInsights, setSmartInsights] = useState<SmartLookupInsights | null>(null);
   const [parkedRecords, setParkedRecords] = useState<ParkingRecord[]>([]);
   const selectedVehicleTypeId = Form.useWatch('vehicleTypeId', form);
 
@@ -101,13 +104,24 @@ const ParkingEntry: React.FC = () => {
     const plate = normalizePlate(raw);
     form.setFieldsValue({ licensePlate: plate });
     try {
-      const res = await api.get<Vehicle>(`/vehicles/by-plate/${encodeURIComponent(plate)}`);
-      setVehicleInfo(res.data);
-      form.setFieldsValue({ vehicleTypeId: res.data.vehicleTypeId });
-      message.info(`Xe của: ${res.data.customer?.fullName || 'Không rõ'}`);
+      const res = await api.get<SmartLookupResult>(`/parking/smart-lookup/${encodeURIComponent(plate)}`);
+      const { vehicle, insights } = res.data;
+      if (!vehicle) {
+        setVehicleInfo(null);
+        setPackageCheck(null);
+        setSmartInsights(null);
+        return;
+      }
+      setVehicleInfo(vehicle);
+      setSmartInsights(insights);
+      form.setFieldsValue({ vehicleTypeId: vehicle.vehicleTypeId });
+      if (insights?.suggestedSpotId) {
+        form.setFieldsValue({ parkingSpotId: insights.suggestedSpotId });
+      }
+      message.info(`Xe của: ${vehicle.customer?.fullName || 'Không rõ'}`);
       // Check package expiry for this vehicle
       try {
-        const pkgRes = await api.get<PackageCheckResult>(`/customer-packages/check/${res.data.id}`);
+        const pkgRes = await api.get<PackageCheckResult>(`/customer-packages/check/${vehicle.id}`);
         setPackageCheck(pkgRes.data);
       } catch {
         setPackageCheck(null);
@@ -115,6 +129,7 @@ const ParkingEntry: React.FC = () => {
     } catch {
       setVehicleInfo(null);
       setPackageCheck(null);
+      setSmartInsights(null);
     }
   };
 
@@ -126,6 +141,7 @@ const ParkingEntry: React.FC = () => {
       form.resetFields();
       setVehicleInfo(null);
       setPackageCheck(null);
+      setSmartInsights(null);
       fetchData();
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
@@ -157,7 +173,7 @@ const ParkingEntry: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Ghi nhận xe vào</h2>
+      <h2 className="page-title">{t('pageParkingEntry')}</h2>
 
       {isFull && (
         <Alert
@@ -221,7 +237,7 @@ const ParkingEntry: React.FC = () => {
                   style={{ height: 48, fontWeight: 600 }}
                   danger={isFull}
                 >
-                  {isFull ? 'Bãi đầy — Không thể nhận xe' : 'Ghi nhận xe vào'}
+                  {isFull ? 'Bãi đầy — Không thể nhận xe' : t('pageParkingEntry')}
                 </Button>
               </Form.Item>
             </Form>
@@ -236,6 +252,45 @@ const ParkingEntry: React.FC = () => {
               <div className="info-row"><span className="info-label">Biển số</span><span className="info-value" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>{vehicleInfo.licensePlate}</span></div>
               <div className="info-row"><span className="info-label">Hãng</span><span className="info-value">{vehicleInfo.brand || '-'}</span></div>
               <div className="info-row"><span className="info-label">Màu</span><span className="info-value">{vehicleInfo.color || '-'}</span></div>
+            </Card>
+          )}
+
+          {smartInsights && (
+            <Card style={{ marginBottom: 24, background: 'var(--primary-container, #e0e8ff)', border: 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: '1.1rem' }}>🔍</span>
+                <span style={{ fontWeight: 600 }}>
+                  {smartInsights.isFrequent ? 'Khách quen' : 'Nhận diện xe'} — {smartInsights.visitCount30Days} lượt đỗ / 30 ngày
+                </span>
+                {smartInsights.isFrequent && <Tag color="blue">Thường xuyên</Tag>}
+              </div>
+              {smartInsights.hasActivePackage ? (
+                <div style={{ marginBottom: 8 }}>
+                  Gói: <b>{smartInsights.packageName}</b>
+                  {smartInsights.packageExpiry && ` (hết hạn ${new Date(smartInsights.packageExpiry).toLocaleDateString('vi-VN')})`}
+                </div>
+              ) : smartInsights.isFrequent ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  message="Khách đỗ thường xuyên nhưng chưa có gói dịch vụ — gợi ý tư vấn đăng ký gói"
+                  style={{ marginBottom: 8, borderRadius: 8 }}
+                />
+              ) : null}
+              {smartInsights.avgDurationHours != null && (
+                <div style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)' }}>
+                  Thời gian đỗ trung bình: {smartInsights.avgDurationHours}h
+                  {smartInsights.preferredZone && ` · Thường đỗ: ${smartInsights.preferredZone}`}
+                </div>
+              )}
+              {smartInsights.suggestedSpotLabel && (
+                <div style={{ fontSize: '0.85rem', marginTop: 6 }}>
+                  Đã tự động chọn chỗ đỗ gợi ý: <b>{smartInsights.suggestedSpotLabel}</b>
+                  {smartInsights.suggestedSpotNote && (
+                    <span style={{ color: 'var(--warning)' }}> — {smartInsights.suggestedSpotNote}</span>
+                  )}
+                </div>
+              )}
             </Card>
           )}
           <Card>

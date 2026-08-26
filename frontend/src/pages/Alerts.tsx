@@ -1,17 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Table, Tag, Button, Select, InputNumber, Row, Col, Statistic, Space, message } from 'antd';
-import { AlertOutlined, CheckCircleOutlined, ExclamationCircleOutlined, FireOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Button, Select, InputNumber, Row, Col, Statistic, Space, message, Dropdown, Segmented, DatePicker, Tooltip } from 'antd';
+import {
+  AlertOutlined, CheckCircleOutlined, ExclamationCircleOutlined, FireOutlined,
+  ReloadOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined,
+  CalendarOutlined, BulbOutlined,
+} from '@ant-design/icons';
+import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AlertItem } from '../types';
+import { exportAlertsExcel, exportAlertsCsv } from '../utils/reportExport';
+import { useLanguage } from '../context/LanguageContext';
+
+type PeriodKey = 'all' | 'today' | '7days' | '30days' | 'thisMonth' | 'custom';
+
+const { RangePicker } = DatePicker;
 
 const Alerts: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [longParkingHours, setLongParkingHours] = useState(24);
-  const [severityFilter, setSeverityFilter] = useState<string | undefined>();
-  const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
+  const [severityFilter, setSeverityFilter] = useState<string | undefined>(undefined);
+  const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+  const [periodFilter, setPeriodFilter] = useState<PeriodKey>('all');
+  const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
 
   const fetchAlerts = async () => {
     setLoading(true);
@@ -31,11 +45,42 @@ const Alerts: React.FC = () => {
     fetchAlerts();
   }, [longParkingHours]);
 
-  const filteredAlerts = useMemo(() => alerts.filter((alert) => {
-    if (severityFilter && alert.severity !== severityFilter) return false;
-    if (categoryFilter && alert.category !== categoryFilter) return false;
-    return true;
-  }), [alerts, severityFilter, categoryFilter]);
+  const getPeriodRange = (): [Date, Date] | null => {
+    const now = new Date();
+    if (periodFilter === 'today') {
+      const start = new Date(now); start.setHours(0, 0, 0, 0);
+      return [start, now];
+    }
+    if (periodFilter === '7days') {
+      const start = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+      return [start, now];
+    }
+    if (periodFilter === '30days') {
+      const start = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+      return [start, now];
+    }
+    if (periodFilter === 'thisMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return [start, now];
+    }
+    if (periodFilter === 'custom' && customRange) {
+      return [customRange[0].startOf('day').toDate(), customRange[1].endOf('day').toDate()];
+    }
+    return null;
+  };
+
+  const filteredAlerts = useMemo(() => {
+    const range = getPeriodRange();
+    return alerts.filter((alert) => {
+      if (severityFilter && alert.severity !== severityFilter) return false;
+      if (categoryFilter && alert.category !== categoryFilter) return false;
+      if (range) {
+        const t = new Date(alert.occurredAt).getTime();
+        if (t < range[0].getTime() || t > range[1].getTime()) return false;
+      }
+      return true;
+    });
+  }, [alerts, severityFilter, categoryFilter, periodFilter, customRange]);
 
   const dangerCount = alerts.filter((alert) => alert.severity === 'danger').length;
   const warningCount = alerts.filter((alert) => alert.severity === 'warning').length;
@@ -58,18 +103,50 @@ const Alerts: React.FC = () => {
       dataIndex: 'category',
       key: 'category',
       width: 140,
-      render: (category: string) => <Tag>{category}</Tag>,
+      render: (category: string) => {
+        const labels: Record<string, string> = {
+          parking: 'Đỗ xe',
+          package: 'Gói dịch vụ',
+          zone: 'Khu bãi',
+          payment: 'Thanh toán',
+          revenue: 'Doanh thu',
+          system: 'Hệ thống',
+        };
+        return <Tag>{labels[category] ?? category}</Tag>;
+      },
     },
     {
       title: 'Tiêu đề',
       dataIndex: 'title',
       key: 'title',
-      render: (title: string) => <span style={{ fontWeight: 600 }}>{title}</span>,
+      render: (title: string, record: AlertItem) => (
+        <span style={{ fontWeight: 600 }}>
+          {title}
+          {record.smartLevel === 'rule_based' && (
+            <Tag color="purple" icon={<BulbOutlined />} style={{ marginLeft: 8 }}>Smart</Tag>
+          )}
+        </span>
+      ),
     },
     {
       title: 'Mô tả',
       dataIndex: 'description',
       key: 'description',
+      render: (description: string, record: AlertItem) => (
+        <div>
+          <div>{description}</div>
+          {record.suggestedAction && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--primary)', marginTop: 4 }}>
+              💡 Gợi ý: {record.suggestedAction}
+            </div>
+          )}
+          {record.context && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: 2 }}>
+              {Object.entries(record.context).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Thời gian',
@@ -92,7 +169,7 @@ const Alerts: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Cảnh báo bất thường</h2>
+      <h2 className="page-title">{t('pageAlerts')}</h2>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
@@ -128,6 +205,34 @@ const Alerts: React.FC = () => {
       </Row>
 
       <Card>
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <CalendarOutlined style={{ color: '#666' }} />
+          <Segmented
+            value={periodFilter}
+            onChange={(v) => { setPeriodFilter(v as PeriodKey); if (v !== 'custom') setCustomRange(null); }}
+            options={[
+              { label: 'Tất cả', value: 'all' },
+              { label: 'Hôm nay', value: 'today' },
+              { label: '7 ngày', value: '7days' },
+              { label: '30 ngày', value: '30days' },
+              { label: 'Tháng này', value: 'thisMonth' },
+              { label: 'Tùy chọn', value: 'custom' },
+            ]}
+          />
+          {periodFilter === 'custom' && (
+            <RangePicker
+              format="DD/MM/YYYY"
+              value={customRange}
+              onChange={(dates) => setCustomRange(dates && dates[0] && dates[1] ? [dates[0], dates[1]] : null)}
+              style={{ width: 260 }}
+            />
+          )}
+          {periodFilter !== 'all' && (
+            <span style={{ fontSize: 12, color: '#888' }}>
+              Hiển thị {filteredAlerts.length} / {alerts.length} cảnh báo
+            </span>
+          )}
+        </div>
         <div className="toolbar">
           <Space wrap>
             <InputNumber
@@ -140,30 +245,71 @@ const Alerts: React.FC = () => {
             <Select
               value={severityFilter}
               allowClear
-              placeholder="Lọc theo mức độ"
-              style={{ width: 180 }}
+              placeholder="Lọc mức độ"
+              style={{ width: 150 }}
               onChange={setSeverityFilter}
               options={[
-                { value: 'danger', label: 'Nguy hiểm' },
-                { value: 'warning', label: 'Cảnh báo' },
-                { value: 'info', label: 'Thông tin' },
+                { value: 'danger', label: '🔴 Nguy hiểm' },
+                { value: 'warning', label: '🟠 Cảnh báo' },
+                { value: 'info', label: '🔵 Thông tin' },
               ]}
             />
             <Select
               value={categoryFilter}
               allowClear
-              placeholder="Lọc theo loại"
-              style={{ width: 180 }}
+              placeholder="Lọc loại"
+              style={{ width: 150 }}
               onChange={setCategoryFilter}
-              options={Array.from(new Set(alerts.map((alert) => alert.category))).map((category) => ({
-                value: category,
-                label: category,
+              options={Array.from(new Set(alerts.map((a) => a.category))).map((cat) => ({
+                value: cat,
+                label: { parking: 'Đỗ xe', package: 'Gói dịch vụ', zone: 'Khu bãi', payment: 'Thanh toán', system: 'Hệ thống' }[cat] ?? cat,
               }))}
             />
-            <Button icon={<ReloadOutlined />} onClick={() => { setSeverityFilter(undefined); setCategoryFilter(undefined); fetchAlerts(); }}>
-              Làm mới
-            </Button>
+            <Tooltip title="Xóa bộ lọc & tải lại">
+              <Button icon={<ReloadOutlined />} onClick={() => {
+                setSeverityFilter(undefined);
+                setCategoryFilter(undefined);
+                setPeriodFilter('all');
+                setCustomRange(null);
+                fetchAlerts();
+              }}>
+                Làm mới
+              </Button>
+            </Tooltip>
           </Space>
+
+          <div style={{ marginLeft: 'auto' }}>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'excel',
+                    icon: <FileExcelOutlined style={{ color: '#1a7a2e' }} />,
+                    label: 'Xuất Excel (.xlsx)',
+                    onClick: () => {
+                      if (filteredAlerts.length === 0) { message.warning('Không có dữ liệu để xuất'); return; }
+                      exportAlertsExcel(filteredAlerts, longParkingHours);
+                      message.success(`Đã xuất ${filteredAlerts.length} cảnh báo ra Excel`);
+                    },
+                  },
+                  {
+                    key: 'csv',
+                    icon: <FileTextOutlined style={{ color: '#565e71' }} />,
+                    label: 'Xuất CSV',
+                    onClick: () => {
+                      if (filteredAlerts.length === 0) { message.warning('Không có dữ liệu để xuất'); return; }
+                      exportAlertsCsv(filteredAlerts);
+                      message.success(`Đã xuất ${filteredAlerts.length} cảnh báo ra CSV`);
+                    },
+                  },
+                ],
+              }}
+            >
+              <Button icon={<DownloadOutlined />}>
+                Xuất báo cáo
+              </Button>
+            </Dropdown>
+          </div>
         </div>
 
         <Table

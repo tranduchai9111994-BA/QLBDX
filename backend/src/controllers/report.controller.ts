@@ -38,9 +38,48 @@ export class ReportController {
     }
   }
 
-  async getHourlyStats(_req: Request, res: Response): Promise<void> {
+  async getHourlyStats(req: Request, res: Response): Promise<void> {
     try {
-      const result = await reportService.getHourlyStats();
+      const { fromDate, toDate } = req.query;
+      const result = await reportService.getHourlyStats(
+        fromDate as string | undefined,
+        toDate as string | undefined,
+      );
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async getPaymentMethodStats(req: Request, res: Response): Promise<void> {
+    try {
+      const { fromDate, toDate } = req.query;
+      const result = await reportService.getPaymentMethodStats(
+        fromDate as string | undefined,
+        toDate as string | undefined,
+      );
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async getExceptionStats(req: Request, res: Response): Promise<void> {
+    try {
+      const { fromDate, toDate } = req.query;
+      const result = await reportService.getExceptionStats(
+        fromDate as string | undefined,
+        toDate as string | undefined,
+      );
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async getInsights(_req: Request, res: Response): Promise<void> {
+    try {
+      const result = await reportService.getInsights();
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

@@ -5,9 +5,11 @@ import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { VehicleType, VehicleTypeForm } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const VehicleTypes: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const canManage = user?.role === 'admin';
   const [types, setTypes] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -15,6 +17,7 @@ const VehicleTypes: React.FC = () => {
   const [editing, setEditing] = useState<VehicleType | null>(null);
   const [search, setSearch] = useState('');
   const [form] = Form.useForm<VehicleTypeForm>();
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -31,6 +34,7 @@ const VehicleTypes: React.FC = () => {
   useEffect(() => { fetchData(); }, []);
 
   const handleSubmit = async (values: VehicleTypeForm) => {
+    setSubmitting(true);
     try {
       if (editing) {
         await api.put(`/vehicle-types/${editing.id}`, values);
@@ -46,6 +50,8 @@ const VehicleTypes: React.FC = () => {
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -73,11 +79,11 @@ const VehicleTypes: React.FC = () => {
   };
 
   const columns = [
-    { title: 'Tên loại xe', dataIndex: 'name', key: 'name' },
-    { title: 'Mô tả', dataIndex: 'description', key: 'description', render: (t?: string) => t || '-' },
-    { title: 'Giá/lượt (đ)', dataIndex: 'hourlyRate', key: 'hourlyRate', render: (v: number) => Number(v).toLocaleString() },
-    { title: 'Giá/ngày (đ)', dataIndex: 'dailyRate', key: 'dailyRate', render: (v: number) => Number(v).toLocaleString() },
-    { title: 'Giá/tháng (đ)', dataIndex: 'monthlyRate', key: 'monthlyRate', render: (v: number) => Number(v).toLocaleString() },
+    { title: t('colVehicleType'), dataIndex: 'name', key: 'name' },
+    { title: t('fieldNote'), dataIndex: 'description', key: 'description', render: (v?: string) => v || '-' },
+    { title: t('colHourlyRate'), dataIndex: 'hourlyRate', key: 'hourlyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
+    { title: t('colDailyRate'), dataIndex: 'dailyRate', key: 'dailyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
+    { title: 'Giá/tháng (đ)', dataIndex: 'monthlyRate', key: 'monthlyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
     {
       title: 'Thao tác', key: 'action', render: (_: any, r: VehicleType) => (
         <Space>
@@ -112,7 +118,7 @@ const VehicleTypes: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Quản lý loại xe</h2>
+      <h2 className="page-title">{t('pageVehicleTypes')}</h2>
       <Card>
         <div className="toolbar">
           <Space wrap>
@@ -143,6 +149,7 @@ const VehicleTypes: React.FC = () => {
         onOk={() => form.submit()}
         okText={editing ? 'Cập nhật' : 'Thêm'}
         cancelText="Hủy"
+        okButtonProps={{ loading: submitting }}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="name" label="Tên loại xe" rules={[{ required: true }]}>

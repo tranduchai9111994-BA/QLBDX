@@ -294,6 +294,115 @@ export class CustomerPackageService {
       isExpiringSoon: daysUntilExpiry !== null && daysUntilExpiry <= 7,
     };
   }
+
+  /**
+   * Gợi ý gói dịch vụ theo tần suất đỗ xe 30 ngày gần nhất (rule-based).
+   * Ngưỡng: >=20 lần/tháng → gói năm, >=12 → gói quý, >=5 → gói tháng, còn lại → không gợi ý.
+   */
+  async getPackageRecommendation(customerId: number) {
+    await this.syncExpiredStatuses();
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, fullName: true },
+    });
+    if (!customer) {
+      throw { status: 404, message: 'Không tìm thấy khách hàng' };
+    }
+
+    const now = new Date();
+    const since30 = new Date();
+    since30.setDate(since30.getDate() - 30);
+
+    const [records, activePkg] = await Promise.all([
+      prisma.parkingRecord.findMany({
+        where: { vehicle: { customerId }, entryTime: { gte: since30 }, status: 'completed' },
+        select: { fee: true, vehicleTypeId: true },
+      }),
+      prisma.customerPackage.findFirst({
+        where: {
+          customerId,
+          status: { not: 'cancelled' },
+          startDate: { lte: now },
+          endDate: { gte: now },
+        },
+      }),
+    ]);
+
+    const frequency = records.length;
+    const totalSpent = records.reduce((sum, r) => sum + Number(r.fee || 0), 0);
+
+    if (activePkg) {
+      return {
+        recommendation: 'none' as const,
+        savings: null,
+        frequency,
+        totalSpent,
+        reason: 'Khách hàng đã có gói đang hiệu lực',
+      };
+    }
+
+    let recommendation: 'yearly' | 'quarterly' | 'monthly' | 'none' = 'none';
+    let savings: string | null = null;
+    let durationDays: number | null = null;
+
+    if (frequency >= 20) {
+      recommendation = 'yearly';
+      savings = '~40%';
+      durationDays = 365;
+    } else if (frequency >= 12) {
+      recommendation = 'quarterly';
+      savings = '~30%';
+      durationDays = 90;
+    } else if (frequency >= 5) {
+      recommendation = 'monthly';
+      savings = '~20%';
+      durationDays = 30;
+    } else {
+      return {
+        recommendation: 'none' as const,
+        savings: null,
+        frequency,
+        totalSpent,
+        reason: frequency === 0
+          ? 'Chưa có dữ liệu đỗ xe trong 30 ngày qua'
+          : `Tần suất đỗ xe thấp (${frequency} lần/tháng, dưới ngưỡng 5 lần)`,
+      };
+    }
+
+    // Loại xe đỗ nhiều nhất trong 30 ngày qua -> dùng để tìm gói phù hợp
+    const typeCounts = new Map<number, number>();
+    for (const r of records) typeCounts.set(r.vehicleTypeId, (typeCounts.get(r.vehicleTypeId) || 0) + 1);
+    let dominantTypeId = records[0].vehicleTypeId;
+    let maxCount = 0;
+    for (const [typeId, count] of typeCounts) {
+      if (count > maxCount) {
+        maxCount = count;
+        dominantTypeId = typeId;
+      }
+    }
+
+    const matchingPackage = await prisma.parkingPackage.findFirst({
+      where: { vehicleTypeId: dominantTypeId, durationDays: durationDays!, isActive: true },
+    });
+
+    const reasonByLevel: Record<'yearly' | 'quarterly' | 'monthly', string> = {
+      yearly: `Đỗ xe ${frequency} lần/tháng — rất thường xuyên`,
+      quarterly: `Đỗ xe ${frequency} lần/tháng — thường xuyên`,
+      monthly: `Đỗ xe ${frequency} lần/tháng — khá đều đặn`,
+    };
+
+    return {
+      recommendation,
+      savings,
+      frequency,
+      totalSpent,
+      reason: reasonByLevel[recommendation],
+      packageId: matchingPackage?.id ?? null,
+      packageName: matchingPackage?.name ?? null,
+      packagePrice: matchingPackage ? Number(matchingPackage.price) : null,
+    };
+  }
 }
 
 export const customerPackageService = new CustomerPackageService();

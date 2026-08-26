@@ -36,6 +36,15 @@ export class ParkingController {
     }
   }
 
+  async exitException(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await parkingService.exitException(req.body, req.user!.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
   async preview(req: Request, res: Response): Promise<void> {
     try {
       const result = await parkingService.preview(Number(req.params.id));
@@ -55,6 +64,24 @@ export class ParkingController {
         vehicleTypeId: req.query.vehicleTypeId ? Number(req.query.vehicleTypeId) : undefined,
         search: req.query.search as string | undefined,
       });
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async plateHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await parkingService.plateHistory(String(req.params.plate || ''));
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async smartLookup(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await parkingService.smartLookup(String(req.params.plate || ''));
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

@@ -5,9 +5,11 @@ import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { ParkingPackage, VehicleType, PackageForm } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const Packages: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const canManage = user?.role === 'admin';
   const [packages, setPackages] = useState<ParkingPackage[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
@@ -54,10 +56,14 @@ const Packages: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [filters]);
 
+  const [submitting, setSubmitting] = useState(false);
+
   const handleSubmit = async (values: PackageForm) => {
+    setSubmitting(true);
     try {
       if (editing) {
-        await api.put(`/packages/${editing.id}`, values);
+        // Preserve isActive so editing an inactive package doesn't re-activate it
+        await api.put(`/packages/${editing.id}`, { ...values, isActive: editing.isActive });
         message.success('Cập nhật thành công');
       } else {
         await api.post('/packages', values);
@@ -70,6 +76,8 @@ const Packages: React.FC = () => {
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -137,11 +145,11 @@ const Packages: React.FC = () => {
   };
 
   const columns = [
-    { title: 'Tên gói', dataIndex: 'name', key: 'name', render: (value: string) => <span style={{ fontWeight: 500 }}>{value}</span> },
-    { title: 'Loại xe', key: 'vehicleTypeName', render: (_: any, r: ParkingPackage) => r.vehicleType?.name || '-' },
-    { title: 'Thời hạn (ngày)', dataIndex: 'durationDays', key: 'durationDays' },
-    { title: 'Giá (đ)', dataIndex: 'price', key: 'price', render: (v: number) => Number(v).toLocaleString() },
-    { title: 'Mô tả', dataIndex: 'description', key: 'description', render: (t?: string) => t || '-' },
+    { title: t('colPackage'), dataIndex: 'name', key: 'name', render: (value: string) => <span style={{ fontWeight: 500 }}>{value}</span> },
+    { title: t('colVehicleType'), key: 'vehicleTypeName', render: (_: any, r: ParkingPackage) => r.vehicleType?.name || '-' },
+    { title: t('colPackageDuration'), dataIndex: 'durationDays', key: 'durationDays' },
+    { title: t('fieldPrice'), dataIndex: 'price', key: 'price', render: (v: number) => Number(v).toLocaleString() + 'đ' },
+    { title: t('fieldNote'), dataIndex: 'description', key: 'description', render: (v?: string) => v || '-' },
     {
       title: 'Trạng thái',
       dataIndex: 'isActive',
@@ -171,7 +179,7 @@ const Packages: React.FC = () => {
 
   return (
     <div>
-      <h2 className="page-title">Quản lý gói dịch vụ</h2>
+      <h2 className="page-title">{t('pagePackages')}</h2>
       <Card>
         <div className="toolbar">
           <Space wrap>
@@ -237,7 +245,7 @@ const Packages: React.FC = () => {
           <div className="toolbar-right">
             {canManage && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-                Thêm gói dịch vụ
+                {t('btnAddPackage')}
               </Button>
             )}
           </div>
@@ -252,6 +260,7 @@ const Packages: React.FC = () => {
         onOk={() => form.submit()}
         okText={editing ? 'Cập nhật' : 'Thêm'}
         cancelText="Hủy"
+        okButtonProps={{ loading: submitting }}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="name" label="Tên gói" rules={[{ required: true }]}>

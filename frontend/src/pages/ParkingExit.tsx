@@ -1,9 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Card, message, Modal, Select, Tag, Input, Alert, Space } from 'antd';
+import {
+  Table, Button, Card, message, Modal, Select, Tag, Input, Alert, Space,
+  Switch, InputNumber, Form, Segmented, Tooltip,
+} from 'antd';
+import { WarningOutlined, GiftOutlined, UserOutlined, ClockCircleOutlined, BulbOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { ParkingRecord, ParkingExitRequest, ParkingZone, VehicleType } from '../types';
+import { CustomerPackage, ParkingRecord, ParkingZone, VehicleType } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+
+interface PackageRecommendation {
+  recommendation: 'yearly' | 'quarterly' | 'monthly' | 'none';
+  savings: string | null;
+  frequency: number;
+  totalSpent: number;
+  reason: string;
+  packageId?: number | null;
+  packageName?: string | null;
+  packagePrice?: number | null;
+}
+
+const RECOMMEND_LABEL: Record<string, string> = {
+  yearly: 'gói năm',
+  quarterly: 'gói quý',
+  monthly: 'gói tháng',
+};
 
 interface ExitResponse {
   message: string;
@@ -13,6 +36,9 @@ interface ExitResponse {
     durationMinutes: number;
     fee: number;
     hasPackage: boolean;
+    isException?: boolean;
+    exceptionReason?: string | null;
+    waived?: boolean;
   };
 }
 
@@ -36,25 +62,48 @@ interface ReceiptData {
   hasPackage: boolean;
   paymentMethod: 'cash' | 'card' | 'transfer';
   collectorName: string;
+  isException?: boolean;
+  exceptionReason?: string;
 }
+
+const EXCEPTION_REASONS = [
+  { value: 'lost_ticket', label: 'Mất vé / mất phiếu' },
+  { value: 'damaged_ticket', label: 'Vé hỏng / không đọc được' },
+  { value: 'force_release', label: 'Giải phóng chỗ bắt buộc' },
+  { value: 'fee_waiver', label: 'Miễn giảm phí (ngoại lệ)' },
+  { value: 'other', label: 'Lý do khác' },
+];
+
+type PackageSegment = 'all' | 'monthly' | 'daily';
 
 const ParkingExit: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+  const [packageSuggestion, setPackageSuggestion] = useState<PackageRecommendation | null>(null);
   const [records, setRecords] = useState<ParkingRecord[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
   const [exitModal, setExitModal] = useState<ParkingRecord | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
   const [zones, setZones] = useState<ParkingZone[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [searchInput, setSearchInput] = useState('');
+  const [packageSegment, setPackageSegment] = useState<PackageSegment>('all');
   const [filters, setFilters] = useState({
     search: '',
     zoneId: undefined as number | undefined,
     vehicleTypeId: undefined as number | undefined,
   });
+  // vehicleId → active package
+  const [activePackageMap, setActivePackageMap] = useState<Map<number, CustomerPackage>>(new Map());
   const [previewFee, setPreviewFee] = useState<PreviewFee | null>(null);
-  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [exceptionMode, setExceptionMode] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState<string>('lost_ticket');
+  const [exceptionNote, setExceptionNote] = useState('');
+  const [waiveFee, setWaiveFee] = useState(false);
+  const [overrideFee, setOverrideFee] = useState<number | null>(null);
 
   const formatDuration = (durationMinutes: number) =>
     Math.floor(durationMinutes / 60) > 0
@@ -65,7 +114,6 @@ const ParkingExit: React.FC = () => {
     const paymentMethodLabel =
       receipt.paymentMethod === 'cash' ? 'Tiền mặt' : receipt.paymentMethod === 'transfer' ? 'Chuyển khoản' : 'Thẻ';
     const printWindow = window.open('', '_blank', 'width=900,height=900');
-
     if (!printWindow) {
       message.error('Trình duyệt đang chặn cửa sổ in biên nhận');
       return;
@@ -85,6 +133,7 @@ const ParkingExit: React.FC = () => {
             .value { font-weight: 600; text-align: right; }
             .total { font-size: 20px; color: #b91c1c; }
             .free { color: #15803d; }
+            .badge { display:inline-block; padding:4px 8px; border-radius:6px; background:#fff7ed; color:#c2410c; font-size:12px; margin-bottom:12px; }
             .footer { margin-top: 24px; font-size: 13px; color: #6b7280; text-align: center; }
           </style>
         </head>
@@ -92,6 +141,7 @@ const ParkingExit: React.FC = () => {
           <div class="receipt">
             <h1>Biên nhận xe ra</h1>
             <h2>Hệ thống quản lý bãi đỗ xe</h2>
+            ${receipt.isException ? `<div class="badge">CHECKOUT NGOẠI LỆ${receipt.exceptionReason ? `: ${receipt.exceptionReason}` : ''}</div>` : ''}
             <div class="row"><div class="label">Biển số</div><div class="value">${receipt.licensePlate}</div></div>
             <div class="row"><div class="label">Loại xe</div><div class="value">${receipt.vehicleTypeName}</div></div>
             <div class="row"><div class="label">Khách hàng</div><div class="value">${receipt.customerName}</div></div>
@@ -101,7 +151,7 @@ const ParkingExit: React.FC = () => {
             <div class="row"><div class="label">Thời gian đỗ</div><div class="value">${formatDuration(receipt.durationMinutes)}</div></div>
             <div class="row"><div class="label">Người thu</div><div class="value">${receipt.collectorName}</div></div>
             <div class="row"><div class="label">Phương thức thanh toán</div><div class="value">${paymentMethodLabel}</div></div>
-            <div class="row"><div class="label">Phí gửi xe</div><div class="value ${receipt.hasPackage ? 'free' : 'total'}">${receipt.hasPackage ? 'Miễn phí (có gói)' : `${Number(receipt.fee).toLocaleString('vi-VN')} đ`}</div></div>
+            <div class="row"><div class="label">Phí gửi xe</div><div class="value ${receipt.hasPackage || receipt.fee === 0 ? 'free' : 'total'}">${receipt.hasPackage && receipt.fee === 0 ? 'Miễn phí (có gói)' : `${Number(receipt.fee).toLocaleString('vi-VN')} đ`}</div></div>
             <div class="footer">Biên nhận được in từ hệ thống lúc ${new Date().toLocaleString('vi-VN')}</div>
           </div>
         </body>
@@ -120,15 +170,22 @@ const ParkingExit: React.FC = () => {
       if (filters.zoneId) params.zoneId = filters.zoneId;
       if (filters.vehicleTypeId) params.vehicleTypeId = filters.vehicleTypeId;
 
-      const [recordsRes, zonesRes, vehicleTypesRes] = await Promise.all([
+      const [recordsRes, zonesRes, vehicleTypesRes, packagesRes] = await Promise.all([
         api.get<ParkingRecord[]>('/parking', { params }),
         api.get<ParkingZone[]>('/parking-zones'),
         api.get<VehicleType[]>('/vehicle-types'),
+        api.get<CustomerPackage[]>('/customer-packages', { params: { status: 'active' } }),
       ]);
       setRecords(recordsRes.data);
       setZones(zonesRes.data);
       setVehicleTypes(vehicleTypesRes.data);
-    } catch (err) {
+
+      const pkgMap = new Map<number, CustomerPackage>();
+      packagesRes.data.forEach((pkg) => {
+        if (pkg.vehicleId) pkgMap.set(pkg.vehicleId, pkg);
+      });
+      setActivePackageMap(pkgMap);
+    } catch {
       message.error('Không tải được danh sách xe trong bãi');
     } finally {
       setLoading(false);
@@ -137,14 +194,46 @@ const ParkingExit: React.FC = () => {
 
   useEffect(() => { fetchRecords(); }, [filters]);
 
+  const resetExceptionForm = () => {
+    setExceptionMode(false);
+    setExceptionReason('lost_ticket');
+    setExceptionNote('');
+    setWaiveFee(false);
+    setOverrideFee(null);
+  };
+
   const handleExit = async () => {
     if (!exitModal) return;
+
+    if (exceptionMode) {
+      if (!exceptionNote.trim() || exceptionNote.trim().length < 5) {
+        message.warning('Checkout ngoại lệ cần ghi chú tối thiểu 5 ký tự');
+        return;
+      }
+    }
+
     try {
-      const res = await api.post<ExitResponse>('/parking/exit', {
-        parkingRecordId: exitModal.id,
-        paymentMethod,
-      } as ParkingExitRequest);
-      message.success(`Xe ra thành công! Phí: ${Number(res.data.data.fee).toLocaleString()}đ`);
+      const res = exceptionMode
+        ? await api.post<ExitResponse>('/parking/exit-exception', {
+            parkingRecordId: exitModal.id,
+            paymentMethod,
+            exceptionReason,
+            exceptionNote: exceptionNote.trim(),
+            waiveFee: waiveFee || exceptionReason === 'fee_waiver',
+            overrideFee: overrideFee,
+          })
+        : await api.post<ExitResponse>('/parking/exit', {
+            parkingRecordId: exitModal.id,
+            paymentMethod,
+          });
+
+      message.success(
+        exceptionMode
+          ? `Checkout ngoại lệ thành công! Phí: ${Number(res.data.data.fee).toLocaleString()}đ`
+          : `Xe ra thành công! Phí: ${Number(res.data.data.fee).toLocaleString()}đ`
+      );
+
+      const reasonLabel = EXCEPTION_REASONS.find((r) => r.value === exceptionReason)?.label;
       setReceiptData({
         licensePlate: exitModal.licensePlate,
         vehicleTypeName: exitModal.vehicleType?.name || '-',
@@ -157,31 +246,92 @@ const ParkingExit: React.FC = () => {
         hasPackage: res.data.data.hasPackage,
         paymentMethod,
         collectorName: user?.fullName || 'Nhân viên thu phí',
+        isException: !!res.data.data.isException,
+        exceptionReason: reasonLabel,
       });
       setExitModal(null);
+      resetExceptionForm();
       fetchRecords();
+
+      const customerId = exitModal.vehicle?.customer?.id;
+      if (customerId) {
+        try {
+          const recRes = await api.get<PackageRecommendation>(`/customer-packages/recommend/${customerId}`);
+          if (recRes.data.recommendation !== 'none') {
+            setPackageSuggestion(recRes.data);
+          }
+        } catch {
+          // Bỏ qua lỗi gợi ý — không ảnh hưởng luồng checkout chính
+        }
+      }
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
 
+  const visibleRecords = records.filter((r) => {
+    const hasPkg = r.vehicleId != null && activePackageMap.has(r.vehicleId);
+    if (packageSegment === 'monthly') return hasPkg;
+    if (packageSegment === 'daily') return !hasPkg;
+    return true;
+  });
+
+  const monthlyCount = records.filter((r) => r.vehicleId != null && activePackageMap.has(r.vehicleId)).length;
+  const dailyCount = records.length - monthlyCount;
+
   const columns = [
-    { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', render: (t: string) => <Tag className="plate-tag">{t}</Tag> },
-    { title: 'Loại xe', key: 'vehicleTypeName', render: (_: any, r: ParkingRecord) => r.vehicleType?.name || '-' },
-    { title: 'Chỗ đỗ', key: 'spot', render: (_: any, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
-    { title: 'Khách hàng', key: 'customerName', render: (_: any, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai' },
-    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => new Date(t).toLocaleString('vi-VN') },
     {
-      title: 'Thời gian đỗ', key: 'duration', render: (_: any, r: ParkingRecord) => {
+      title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate',
+      render: (t: string) => <Tag className="plate-tag">{t}</Tag>,
+    },
+    {
+      title: 'Phân loại', key: 'packageType', width: 140,
+      render: (_: unknown, r: ParkingRecord) => {
+        const pkg = r.vehicleId != null ? activePackageMap.get(r.vehicleId) : undefined;
+        if (pkg) {
+          const daysLeft = Math.ceil(
+            (new Date(pkg.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+          );
+          return (
+            <Tooltip title={`Gói: ${pkg.parkingPackage?.name || '—'} · HH: ${new Date(pkg.endDate).toLocaleDateString('vi-VN')} (còn ${daysLeft} ngày)`}>
+              <Tag color="green" icon={<GiftOutlined />}>Xe tháng</Tag>
+            </Tooltip>
+          );
+        }
+        return <Tag color="default" icon={<UserOutlined />}>Vãn lai</Tag>;
+      },
+    },
+    { title: 'Loại xe', key: 'vehicleTypeName', render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-' },
+    {
+      title: 'Chỗ đỗ', key: 'spot',
+      render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-',
+    },
+    {
+      title: 'Khách hàng', key: 'customerName',
+      render: (_: unknown, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai',
+    },
+    {
+      title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime',
+      render: (t: string) => new Date(t).toLocaleString('vi-VN'),
+    },
+    {
+      title: 'Thời gian đỗ', key: 'duration',
+      render: (_: unknown, r: ParkingRecord) => {
         const mins = Math.ceil((Date.now() - new Date(r.entryTime).getTime()) / 60000);
         const hours = Math.floor(mins / 60);
-        return hours > 0 ? `${hours}h ${mins % 60}p` : `${mins}p`;
-      }
+        const label = hours > 0 ? `${hours}h ${mins % 60}p` : `${mins}p`;
+        const isLong = hours >= 8;
+        return isLong
+          ? <span style={{ color: hours >= 24 ? 'var(--error)' : 'var(--warning)', fontWeight: 600 }}>
+              <ClockCircleOutlined style={{ marginRight: 4 }} />{label}
+            </span>
+          : label;
+      },
     },
     {
       title: 'Thao tác', key: 'action', width: 120,
-      render: (_: any, record: ParkingRecord) => (
+      render: (_: unknown, record: ParkingRecord) => (
         <Button type="primary" onClick={() => openExitModal(record)} size="small">Cho xe ra</Button>
       ),
     },
@@ -190,61 +340,126 @@ const ParkingExit: React.FC = () => {
   const openExitModal = async (record: ParkingRecord) => {
     setExitModal(record);
     setPreviewFee(null);
+    resetExceptionForm();
+    setPaymentMethod('cash');
     setPreviewLoading(true);
     try {
       const res = await api.get(`/parking/${record.id}/preview`);
       setPreviewFee(res.data);
-    } catch (err) {
+    } catch {
       message.error('Không tính trước được phí gửi xe');
     } finally {
       setPreviewLoading(false);
     }
   };
 
+  const displayFee = (() => {
+    if (!previewFee) return null;
+    if (exceptionMode && (waiveFee || exceptionReason === 'fee_waiver')) return 0;
+    if (exceptionMode && overrideFee !== null && overrideFee !== undefined) return overrideFee;
+    return previewFee.fee;
+  })();
+
   return (
     <div>
-      <h2 className="page-title">Ghi nhận xe ra</h2>
+      <h2 className="page-title">{t('pageParkingExit')}</h2>
       <Card>
         <div className="toolbar">
           <Input.Search
             placeholder="Tìm biển số, khách, khu..."
-            style={{ width: 300 }}
+            style={{ width: 280 }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
             allowClear
           />
-          <Space wrap>
+          <Segmented
+            value={packageSegment}
+            onChange={(v) => setPackageSegment(v as PackageSegment)}
+            options={[
+              { label: `Tất cả (${records.length})`, value: 'all' },
+              { label: `Xe tháng (${monthlyCount})`, value: 'monthly' },
+              { label: `Vãn lai (${dailyCount})`, value: 'daily' },
+            ]}
+          />
+          <Space wrap style={{ marginLeft: 'auto' }}>
             <Select
               value={filters.zoneId}
               allowClear
               placeholder="Lọc theo khu"
-              style={{ width: 180 }}
+              style={{ width: 160 }}
               onChange={(value) => setFilters((prev) => ({ ...prev, zoneId: value }))}
               options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
             />
             <Select
               value={filters.vehicleTypeId}
               allowClear
-              placeholder="Lọc theo loại xe"
-              style={{ width: 180 }}
+              placeholder="Lọc loại xe"
+              style={{ width: 150 }}
               onChange={(value) => setFilters((prev) => ({ ...prev, vehicleTypeId: value }))}
-              options={vehicleTypes.map((vehicleType) => ({ value: vehicleType.id, label: vehicleType.name }))}
+              options={vehicleTypes.map((vt) => ({ value: vt.id, label: vt.name }))}
             />
-            <Button onClick={() => { setSearchInput(''); setFilters({ search: '', zoneId: undefined, vehicleTypeId: undefined }); }}>
+            <Button onClick={() => { setSearchInput(''); setPackageSegment('all'); setFilters({ search: '', zoneId: undefined, vehicleTypeId: undefined }); }}>
               Xóa bộ lọc
             </Button>
           </Space>
         </div>
-        <Table columns={columns} dataSource={records} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+        <Table
+          columns={columns}
+          dataSource={visibleRecords}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          rowClassName={(r) => {
+            const hasPkg = r.vehicleId != null && activePackageMap.has(r.vehicleId);
+            return hasPkg ? 'exit-row-monthly' : '';
+          }}
+        />
       </Card>
 
-      <Modal title="Xác nhận xe ra" open={!!exitModal} onOk={handleExit} onCancel={() => setExitModal(null)} okText="Xác nhận" cancelText="Hủy">
-        {exitModal && (
+      <Modal
+        title={exceptionMode ? 'Checkout ngoại lệ' : 'Xác nhận xe ra'}
+        open={!!exitModal}
+        onOk={handleExit}
+        onCancel={() => { setExitModal(null); resetExceptionForm(); }}
+        okText={exceptionMode ? 'Xác nhận ngoại lệ' : 'Xác nhận'}
+        cancelText="Hủy"
+        okButtonProps={{ danger: exceptionMode }}
+        width={560}
+      >
+        {exitModal && (() => {
+          const activePkg = exitModal.vehicleId != null ? activePackageMap.get(exitModal.vehicleId) : undefined;
+          return (
           <div>
+            {/* Package / daily banner */}
+            {activePkg ? (
+              <Alert
+                type="success"
+                showIcon
+                icon={<GiftOutlined />}
+                style={{ marginBottom: 14, borderRadius: 8 }}
+                message={
+                  <span>
+                    <strong>Xe tháng</strong> — {activePkg.parkingPackage?.name || 'Gói dịch vụ'}
+                  </span>
+                }
+                description={`Hết hạn: ${new Date(activePkg.endDate).toLocaleDateString('vi-VN')} · Xe ra sẽ được miễn phí`}
+              />
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                icon={<UserOutlined />}
+                style={{ marginBottom: 14, borderRadius: 8 }}
+                message={<strong>Xe vãn lai</strong>}
+                description="Không có gói dịch vụ — phí sẽ được tính theo giờ/ngày"
+              />
+            )}
+
             <div className="info-panel" style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-default)', padding: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
               <div className="info-row"><span className="info-label">Biển số</span><Tag className="plate-tag">{exitModal.licensePlate}</Tag></div>
               <div className="info-row"><span className="info-label">Loại xe</span><span className="info-value">{exitModal.vehicleType?.name || '-'}</span></div>
+              <div className="info-row"><span className="info-label">Khách hàng</span><span className="info-value">{exitModal.vehicle?.customer?.fullName || 'Khách vãng lai'}</span></div>
               <div className="info-row"><span className="info-label">Giờ vào</span><span className="info-value">{new Date(exitModal.entryTime).toLocaleString('vi-VN')}</span></div>
               <div className="info-row"><span className="info-label">Giờ ra</span><span className="info-value">{new Date().toLocaleString('vi-VN')}</span></div>
               {previewLoading ? (
@@ -253,47 +468,92 @@ const ParkingExit: React.FC = () => {
                 <>
                   <div className="info-row"><span className="info-label">Thời gian đỗ</span><span className="info-value">{formatDuration(previewFee.durationMinutes)}</span></div>
                   <div className="info-row">
-                    <span className="info-label">Phí gửi xe</span>
-                    <span className="info-value" style={{ fontSize: '1.25rem', fontWeight: 700, color: previewFee.hasPackage ? 'var(--success)' : 'var(--error)' }}>
-                      {previewFee.hasPackage ? 'Miễn phí (có gói)' : `${Number(previewFee.fee).toLocaleString()}đ`}
+                    <span className="info-label">Phí thu</span>
+                    <span className="info-value" style={{ fontSize: '1.15rem', fontWeight: 700, color: previewFee.hasPackage ? 'var(--success)' : 'var(--error)' }}>
+                      {previewFee.hasPackage ? '0đ — Miễn phí (xe tháng)' : `${Number(previewFee.fee).toLocaleString()}đ`}
                     </span>
                   </div>
-                  {previewFee.hasPackage && previewFee.daysUntilExpiry !== null && previewFee.daysUntilExpiry !== undefined && (
-                    previewFee.daysUntilExpiry === 0 ? (
-                      <Alert
-                        type="error"
-                        showIcon
-                        message="Gói hết hạn hôm nay!"
-                        description="Đây là lần sử dụng cuối. Nhắc khách gia hạn gói để tiếp tục miễn phí."
-                        style={{ marginTop: 12, borderRadius: 6 }}
-                      />
-                    ) : previewFee.daysUntilExpiry <= 7 ? (
-                      <Alert
-                        type="warning"
-                        showIcon
-                        message={`Gói sắp hết hạn — còn ${previewFee.daysUntilExpiry} ngày`}
-                        description={`Hết hạn ngày ${
-                          previewFee.packageEndDate
-                            ? new Date(previewFee.packageEndDate).toLocaleDateString('vi-VN')
-                            : ''
-                        }. Nhắc khách hàng gia hạn sớm.`}
-                        style={{ marginTop: 12, borderRadius: 6 }}
-                      />
-                    ) : null
+                  {exceptionMode && (
+                    <div className="info-row">
+                      <span className="info-label">Phí ngoại lệ sẽ thu</span>
+                      <span className="info-value" style={{ fontWeight: 700, color: 'var(--warning)' }}>
+                        {Number(displayFee || 0).toLocaleString()}đ
+                      </span>
+                    </div>
                   )}
                 </>
               )}
             </div>
+
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600 }}>
+                <WarningOutlined style={{ color: 'var(--warning)', marginRight: 8 }} />
+                Checkout ngoại lệ
+              </span>
+              <Switch checked={exceptionMode} onChange={setExceptionMode} />
+            </div>
+
+            {exceptionMode && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="Dùng khi mất vé, vé hỏng, giải phóng chỗ hoặc miễn phí đặc biệt. Hệ thống sẽ ghi chú vào lịch sử biển số."
+              />
+            )}
+
+            {exceptionMode && (
+              <Form layout="vertical">
+                <Form.Item label="Lý do ngoại lệ" required>
+                  <Select
+                    value={exceptionReason}
+                    onChange={(v) => {
+                      setExceptionReason(v);
+                      if (v === 'fee_waiver') setWaiveFee(true);
+                    }}
+                    options={EXCEPTION_REASONS}
+                  />
+                </Form.Item>
+                <Form.Item label="Ghi chú xử lý" required>
+                  <Input.TextArea
+                    rows={3}
+                    value={exceptionNote}
+                    onChange={(e) => setExceptionNote(e.target.value)}
+                    placeholder="VD: Khách mất vé, xác minh CCCD/biển số trước khi cho ra..."
+                  />
+                </Form.Item>
+                <Form.Item label="Miễn phí hoàn toàn">
+                  <Switch
+                    checked={waiveFee || exceptionReason === 'fee_waiver'}
+                    onChange={setWaiveFee}
+                    disabled={exceptionReason === 'fee_waiver'}
+                  />
+                </Form.Item>
+                {!waiveFee && exceptionReason !== 'fee_waiver' && (
+                  <Form.Item label="Ghi đè phí (để trống = giữ phí hệ thống)">
+                    <InputNumber
+                      min={0}
+                      style={{ width: '100%' }}
+                      value={overrideFee ?? undefined}
+                      onChange={(v) => setOverrideFee(typeof v === 'number' ? v : null)}
+                      placeholder="VD: 20000"
+                    />
+                  </Form.Item>
+                )}
+              </Form>
+            )}
+
             <div>
               <div style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--on-surface-variant)', marginBottom: 8 }}>Phương thức thanh toán</div>
-              <Select value={paymentMethod} onChange={setPaymentMethod} style={{ width: '100%' }}>
+              <Select value={paymentMethod} onChange={setPaymentMethod} style={{ width: '100%' }} disabled={!!(waiveFee || exceptionReason === 'fee_waiver') && exceptionMode}>
                 <Select.Option value="cash">Tiền mặt</Select.Option>
                 <Select.Option value="card">Thẻ</Select.Option>
                 <Select.Option value="transfer">Chuyển khoản</Select.Option>
               </Select>
             </div>
           </div>
-        )}
+          );
+        })()}
       </Modal>
 
       <Modal
@@ -306,14 +566,49 @@ const ParkingExit: React.FC = () => {
       >
         {receiptData && (
           <div className="info-panel" style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-default)', padding: 'var(--spacing-lg)' }}>
+            {receiptData.isException && <Alert type="warning" showIcon message={`Ngoại lệ: ${receiptData.exceptionReason || ''}`} style={{ marginBottom: 12 }} />}
             <div className="info-row"><span className="info-label">Biển số</span><Tag className="plate-tag">{receiptData.licensePlate}</Tag></div>
             <div className="info-row"><span className="info-label">Khách hàng</span><span className="info-value">{receiptData.customerName}</span></div>
             <div className="info-row"><span className="info-label">Chỗ đỗ</span><span className="info-value">{receiptData.spotName}</span></div>
             <div className="info-row"><span className="info-label">Thời gian đỗ</span><span className="info-value">{formatDuration(receiptData.durationMinutes)}</span></div>
             <div className="info-row"><span className="info-label">Người thu</span><span className="info-value">{receiptData.collectorName}</span></div>
             <div className="info-row"><span className="info-label">PT thanh toán</span><span className="info-value">{receiptData.paymentMethod === 'cash' ? 'Tiền mặt' : receiptData.paymentMethod === 'transfer' ? 'Chuyển khoản' : 'Thẻ'}</span></div>
-            <div className="info-row"><span className="info-label">Phí gửi xe</span><span className="info-value" style={{ fontWeight: 700, color: receiptData.hasPackage ? 'var(--success)' : 'var(--error)' }}>{receiptData.hasPackage ? 'Miễn phí (có gói)' : `${receiptData.fee.toLocaleString()}đ`}</span></div>
+            <div className="info-row"><span className="info-label">Phí gửi xe</span><span className="info-value" style={{ fontWeight: 700, color: receiptData.fee === 0 ? 'var(--success)' : 'var(--error)' }}>{receiptData.fee === 0 ? '0đ / miễn phí' : `${receiptData.fee.toLocaleString()}đ`}</span></div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={<span><BulbOutlined style={{ color: 'var(--warning)', marginRight: 8 }} />Gợi ý thông minh</span>}
+        open={!!packageSuggestion}
+        onCancel={() => setPackageSuggestion(null)}
+        footer={[
+          <Button key="dismiss" onClick={() => setPackageSuggestion(null)}>Bỏ qua</Button>,
+          <Button key="view" type="primary" onClick={() => { setPackageSuggestion(null); navigate('/packages'); }}>
+            Xem gói dịch vụ
+          </Button>,
+        ]}
+      >
+        {packageSuggestion && (
+          <Alert
+            type="info"
+            showIcon
+            icon={<BulbOutlined />}
+            message={`Khách hàng nên đăng ký ${RECOMMEND_LABEL[packageSuggestion.recommendation] || 'gói dịch vụ'}`}
+            description={
+              <div>
+                <div>{packageSuggestion.reason}.</div>
+                {packageSuggestion.savings && <div>Ước tính tiết kiệm {packageSuggestion.savings} so với gửi lẻ.</div>}
+                {packageSuggestion.packageName && (
+                  <div style={{ marginTop: 8 }}>
+                    Gói gợi ý: <b>{packageSuggestion.packageName}</b>
+                    {packageSuggestion.packagePrice != null && ` — ${packageSuggestion.packagePrice.toLocaleString()}đ`}
+                  </div>
+                )}
+              </div>
+            }
+            style={{ borderRadius: 8 }}
+          />
         )}
       </Modal>
     </div>

@@ -2,7 +2,9 @@ import React, { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import viVN from 'antd/locale/vi_VN';
+import enUS from 'antd/locale/en_US';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import MainLayout from './components/Layout/MainLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -17,6 +19,7 @@ import CustomerPackages from './pages/CustomerPackages';
 import Payments from './pages/Payments';
 import Users from './pages/Users';
 import Reports from './pages/Reports';
+import Analytics from './pages/Analytics';
 import VehicleTypes from './pages/VehicleTypes';
 import Profile from './pages/Profile';
 import ActivityLogs from './pages/ActivityLogs';
@@ -44,9 +47,10 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   return <>{children}</>;
 };
 
-const App: React.FC = () => {
+const AppInner: React.FC = () => {
+  const { lang } = useLanguage();
   return (
-    <ConfigProvider locale={viVN} theme={{
+    <ConfigProvider locale={lang === 'en' ? enUS : viVN} theme={{
       token: {
         colorPrimary: '#005daa',
         colorBgBase: '#f9f9ff',
@@ -92,6 +96,7 @@ const App: React.FC = () => {
               <Route path="alerts" element={<AdminRoute><Alerts /></AdminRoute>} />
               <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
               <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
+              <Route path="analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
               <Route path="profile" element={<Profile />} />
               <Route path="activity-logs" element={<AdminRoute><ActivityLogs /></AdminRoute>} />
             </Route>
@@ -101,5 +106,11 @@ const App: React.FC = () => {
     </ConfigProvider>
   );
 };
+
+const App: React.FC = () => (
+  <LanguageProvider>
+    <AppInner />
+  </LanguageProvider>
+);
 
 export default App;

@@ -181,7 +181,7 @@ export interface ParkingRecord {
   notes?: string;
   vehicleType?: { name: string };
   parkingSpot?: { spotNumber: string; zone?: { name: string } };
-  vehicle?: { brand?: string; model?: string; color?: string; customer?: { fullName: string } };
+  vehicle?: { brand?: string; model?: string; color?: string; customer?: { id?: number; fullName: string } };
   createdAt: string;
 }
 
@@ -192,9 +192,39 @@ export interface ParkingEntryForm {
   notes?: string;
 }
 
+// Smart lookup (auto-fill thông minh khi nhập biển số)
+export interface SmartLookupInsights {
+  visitCount30Days: number;
+  lastVisit: string | null;
+  avgDurationHours: number | null;
+  preferredZone: string | null;
+  hasActivePackage: boolean;
+  packageName: string | null;
+  packageExpiry: string | null;
+  isFrequent: boolean;
+  suggestedSpotId: number | null;
+  suggestedSpotLabel: string | null;
+  suggestedSpotNote: string | null;
+}
+
+export interface SmartLookupResult {
+  vehicle: Vehicle | null;
+  customer: { fullName: string; phone?: string } | null;
+  insights: SmartLookupInsights | null;
+}
+
 export interface ParkingExitRequest {
   parkingRecordId: number;
   paymentMethod: 'cash' | 'card' | 'transfer';
+}
+
+export interface ParkingExitExceptionRequest {
+  parkingRecordId: number;
+  paymentMethod?: 'cash' | 'card' | 'transfer';
+  exceptionReason: 'lost_ticket' | 'damaged_ticket' | 'force_release' | 'fee_waiver' | 'other';
+  exceptionNote: string;
+  waiveFee?: boolean;
+  overrideFee?: number | null;
 }
 
 // Payment
@@ -225,6 +255,22 @@ export interface DashboardStats {
   monthRevenue: number;
 }
 
+// Dashboard insights (DSS — so sánh tuần, xu hướng, gợi ý)
+export interface DashboardInsights {
+  weekComparison: {
+    thisWeek: { revenue: number; vehicles: number; avgDuration: number };
+    lastWeek: { revenue: number; vehicles: number; avgDuration: number };
+    changePercent: { revenue: number; vehicles: number; avgDuration: number };
+  };
+  peakHours: {
+    morning: { hour: number; avgCount: number };
+    afternoon: { hour: number; avgCount: number };
+  };
+  dailyTrend: { date: string; vehicles: number; revenue: number }[];
+  topVehicleTypes: { type: string; count: number; percent: number }[];
+  suggestions: { type: string; message: string }[];
+}
+
 // Revenue Report
 export interface RevenueReport {
   period: string;
@@ -245,6 +291,55 @@ export interface VehicleStats {
 export interface HourlyStats {
   hour: number;
   count: number;
+}
+
+export interface PaymentMethodStat {
+  method: string;
+  label: string;
+  totalAmount: number;
+  totalTransactions: number;
+}
+
+export interface PaymentTypeStat {
+  type: string;
+  label: string;
+  totalAmount: number;
+  totalTransactions: number;
+}
+
+export interface PaymentMethodReport {
+  byMethod: PaymentMethodStat[];
+  byType: PaymentTypeStat[];
+  totalAmount: number;
+  totalTransactions: number;
+}
+
+export interface ExceptionReasonStat {
+  key: string;
+  label: string;
+  count: number;
+  totalFeeWaived: number;
+}
+
+export interface ExceptionRecord {
+  id: number;
+  licensePlate: string;
+  vehicleType: string;
+  entryTime: string;
+  exitTime: string | null;
+  fee: number;
+  reasonKey: string;
+  reasonLabel: string;
+  staffName: string;
+  notes: string;
+}
+
+export interface ExceptionStats {
+  totalCount: number;
+  totalFeeImpact: number;
+  waivedCount: number;
+  byReason: ExceptionReasonStat[];
+  records: ExceptionRecord[];
 }
 
 // User Form
@@ -292,6 +387,33 @@ export interface ActivityLogPage {
   limit: number;
 }
 
+// Analytics — Phân tích & Gợi ý quyết định (DSS)
+export interface AnalyticsDecisionOption {
+  action: string;
+  estimatedImpact: string;
+  risk: string;
+}
+export interface AnalyticsDecision {
+  id: string;
+  question: string;
+  analysis: string;
+  options: AnalyticsDecisionOption[];
+}
+export interface AnalyticsInsights {
+  period: string;
+  summary: {
+    totalRevenue: number;
+    totalVehicles: number;
+    avgRevenuePerDay: number;
+    avgVehiclesPerDay: number;
+    occupancyRate: number;
+  };
+  dayOfWeekAnalysis: { day: string; avgVehicles: number; avgRevenue: number }[];
+  hourlyAnalysis: { hour: number; avgVehicles: number }[];
+  zoneEfficiency: { zone: string; totalSpots: number; avgOccupancy: number; revenue: number; revenuePerSpot: number }[];
+  decisions: AnalyticsDecision[];
+}
+
 export interface AlertItem {
   id: string;
   severity: 'info' | 'warning' | 'danger';
@@ -300,4 +422,7 @@ export interface AlertItem {
   description: string;
   occurredAt: string;
   relatedPath?: string;
+  smartLevel?: 'rule_based';
+  context?: Record<string, string | number>;
+  suggestedAction?: string;
 }

@@ -108,7 +108,11 @@ QLBDX/
 ├── frontend/
 ├── database/
 ├── README.md
-└── Function.md
+├── Function.md
+├── KIEN_TRUC_TONG_QUAN.md
+├── demo_accounts.md
+├── start.bat
+└── start-fast.bat
 ```
 
 ### 3.2 `frontend/`
@@ -117,25 +121,33 @@ Các thư mục/file đáng chú ý:
 
 - `frontend/src/api/axios.ts`: cấu hình `axios`, tự gắn JWT vào header `Authorization`.
 - `frontend/src/context/AuthContext.tsx`: lưu trạng thái đăng nhập, login/logout, gọi `/auth/me`.
-- `frontend/src/components/Layout/MainLayout.tsx`: layout chính và menu.
+- `frontend/src/components/Layout/MainLayout.tsx`: layout chính và menu (ẩn/hiện theo role).
 - `frontend/src/pages/`: các màn hình nghiệp vụ.
+- `frontend/src/types/index.ts`: TypeScript interfaces toàn cục.
+- `frontend/src/utils/reportExport.ts`: xuất Excel (multi-sheet), CSV, in PDF báo cáo.
+- `frontend/src/design-system.css`: CSS bổ sung cho dashboard, hero section, occupancy bars.
 
-Một số trang thật trong project:
+Danh sách trang hiện có (17 trang):
 
-- `Login.tsx`
-- `Dashboard.tsx`
-- `ParkingEntry.tsx`
-- `ParkingExit.tsx`
-- `ParkingHistory.tsx`
-- `Customers.tsx`
-- `Vehicles.tsx`
-- `VehicleTypes.tsx`
-- `Packages.tsx`
-- `CustomerPackages.tsx`
-- `Payments.tsx`
-- `Users.tsx`
-- `Reports.tsx`
-- `ActivityLogs.tsx`
+| Trang | Staff | Admin |
+|-------|-------|-------|
+| `Login.tsx` | ✓ | ✓ |
+| `Dashboard.tsx` | ✓ (vận hành) | ✓ (đầy đủ KPI) |
+| `ParkingEntry.tsx` | ✓ | ✓ |
+| `ParkingExit.tsx` | ✓ (+ ngoại lệ) | ✓ |
+| `ParkingHistory.tsx` | ✓ (+ tra biển số) | ✓ |
+| `Customers.tsx` | ✓ | ✓ |
+| `Vehicles.tsx` | ✓ | ✓ |
+| `VehicleTypes.tsx` | xem | ✓ |
+| `Packages.tsx` | xem | ✓ |
+| `CustomerPackages.tsx` | ✓ | ✓ |
+| `ParkingZones.tsx` | xem | ✓ |
+| `ParkingSpots.tsx` | xem | ✓ |
+| `Payments.tsx` | — | ✓ |
+| `Reports.tsx` | — | ✓ |
+| `Alerts.tsx` | — | ✓ |
+| `Users.tsx` | — | ✓ |
+| `ActivityLogs.tsx` | — | ✓ |
 
 ### 3.3 `backend/`
 
@@ -147,16 +159,17 @@ Các thư mục quan trọng:
 - `backend/src/middlewares/`: `auth`, `adminOnly`, `activityLogger`, `validate`.
 - `backend/src/validators/`: schema `zod`.
 - `backend/src/config/`: cấu hình app và Prisma.
-- `backend/src/utils/`: quy tắc dùng lại, ví dụ chuẩn hóa biển số, trạng thái gói.
+- `backend/src/utils/`:
+  - `feeCalculator.ts`: hàm thuần `calculateParkingFee()` — logic tính phí gửi xe.
+  - `feeCalculator.test.ts`: 9 unit test (0p, <1h, capped daily, qua 24h, có gói).
+  - `businessRules.ts`: chuẩn hóa biển số, kiểm tra loại xe.
 - `backend/prisma/schema.prisma`: mô hình dữ liệu Prisma.
-- `backend/prisma/seed.ts`: dữ liệu mẫu.
+- `backend/prisma/seed.ts`: seed dữ liệu demo dày cho 01–02/08/2026.
 
 ### 3.4 `database/`
 
-Thư mục này chứa script SQL như:
-
-- `database/schema.sql`
-- `database/setup.sql`
+- `database/setup.sql`: tạo database + schema + seed cơ bản.
+- `database/demo_business_patch.sql`: sync dữ liệu demo theo rule nghiệp vụ (biển số, trạng thái gói/chỗ đỗ).
 
 Nếu giám khảo hỏi "vậy schema thật nằm ở đâu?", có thể trả lời:
 
@@ -243,40 +256,56 @@ Sau khi thành công:
 - bảng `ParkingRecords` có thêm 1 dòng,
 - bảng `ParkingSpots` của chỗ `B12` chuyển sang `occupied`.
 
-### 5.2 Luồng xe ra
+### 5.2 Luồng xe ra (thông thường)
 
 1. Nhân viên mở màn hình xe ra, chọn một xe đang có trạng thái `parked`.
-2. Frontend có thể gọi `GET /api/parking/:id/preview` để xem trước phí.
+2. Frontend gọi `GET /api/parking/:id/preview` để xem trước phí.
 3. Backend lấy `entryTime`, so với thời điểm hiện tại để tính thời gian gửi xe.
 4. Hệ thống kiểm tra xe đó có gói dịch vụ đang còn hiệu lực không.
 5. Nếu có gói thì phí = `0`.
-6. Nếu không có gói:
+6. Nếu không có gói (logic trong `feeCalculator.ts`):
 
-   - trong vòng 24 giờ: lấy `min(số giờ * giá giờ, giá ngày)`
-   - quá 24 giờ: tính theo số ngày
+   - trong vòng 24 giờ: `min(số giờ × giá giờ, giá ngày)`
+   - quá 24 giờ: `số_ngày × giá_ngày + min(giờ_lẻ × giá_giờ, giá_ngày)`
 
-7. Backend cập nhật `ParkingRecord`:
-
-   - `exitTime`
-   - `duration`
-   - `fee`
-   - `status = completed`
-
+7. Backend cập nhật `ParkingRecord`: `exitTime`, `duration`, `fee`, `status = completed`.
 8. Nếu có chỗ đỗ, backend trả chỗ về `available`.
 9. Nếu phí > 0, backend tạo thêm một bản ghi `Payment`.
-10. Frontend hiển thị số tiền để nhân viên thu của khách.
+10. Frontend hiển thị số tiền để nhân viên thu và có thể in biên nhận.
 
 Ví dụ cụ thể:
 
-- xe vào lúc `08:10`
-- xe ra lúc `10:05`
-- tổng thời gian làm tròn là khoảng `2 giờ`
-- giá giờ là `10.000`
-- giá ngày là `60.000`
+- xe vào lúc `08:10`, ra lúc `10:05` (gần 2 giờ)
+- giá giờ `10.000`, giá ngày `60.000`
+- phí = `min(2 × 10.000, 60.000) = 20.000`
 
-Khi đó phí tạm hiểu là `2 x 10.000 = 20.000`, nhỏ hơn giá ngày nên thu `20.000`.
+### 5.3 Luồng xe ra ngoại lệ (checkout ngoại lệ)
 
-### 5.3 Luồng đăng ký gói dịch vụ
+Đây là luồng mới bổ sung cho tình huống thực tế như mất vé, miễn phí VIP, ghi đè phí.
+
+1. Nhân viên bật switch "Checkout ngoại lệ" trong màn hình xe ra.
+2. Nhân viên chọn lý do: `Mất vé`, `Miễn phí`, `Khác`...
+3. Nhân viên có thể nhập ghi chú, bật "Miễn phí" hoặc nhập "Phí ghi đè".
+4. Frontend gọi `POST /api/parking/exit-exception`.
+5. Backend kiểm tra bản ghi tồn tại và đang `parked`.
+6. Backend lưu `exceptionReason`, `exceptionNote`, `waiveFee`, phí ghi đè vào `ParkingRecord`.
+7. Tạo `Payment` nếu phí > 0 và không bị miễn.
+8. Trả `status = completed`.
+
+Điểm hay để nói khi bảo vệ: hệ thống có audit trail đầy đủ — ngoại lệ vẫn được ghi nhận với lý do và người thực hiện, không "xóa chui" dữ liệu.
+
+### 5.4 Tra cứu lịch sử theo biển số
+
+Nhân viên hoặc admin có thể nhập một biển số bất kỳ vào ô tìm kiếm ở màn hình `ParkingHistory.tsx`, hệ thống gọi `GET /api/parking/plate-history/:plate` và trả về:
+
+- Tổng số lượt gửi (tất cả thời gian).
+- Xe có đang trong bãi không.
+- Số lần checkout ngoại lệ.
+- Danh sách toàn bộ bản ghi có thể cuộn xem.
+
+Ứng dụng thực tế: tìm xe khả nghi đỗ lâu, kiểm tra lịch sử vi phạm, xác nhận thông tin cho khách.
+
+### 5.5 Luồng đăng ký gói dịch vụ
 
 1. Nhân viên hoặc admin chọn khách hàng, chọn xe, chọn gói.
 2. Backend kiểm tra:
@@ -421,6 +450,22 @@ Nhưng khi trả lời phản biện nên nhấn mạnh:
 
 > Frontend chỉ chặn ở mức trải nghiệm người dùng. Bảo mật thật vẫn phải nằm ở backend middleware.
 
+### 7.5 Ma trận phân quyền cấu hình được (Configurable RBAC)
+
+Ngoài phân quyền cứng ở backend, hệ thống còn có **ma trận phân quyền mềm** do admin cấu hình qua giao diện:
+
+- Admin vào **Người dùng → tab Phân quyền chức năng**
+- Với mỗi màn hình có thể cấu hình, admin chọn mức độ cho Staff: **Ẩn | Chỉ xem | Đầy đủ**
+- Cấu hình lưu vào `localStorage` và được `MainLayout` đọc để ẩn/hiện menu item
+- Có nút **Chỉnh sửa / Lưu / Hủy / Reset** + bulk-set nhanh "Ẩn hết / Xem hết / Đầy đủ hết"
+
+> Lưu ý cho phản biện: đây là lớp phân quyền UI-level, không thay thế `adminOnly` middleware ở backend. Mục đích là giúp admin tùy biến giao diện cho từng bãi đỗ xe khác nhau.
+
+**File liên quan:**
+- `frontend/src/utils/permConfig.ts` — định nghĩa SCREENS, AccessLevel, load/save localStorage
+- `frontend/src/pages/Users.tsx` — tab Phân quyền với Radio.Group inline
+- `frontend/src/components/Layout/MainLayout.tsx` — đọc permConfig để lọc menu
+
 ---
 
 ## 8. Công nghệ và lý do chọn
@@ -487,11 +532,36 @@ Vì người dùng có thể nhập `29A-12345`, `29A 12345`, hoặc `29A12345`.
 
 ### 11. Frontend đã chặn admin/staff rồi, sao backend còn phải chặn nữa?
 
-Vì frontend có thể bị bypass. Người dùng có thể gọi API trực tiếp bằng Postman hoặc sửa request thủ công, nên backend mới là nơi bắt buộc phải kiểm tra quyền thật.
+Vì frontend có thể bị bypass. Người dùng có thể gọi API trực tiếp bằng Postman hoặc sửa request thủ công, nên backend mới là nơi bắt buộc phải kiểm tra quyền thật. Ngoài ra, middleware `auth` hiện tại còn re-check `role` và `isActive` từ DB mỗi request — tức là dù token vẫn còn hạn, nếu admin vô hiệu hóa tài khoản thì request tiếp theo sẽ bị chặn ngay.
 
 ### 12. Khi nào không cho sửa dữ liệu xe?
 
-Code hiện tại có những ràng buộc nghiệp vụ khá hợp lý: nếu xe đang ở trong bãi thì không cho đổi biển số/chủ xe/loại xe; nếu xe đang có gói active hoặc pending thì không cho đổi loại xe. Điều này giúp dữ liệu lịch sử không bị lệch.
+Nếu xe đang ở trong bãi thì không cho đổi biển số/chủ xe/loại xe; nếu xe đang có gói active hoặc pending thì không cho đổi loại xe. Điều này giúp dữ liệu lịch sử không bị lệch.
+
+### 13. Checkout ngoại lệ là gì, tại sao cần?
+
+Thực tế vận hành bãi đỗ có những tình huống không theo quy trình chuẩn: khách mất vé, xe VIP miễn phí, nhân viên ghi đè phí vì lý do đặc biệt. Nếu không có luồng ngoại lệ, nhân viên buộc phải thoát xe với phí sai hoặc xóa bản ghi. Luồng `exit-exception` cho phép ghi đúng lý do + số tiền, giữ nguyên audit trail, và không mất dữ liệu.
+
+### 14. Hệ thống có unit test không?
+
+Có. File `backend/src/utils/feeCalculator.test.ts` chứa 9 test cases cho hàm tính phí:
+- 0 phút → 0 đồng
+- Dưới 1 giờ → tính 1 giờ
+- 11 giờ → bị cap bởi giá ngày
+- 24 giờ chẵn → 1 ngày
+- 25 giờ → 1 ngày + 1 giờ lẻ
+- 48 giờ → 2 ngày
+- 49 giờ → 2 ngày + 1 giờ, lại bị cap
+- Có gói active → phí = 0
+
+Chạy bằng `cd backend && npm test`.
+
+### 15. Báo cáo xuất được những gì?
+
+Từ trang Reports (admin only), có thể:
+- **Xuất Excel** (multi-sheet): sheet Tổng quan, sheet Doanh thu theo kỳ, sheet Phân loại xe, sheet Phương thức thanh toán.
+- **Xuất CSV**: riêng từng bộ dữ liệu (doanh thu / xe / thanh toán).
+- **In PDF**: mở cửa sổ in với layout chuẩn gồm KPI box, bảng doanh thu, bảng loại xe, chữ ký.
 
 ---
 
@@ -501,34 +571,54 @@ Có thể nói theo nhịp sau:
 
 > Đề tài của em là hệ thống quản lý bãi đỗ xe, phục vụ hai nhóm người dùng chính là admin và nhân viên vận hành. Về mặt kiến trúc, hệ thống được tách thành frontend và backend. Frontend viết bằng React và Ant Design để làm giao diện quản trị, còn backend dùng Express và TypeScript để cung cấp API xử lý nghiệp vụ.
 >
-> Luồng hoạt động chung là frontend gửi request lên backend qua các API `/api/...`. Backend sẽ đi qua các lớp route, middleware, controller và service. Middleware dùng để kiểm tra JWT và validate dữ liệu đầu vào. Controller nhận request và trả response, còn service là nơi xử lý nghiệp vụ chính như xe vào, xe ra, tính phí, đăng ký gói.
+> Luồng hoạt động chung là frontend gửi request lên backend qua các API `/api/...`. Backend đi qua các lớp route, middleware, controller và service. Middleware kiểm tra JWT và validate dữ liệu. Controller nhận request và trả response, còn service là nơi xử lý nghiệp vụ chính như xe vào, xe ra, tính phí, đăng ký gói.
 >
 > Ở tầng dữ liệu, backend dùng Prisma để làm việc với SQL Server. Các bảng quan trọng gồm khách hàng, phương tiện, loại xe, khu vực đỗ, chỗ đỗ, bản ghi gửi xe, gói dịch vụ và thanh toán. Ví dụ một khách hàng có thể có nhiều xe, một xe có thể có nhiều lượt gửi, và một lượt gửi có thể phát sinh thanh toán khi xe ra.
 >
-> Một luồng tiêu biểu là xe vào: nhân viên nhập biển số, chọn loại xe và chỗ đỗ, frontend gọi API, backend kiểm tra token, kiểm tra dữ liệu, kiểm tra xe có đang trong bãi hay không, kiểm tra chỗ đỗ còn trống không, sau đó tạo bản ghi gửi xe và cập nhật trạng thái chỗ đỗ sang occupied. Khi xe ra, hệ thống sẽ kiểm tra xe có gói dịch vụ không; nếu có thì miễn phí, nếu không thì tính phí theo giá giờ hoặc giá ngày.
+> Về luồng nghiệp vụ: xe vào là nhân viên nhập biển số, chọn loại xe và chỗ đỗ, backend kiểm tra xe chưa trong bãi và chỗ còn trống, rồi tạo bản ghi. Xe ra thì backend tính phí — nếu xe có gói thì miễn, không có gói thì lấy min(giờ × giá, giá ngày) trong 24h đầu, quá 24h thì tính theo ngày. Logic này nằm trong hàm riêng `calculateParkingFee` và có 9 unit test để chứng minh tính đúng đắn.
 >
-> Điểm em muốn nhấn mạnh là hệ thống không chỉ là CRUD, mà có các ràng buộc nghiệp vụ khá rõ như phân quyền admin/staff, kiểm soát trạng thái chỗ đỗ, kiểm tra gói còn hiệu lực, và ghi log hoạt động để theo dõi vận hành.
+> Ngoài ra hệ thống còn có luồng checkout ngoại lệ cho tình huống thực tế như mất vé hay miễn phí VIP; trang cảnh báo phát hiện bất thường như xe đỗ quá lâu hay khu sắp đầy; và trang báo cáo có thể xuất Excel nhiều sheet, CSV, hoặc in PDF trực tiếp.
+>
+> Điểm em muốn nhấn mạnh là hệ thống không chỉ là CRUD — có ràng buộc nghiệp vụ rõ ràng, phân quyền theo role, kiểm tra gói còn hiệu lực, ghi log hoạt động, và thuật toán tính phí được unit test đầy đủ.
 
 ---
 
-## 11. Ba ý nên học kỹ trước khi bảo vệ
+## 11. Năm ý nên học kỹ trước khi bảo vệ
 
 ### 1. Luồng request từ frontend xuống database
 
 Phải nói trơn được chuỗi:
 
-`React page -> axios -> route -> middleware -> controller -> service -> Prisma -> SQL Server -> response -> UI`
+```
+React page → axios → route → middleware (auth / validate) → controller → service → Prisma → SQL Server → response → UI
+```
 
 ### 2. Quan hệ dữ liệu cốt lõi
 
 Đặc biệt là các cặp:
 
-- `Customer - Vehicle`
-- `Vehicle - ParkingRecord`
-- `ParkingRecord - Payment`
-- `CustomerPackage - Vehicle - ParkingPackage`
-- `ParkingZone - ParkingSpot`
+- `Customer → Vehicle`
+- `Vehicle → ParkingRecord`
+- `ParkingRecord → Payment`
+- `CustomerPackage → Vehicle + ParkingPackage`
+- `ParkingZone → ParkingSpot`
 
 ### 3. Hai nghiệp vụ chính: xe vào và xe ra
 
-Nếu nói chắc 2 luồng này, gần như đã nắm được phần "linh hồn" của hệ thống.
+Nếu nói chắc 2 luồng này, gần như đã nắm được phần "linh hồn" của hệ thống. Nhớ thêm checkout ngoại lệ là điểm cộng khi bảo vệ.
+
+### 4. Thuật toán tính phí
+
+Ghi nhớ công thức:
+- ≤ 24h: `min(giờ × hourlyRate, dailyRate)`
+- > 24h: `ngày × dailyRate + min(giờ_lẻ × hourlyRate, dailyRate)`
+- Có gói active → `0`
+
+Có thể trả lời câu hỏi này bằng cách chạy `npm test` live để show 9/9 PASS.
+
+### 5. Phân quyền và bảo mật
+
+- JWT được verify tại middleware `auth` trên mỗi request.
+- `adminOnly` chặn staff gọi API admin.
+- Middleware re-check `isActive` từ DB — token cũ không bypass được nếu tài khoản đã bị vô hiệu hóa.
+- Frontend ẩn menu theo role nhưng đây chỉ là UX — backend mới là lớp bảo mật thật.

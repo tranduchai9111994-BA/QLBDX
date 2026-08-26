@@ -14,5 +14,21 @@ export const parkingExitSchema = z.object({
   paymentMethod: z.enum(['cash', 'card', 'transfer']).optional().default('cash'),
 });
 
+export const parkingExitExceptionSchema = z.object({
+  parkingRecordId: z.number().int().positive('Vui lòng chọn bản ghi đỗ xe'),
+  paymentMethod: z.enum(['cash', 'card', 'transfer']).optional().default('cash'),
+  exceptionReason: z.enum([
+    'lost_ticket',
+    'damaged_ticket',
+    'force_release',
+    'fee_waiver',
+    'other',
+  ], { required_error: 'Vui lòng chọn lý do ngoại lệ' }),
+  exceptionNote: z.string().trim().min(5, 'Vui lòng ghi chú lý do ngoại lệ (tối thiểu 5 ký tự)'),
+  waiveFee: z.boolean().optional().default(false),
+  overrideFee: z.number().min(0, 'Phí ghi đè không hợp lệ').optional().nullable(),
+});
+
 export type ParkingEntryInput = z.infer<typeof parkingEntrySchema>;
 export type ParkingExitInput = z.infer<typeof parkingExitSchema>;
+export type ParkingExitExceptionInput = z.infer<typeof parkingExitExceptionSchema>;
