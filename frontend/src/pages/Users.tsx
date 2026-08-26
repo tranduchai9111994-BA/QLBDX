@@ -23,9 +23,9 @@ import { confirmDanger } from '../utils/confirmDanger';
 import { defaultPagination } from '../utils/tablePagination';
 
 const ACCESS_LABEL: Record<AccessLevel, { text: string; color: string }> = {
-  full:   { text: 'Đầy đủ',  color: '#52c41a' },
-  view:   { text: 'Chỉ xem', color: '#1677ff' },
-  hidden: { text: 'Ẩn',      color: '#d9d9d9' },
+  full:   { text: 'Đầy đủ',  color: 'var(--success)' },
+  view:   { text: 'Chỉ xem', color: 'var(--info)' },
+  hidden: { text: 'Ẩn',      color: 'var(--outline-variant)' },
 };
 
 const GROUP_ORDER = ['Chung', 'Ra / Vào', 'Hạ tầng', 'Nghiệp vụ', 'Danh mục', 'Quản trị', 'Hệ thống'];
@@ -131,19 +131,19 @@ const Users: React.FC = () => {
     .filter((u) => statusFilter === 'all' || (statusFilter === 'active' ? u.isActive : !u.isActive));
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: t('colUsername'), dataIndex: 'username', key: 'username', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
-    { title: t('colFullName'), dataIndex: 'fullName', key: 'fullName' },
-    { title: t('fieldEmail'), dataIndex: 'email', key: 'email', render: (v?: string) => v || '-' },
-    { title: t('fieldPhone'), dataIndex: 'phone', key: 'phone', render: (v?: string) => v || '-' },
+    { title: 'ID', dataIndex: 'id', key: 'id', width: 60, ellipsis: true },
+    { title: t('colUsername'), dataIndex: 'username', key: 'username', width: 150, ellipsis: true, render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { title: t('colFullName'), dataIndex: 'fullName', key: 'fullName', width: 180, ellipsis: true },
+    { title: t('fieldEmail'), dataIndex: 'email', key: 'email', width: 200, ellipsis: true, render: (v?: string) => v || '-' },
+    { title: t('fieldPhone'), dataIndex: 'phone', key: 'phone', width: 130, ellipsis: true, render: (v?: string) => v || '-' },
     {
-      title: t('fieldRole'), dataIndex: 'role', key: 'role',
+      title: t('fieldRole'), dataIndex: 'role', key: 'role', width: 120,
       render: (r: string) => r === 'admin'
         ? <Tag color="red">{t('userRoleAdmin')}</Tag>
         : <Tag className="chip-available">{t('userRoleStaff')}</Tag>,
     },
     {
-      title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive',
+      title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive', width: 130,
       render: (v?: boolean) => (
         <StatusTag domain="user" value={v !== false} label={v === false ? t('statusInactive') : t('statusActive')} />
       ),
@@ -173,17 +173,17 @@ const Users: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
         <div>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Ma trận phân quyền chức năng</span>
-          <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>
+          <span style={{ marginLeft: 8, color: 'var(--on-surface-variant)', fontSize: 13 }}>
             — Admin luôn có toàn quyền. Click radio để thay đổi quyền Nhân viên.
           </span>
         </div>
         <Space wrap>
           {permEditing && (
             <>
-              <span style={{ fontSize: 12, color: '#666' }}>Đặt tất cả:</span>
+              <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Đặt tất cả:</span>
               <Button size="small" onClick={() => bulkSetDraft('hidden')}>Ẩn hết</Button>
-              <Button size="small" onClick={() => bulkSetDraft('view')} style={{ color: '#1677ff', borderColor: '#1677ff' }}>Xem hết</Button>
-              <Button size="small" onClick={() => bulkSetDraft('full')} style={{ color: '#52c41a', borderColor: '#52c41a' }}>Đầy đủ hết</Button>
+              <Button size="small" onClick={() => bulkSetDraft('view')} style={{ color: 'var(--info)', borderColor: 'var(--info)' }}>Xem hết</Button>
+              <Button size="small" onClick={() => bulkSetDraft('full')} style={{ color: 'var(--success)', borderColor: 'var(--success)' }}>Đầy đủ hết</Button>
               <Button type="primary" onClick={savePerms} icon={<CheckCircleOutlined />}>Lưu</Button>
               <Button onClick={() => { setPermEditing(false); setDraftPerms({}); }}>Hủy</Button>
             </>
@@ -203,9 +203,9 @@ const Users: React.FC = () => {
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ background: 'linear-gradient(90deg,#0e3a6e,#1677ff)', color: '#fff' }}>
+          <tr style={{ background: 'linear-gradient(90deg,var(--primary-container),var(--primary))', color: 'var(--on-primary)' }}>
             <th style={{ padding: '10px 14px', textAlign: 'left', width: 200 }}>Chức năng</th>
-            <th style={{ padding: '10px 14px', textAlign: 'center', width: 110, color: '#ffd' }}>Admin</th>
+            <th style={{ padding: '10px 14px', textAlign: 'center', width: 110, color: 'var(--on-primary)' }}>Admin</th>
             <th style={{ padding: '10px 14px', textAlign: 'center' }}>
               Nhân viên
               {permEditing && <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>(đang chỉnh sửa)</span>}
@@ -219,7 +219,7 @@ const Users: React.FC = () => {
             return (
               <React.Fragment key={group}>
                 <tr>
-                  <td colSpan={3} style={{ padding: '7px 14px', background: '#f0f4ff', fontWeight: 700, color: '#0e3a6e', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                  <td colSpan={3} style={{ padding: '7px 14px', background: 'var(--surface-container-low)', fontWeight: 700, color: 'var(--primary)', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' }}>
                     {group}
                   </td>
                 </tr>
@@ -228,12 +228,12 @@ const Users: React.FC = () => {
                     ? (draftPerms[s.key] ?? staffPerms[s.key] ?? s.defaultStaffLevel)
                     : (staffPerms[s.key] ?? s.defaultStaffLevel);
                   return (
-                    <tr key={s.key} style={{ background: i % 2 === 0 ? '#fff' : '#fafcff', borderBottom: '1px solid #eef0f8' }}>
-                      <td style={{ padding: '10px 14px', color: '#222' }}>
+                    <tr key={s.key} style={{ background: i % 2 === 0 ? 'var(--surface-container-lowest)' : 'var(--surface-container-low)', borderBottom: '1px solid var(--card-hairline)' }}>
+                      <td style={{ padding: '10px 14px', color: 'var(--on-surface)' }}>
                         {s.label}
                         {!s.configurable && (
                           <Tooltip title="Quyền cố định theo thiết kế, không thể thay đổi">
-                            <LockOutlined style={{ marginLeft: 6, color: '#ccc', fontSize: 11 }} />
+                            <LockOutlined style={{ marginLeft: 6, color: 'var(--outline)', fontSize: 11 }} />
                           </Tooltip>
                         )}
                       </td>
@@ -253,9 +253,9 @@ const Users: React.FC = () => {
                             size="small"
                             disabled={!permEditing}
                           >
-                            <Radio.Button value="hidden" style={effectiveLevel === 'hidden' ? { background: '#ff4d4f', borderColor: '#ff4d4f' } : {}}>Ẩn</Radio.Button>
-                            <Radio.Button value="view" style={effectiveLevel === 'view' ? { background: '#1677ff', borderColor: '#1677ff' } : {}}>Chỉ xem</Radio.Button>
-                            <Radio.Button value="full" style={effectiveLevel === 'full' ? { background: '#52c41a', borderColor: '#52c41a' } : {}}>Đầy đủ</Radio.Button>
+                            <Radio.Button value="hidden" style={effectiveLevel === 'hidden' ? { background: 'var(--error)', borderColor: 'var(--error)' } : {}}>Ẩn</Radio.Button>
+                            <Radio.Button value="view" style={effectiveLevel === 'view' ? { background: 'var(--info)', borderColor: 'var(--info)' } : {}}>Chỉ xem</Radio.Button>
+                            <Radio.Button value="full" style={effectiveLevel === 'full' ? { background: 'var(--success)', borderColor: 'var(--success)' } : {}}>Đầy đủ</Radio.Button>
                           </Radio.Group>
                         ) : (
                           <Tag color={effectiveLevel === 'full' ? 'green' : effectiveLevel === 'view' ? 'blue' : 'default'}>

@@ -6,12 +6,14 @@ import {
   UserOutlined, TeamOutlined, EnvironmentOutlined, GiftOutlined,
   DollarOutlined, BarChartOutlined, SettingOutlined, HistoryOutlined,
   AppstoreOutlined, AuditOutlined, AlertOutlined, FundOutlined,
-  SyncOutlined,
+  SyncOutlined, MoonOutlined, SunOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { loadStaffPerms, getStaffVisibleKeys } from '../../utils/permConfig';
 import { useUpdateAvailable } from '../../hooks/useUpdateAvailable';
+import DesktopOnlyBanner from './DesktopOnlyBanner';
 
 const MainLayout: React.FC = () => {
   const { user, logout } = useAuth();
@@ -20,6 +22,7 @@ const MainLayout: React.FC = () => {
   const location = useLocation();
   const isAdmin = user?.role === 'admin';
   const { updateAvailable, reload } = useUpdateAvailable();
+  const { mode, toggleMode } = useTheme();
 
   // Staff perm config
   const [staffVisible, setStaffVisible] = useState<Set<string>>(() =>
@@ -112,6 +115,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--surface)' }}>
+      <DesktopOnlyBanner />
       {/* Sidebar */}
       <aside className="app-sidebar">
         <div className="sidebar-logo">
@@ -151,6 +155,14 @@ const MainLayout: React.FC = () => {
               </Badge>
             </Tooltip>
           )}
+          {/* Chuyển theme sáng/tối — Q7: có ca trực đêm */}
+          <Tooltip title={mode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}>
+            <Button
+              shape="circle"
+              icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+              onClick={toggleMode}
+            />
+          </Tooltip>
           {/* Language switcher */}
           <Segmented
             value={lang}

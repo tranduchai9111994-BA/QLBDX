@@ -128,13 +128,13 @@ const Customers: React.FC = () => {
   };
 
   const columns = [
-    { title: t('fieldName'), dataIndex: 'fullName', key: 'fullName', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
-    { title: t('fieldPhone'), dataIndex: 'phone', key: 'phone' },
-    { title: t('fieldEmail'), dataIndex: 'email', key: 'email', render: (v?: string) => v || '-' },
-    { title: t('colIdentityCard'), dataIndex: 'identityCard', key: 'identityCard', render: (v?: string) => v || '-' },
-    { title: t('fieldAddress'), dataIndex: 'address', key: 'address', render: (v?: string) => v || '-' },
+    { title: t('fieldName'), dataIndex: 'fullName', key: 'fullName', width: 180, ellipsis: true, render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { title: t('fieldPhone'), dataIndex: 'phone', key: 'phone', width: 130, ellipsis: true },
+    { title: t('fieldEmail'), dataIndex: 'email', key: 'email', width: 200, ellipsis: true, render: (v?: string) => v || '-' },
+    { title: t('colIdentityCard'), dataIndex: 'identityCard', key: 'identityCard', width: 140, ellipsis: true, render: (v?: string) => v || '-' },
+    { title: t('fieldAddress'), dataIndex: 'address', key: 'address', width: 250, ellipsis: true, render: (v?: string) => v || '-' },
     {
-      title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive',
+      title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive', width: 130,
       render: (isActive: boolean) => (
         <StatusTag domain="toggle" value={isActive} label={isActive ? t('statusActive') : t('statusInactive')} />
       ),

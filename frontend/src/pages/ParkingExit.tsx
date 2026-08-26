@@ -285,7 +285,7 @@ const ParkingExit: React.FC = () => {
 
   const columns = [
     {
-      title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate',
+      title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', width: 130,
       render: (t: string) => <Tag className="plate-tag">{t}</Tag>,
     },
     {
@@ -305,21 +305,24 @@ const ParkingExit: React.FC = () => {
         return <Tag color="default" icon={<UserOutlined />}>Vãng lai</Tag>;
       },
     },
-    { title: 'Loại xe', key: 'vehicleTypeName', render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-' },
     {
-      title: 'Chỗ đỗ', key: 'spot',
+      title: 'Loại xe', key: 'vehicleTypeName', width: 110, ellipsis: true,
+      render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-',
+    },
+    {
+      title: 'Chỗ đỗ', key: 'spot', width: 160, ellipsis: true,
       render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-',
     },
     {
-      title: 'Khách hàng', key: 'customerName',
+      title: 'Khách hàng', key: 'customerName', width: 170, ellipsis: true,
       render: (_: unknown, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai',
     },
     {
-      title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime',
+      title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', width: 160, ellipsis: true,
       render: (t: string) => formatDateTime(t),
     },
     {
-      title: 'Thời gian đỗ', key: 'duration',
+      title: 'Thời gian đỗ', key: 'duration', width: 140, ellipsis: true,
       render: (_: unknown, r: ParkingRecord) => {
         const mins = Math.ceil((Date.now() - new Date(r.entryTime).getTime()) / 60000);
         const hours = Math.floor(mins / 60);

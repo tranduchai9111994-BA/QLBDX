@@ -5,6 +5,8 @@ import viVN from 'antd/locale/vi_VN';
 import enUS from 'antd/locale/en_US';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { useAntdTheme } from './theme/useAntdTheme';
 import MainLayout from './components/Layout/MainLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -49,34 +51,10 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
 
 const AppInner: React.FC = () => {
   const { lang } = useLanguage();
+  const { mode } = useTheme();
+  const antdTheme = useAntdTheme(mode);
   return (
-    <ConfigProvider locale={lang === 'en' ? enUS : viVN} theme={{
-      token: {
-        colorPrimary: '#005daa',
-        colorBgBase: '#f9f9ff',
-        colorBgContainer: '#ffffff',
-        colorBgElevated: '#ffffff',
-        colorBorder: 'rgba(116, 119, 127, 0.15)',
-        colorText: '#131b2c',
-        colorTextSecondary: '#44474f',
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        borderRadius: 8,
-        fontSize: 14,
-        controlHeight: 40,
-        colorError: '#ba1a1a',
-        colorSuccess: '#1a7a2e',
-        colorWarning: '#934600',
-      },
-      components: {
-        Card: { boxShadowTertiary: 'none' },
-        Table: { borderColor: 'transparent', headerBg: '#f1f3ff' },
-        Button: { primaryShadow: 'none' },
-        Input: { activeBorderColor: 'transparent', hoverBorderColor: 'transparent' },
-        Select: { optionSelectedBg: '#e0e8ff' },
-        Modal: { contentBg: '#ffffff', headerBg: '#ffffff' },
-        Menu: { darkItemBg: 'transparent', darkSubMenuItemBg: 'transparent' },
-      },
-    }}>
+    <ConfigProvider locale={lang === 'en' ? enUS : viVN} theme={antdTheme}>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -108,9 +86,11 @@ const AppInner: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <LanguageProvider>
-    <AppInner />
-  </LanguageProvider>
+  <ThemeProvider>
+    <LanguageProvider>
+      <AppInner />
+    </LanguageProvider>
+  </ThemeProvider>
 );
 
 export default App;

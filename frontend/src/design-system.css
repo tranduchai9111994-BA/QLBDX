@@ -97,6 +97,61 @@
 }
 
 /* =============================================
+   DARK MODE — Q7: có ca trực đêm, cần theme tối.
+   Bật bằng thuộc tính data-theme="dark" trên <html> (xem ThemeContext.tsx) — không dùng
+   prefers-color-scheme vì đây là lựa chọn tự bật/tắt của người dùng, không theo hệ điều hành.
+   ============================================= */
+:root[data-theme='dark'] {
+  --primary: #6db8ff;
+  --primary-container: #1864ab;
+  --on-primary: #00304d;
+  --primary-hover: #8fc9ff;
+
+  --surface: #14171f;
+  --surface-container-lowest: #1b1f29;
+  --surface-container-low: #1f2430;
+  --surface-container: #262c3a;
+  --surface-container-high: #2d3444;
+  --surface-container-highest: #353d4f;
+  --surface-bright: #1b1f29;
+  --card-hairline: rgba(255, 255, 255, 0.08);
+
+  --on-surface: #e4e7f0;
+  --on-surface-variant: #b3b8c8;
+  --outline: #8b909f;
+  --outline-variant: rgba(179, 184, 200, 0.16);
+
+  --success: #6fd18a;
+  --success-container: #164027;
+  --warning: #ffb35c;
+  --warning-container: #4a300e;
+  --error: #ff7a7a;
+  --error-container: #4a1a1a;
+  --info: #6db8ff;
+  --info-container: #1864ab;
+
+  --secondary: #a9b1c6;
+  --secondary-container: #2d3444;
+
+  --tertiary: #ffb35c;
+  --tertiary-container: #4a300e;
+
+  --chart-accent-1: #b7a3e0;
+  --chart-accent-2: #85cf9a;
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.45);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+/* =============================================
+   TABLE ROW STATES
+   ============================================= */
+.ant-table-row-danger td {
+  background: var(--error-container) !important;
+}
+
+/* =============================================
    GLOBAL RESETS
    ============================================= */
 *, *::before, *::after {

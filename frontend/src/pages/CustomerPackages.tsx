@@ -267,39 +267,39 @@ const CustomerPackages: React.FC = () => {
   const daysRemaining = (endDate: string) => {
     const diff = dayjs(endDate).diff(dayjs(), 'day');
     if (diff < 0) return null;
-    if (diff <= 7) return <Badge count={`còn ${diff}n`} color="#faad14" style={{ fontSize: 11 }} />;
-    if (diff <= 14) return <Badge count={`còn ${diff}n`} color="#1677ff" style={{ fontSize: 11 }} />;
+    if (diff <= 7) return <Badge count={`còn ${diff}n`} color="var(--warning)" style={{ fontSize: 11 }} />;
+    if (diff <= 14) return <Badge count={`còn ${diff}n`} color="var(--primary)" style={{ fontSize: 11 }} />;
     return null;
   };
 
   /* ── Columns ─────────────────────────────────────────────────── */
   const columns = [
     {
-      title: 'Khách hàng', key: 'customerName',
+      title: 'Khách hàng', key: 'customerName', width: 180, ellipsis: true,
       render: (_: unknown, r: CustomerPackage) => <span style={{ fontWeight: 500 }}>{r.customer?.fullName || '-'}</span>,
     },
     {
-      title: 'Gói', key: 'packageName',
+      title: 'Gói', key: 'packageName', width: 170, ellipsis: true,
       render: (_: unknown, r: CustomerPackage) => r.parkingPackage?.name || '-',
     },
     {
-      title: 'Phương tiện', key: 'vehiclePlate',
+      title: 'Phương tiện', key: 'vehiclePlate', width: 130,
       render: (_: unknown, r: CustomerPackage) => <Tag className="plate-tag">{r.vehicle?.licensePlate || '-'}</Tag>,
     },
     {
-      title: 'Bắt đầu', dataIndex: 'startDate', key: 'startDate',
+      title: 'Bắt đầu', dataIndex: 'startDate', key: 'startDate', width: 120, ellipsis: true,
       render: (d: string) => dayjs(d).format('DD/MM/YYYY'),
     },
     {
-      title: 'Kết thúc', dataIndex: 'endDate', key: 'endDate',
+      title: 'Kết thúc', dataIndex: 'endDate', key: 'endDate', width: 120, ellipsis: true,
       render: (d: string) => (
-        <span style={{ color: dayjs(d).isBefore(dayjs()) ? '#cf1322' : undefined }}>
+        <span style={{ color: dayjs(d).isBefore(dayjs()) ? 'var(--error)' : undefined }}>
           {dayjs(d).format('DD/MM/YYYY')}
         </span>
       ),
     },
     {
-      title: 'Trạng thái', dataIndex: 'status', key: 'status',
+      title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 170,
       render: (s: string, r: CustomerPackage) => (
         <Space size={4}>
           <StatusTag domain="customerPackage" value={s} />
@@ -321,7 +321,7 @@ const CustomerPackages: React.FC = () => {
                   icon={<SyncOutlined />}
                   onClick={() => openRenew(r)}
                   size="small"
-                  style={{ color: '#1677ff', borderColor: '#1677ff' }}
+                  style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}
                 >
                   Gia hạn
                 </Button>
@@ -472,7 +472,7 @@ const CustomerPackages: React.FC = () => {
       >
         {editingPkg && (
           <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
-            <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f5f5f5', borderRadius: 8 }}>
+            <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--surface-container-low)', borderRadius: 8 }}>
               <div><strong>Gói:</strong> {editingPkg.parkingPackage?.name}</div>
               <div><strong>Thời hạn:</strong> {dayjs(editingPkg.startDate).format('DD/MM/YYYY')} – {dayjs(editingPkg.endDate).format('DD/MM/YYYY')}</div>
             </div>
@@ -502,7 +502,7 @@ const CustomerPackages: React.FC = () => {
       <Modal
         title={
           <Space>
-            <CalendarOutlined style={{ color: '#1677ff' }} />
+            <CalendarOutlined style={{ color: 'var(--primary)' }} />
             Gia hạn gói dịch vụ
           </Space>
         }
@@ -513,12 +513,12 @@ const CustomerPackages: React.FC = () => {
       >
         {renewingPkg && (
           <>
-            <div style={{ marginBottom: 16, padding: '10px 14px', background: '#fff7e6', borderRadius: 8, borderLeft: '4px solid #faad14' }}>
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--warning-container)', borderRadius: 8, borderLeft: '4px solid var(--warning)' }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>Gói hết hạn:</div>
               <div><strong>Khách:</strong> {renewingPkg.customer?.fullName}</div>
               <div><strong>Gói cũ:</strong> {renewingPkg.parkingPackage?.name}</div>
               <div><strong>Hết hạn:</strong> {dayjs(renewingPkg.endDate).format('DD/MM/YYYY')}</div>
-              <div style={{ marginTop: 6, color: '#888', fontSize: 12 }}>
+              <div style={{ marginTop: 6, color: 'var(--outline)', fontSize: 12 }}>
                 Gói cũ giữ nguyên trạng thái "Hết hạn" trong lịch sử. Gói mới sẽ được tạo.
               </div>
             </div>

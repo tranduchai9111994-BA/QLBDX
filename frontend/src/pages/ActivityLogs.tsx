@@ -174,6 +174,7 @@ const ActivityLogs: React.FC = () => {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 160,
+      ellipsis: true,
       render: (v: string) => (
         <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
           {formatDateTime(v)}
@@ -184,6 +185,7 @@ const ActivityLogs: React.FC = () => {
       title: t('colUser'),
       key: 'user',
       width: 170,
+      ellipsis: true,
       render: (_: unknown, record: ActivityLog) => (
         <div>
           <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{record.username}</div>
@@ -213,7 +215,7 @@ const ActivityLogs: React.FC = () => {
     {
       title: 'Đối tượng',
       key: 'entity',
-      width: 160,
+      width: 180,
       render: (_: unknown, record: ActivityLog) => {
         if (!record.entity) return <span style={{ color: 'var(--outline)' }}>—</span>;
         const label = ENTITY_LABELS[record.entity] ?? record.entity;
@@ -233,6 +235,7 @@ const ActivityLogs: React.FC = () => {
       title: 'Chi tiết',
       dataIndex: 'details',
       key: 'details',
+      width: 280,
       ellipsis: true,
       render: (v: string | null) =>
         v ? (
@@ -249,7 +252,8 @@ const ActivityLogs: React.FC = () => {
       title: 'IP',
       dataIndex: 'ipAddress',
       key: 'ipAddress',
-      width: 100,
+      width: 120,
+      ellipsis: true,
       render: (v: string | null) => (
         <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: 'var(--on-surface-variant)' }}>
           {v ?? '—'}
@@ -396,7 +400,7 @@ const ActivityLogs: React.FC = () => {
               <Button
                 icon={<FileExcelOutlined />}
                 onClick={handleExportExcel}
-                style={{ color: '#217346', borderColor: '#217346' }}
+                style={{ color: 'var(--success)', borderColor: 'var(--success)' }}
               >
                 Xuất Excel
               </Button>
@@ -413,7 +417,7 @@ const ActivityLogs: React.FC = () => {
           rowKey="id"
           loading={loading}
           size="small"
-          scroll={{ x: 900 }}
+          scroll={{ x: 1140 }}
           pagination={{
             current: page,
             pageSize,
@@ -432,12 +436,6 @@ const ActivityLogs: React.FC = () => {
           }
         />
       </Card>
-
-      <style>{`
-        .ant-table-row-danger td {
-          background: #fff5f5 !important;
-        }
-      `}</style>
     </div>
   );
 };

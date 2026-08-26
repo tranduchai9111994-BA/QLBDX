@@ -43,6 +43,17 @@ function toCsv(rows: Record<string, string | number>[]): string {
   ].join('\n');
 }
 
+/** T-17: gom logic map-rows + toCsv + downloadBlob dùng chung cho mọi export CSV bên dưới. */
+function exportCsv<T>(
+  items: T[],
+  toRow: (item: T) => Record<string, string | number>,
+  filenamePrefix: string,
+  stamp: string
+) {
+  const rows = items.map(toRow);
+  downloadBlob('﻿' + toCsv(rows), `${filenamePrefix}_${stamp}.csv`, 'text/csv;charset=utf-8;');
+}
+
 export interface ReportExportPayload {
   dateRange: [Dayjs, Dayjs];
   groupBy: GroupBy;
@@ -219,32 +230,44 @@ export function exportRevenueExcel(payload: ReportExportPayload) {
 }
 
 export function exportRevenueCsv(payload: ReportExportPayload) {
-  const rows = payload.revenue.map((item) => ({
-    Ky: formatPeriodLabel(item.period, payload.groupBy),
-    Gui_le: Number(item.parkingRevenue),
-    Goi_dich_vu: Number(item.packageRevenue),
-    Tong: Number(item.totalRevenue),
-    So_GD: Number(item.totalTransactions),
-  }));
-  downloadBlob('\uFEFF' + toCsv(rows), `doanh-thu_${fileStamp(payload.dateRange)}.csv`, 'text/csv;charset=utf-8;');
+  exportCsv(
+    payload.revenue,
+    (item) => ({
+      Ky: formatPeriodLabel(item.period, payload.groupBy),
+      Gui_le: Number(item.parkingRevenue),
+      Goi_dich_vu: Number(item.packageRevenue),
+      Tong: Number(item.totalRevenue),
+      So_GD: Number(item.totalTransactions),
+    }),
+    'doanh-thu',
+    fileStamp(payload.dateRange)
+  );
 }
 
 export function exportVehicleCsv(payload: ReportExportPayload) {
-  const rows = payload.vehicleStats.map((item) => ({
-    Loai_xe: item.vehicleType,
-    So_luot: item.totalRecords,
-    Doanh_thu: Number(item.totalFees),
-  }));
-  downloadBlob('\uFEFF' + toCsv(rows), `loai-xe_${fileStamp(payload.dateRange)}.csv`, 'text/csv;charset=utf-8;');
+  exportCsv(
+    payload.vehicleStats,
+    (item) => ({
+      Loai_xe: item.vehicleType,
+      So_luot: item.totalRecords,
+      Doanh_thu: Number(item.totalFees),
+    }),
+    'loai-xe',
+    fileStamp(payload.dateRange)
+  );
 }
 
 export function exportPaymentMethodCsv(payload: ReportExportPayload) {
-  const rows = (payload.paymentMethods?.byMethod || []).map((item) => ({
-    Phuong_thuc: item.label,
-    So_GD: item.totalTransactions,
-    Doanh_thu: item.totalAmount,
-  }));
-  downloadBlob('\uFEFF' + toCsv(rows), `phuong-thuc-tt_${fileStamp(payload.dateRange)}.csv`, 'text/csv;charset=utf-8;');
+  exportCsv(
+    payload.paymentMethods?.byMethod || [],
+    (item) => ({
+      Phuong_thuc: item.label,
+      So_GD: item.totalTransactions,
+      Doanh_thu: item.totalAmount,
+    }),
+    'phuong-thuc-tt',
+    fileStamp(payload.dateRange)
+  );
 }
 
 export function printRevenueReport(payload: ReportExportPayload) {
@@ -550,13 +573,16 @@ export function exportExceptionExcel(stats: ExceptionStats, dateRange: [Dayjs, D
 }
 
 export function exportAlertsCsv(alerts: AlertItem[]) {
-  const rows = alerts.map((a) => ({
-    Muc_do: SEVERITY_LABEL[a.severity] ?? a.severity,
-    Danh_muc: a.category,
-    Tieu_de: a.title,
-    Mo_ta: a.description,
-    Thoi_gian: new Date(a.occurredAt).toLocaleString('vi-VN'),
-  }));
-  const stamp = dayjs().format('DDMMYYYY-HHmm');
-  downloadBlob('\uFEFF' + toCsv(rows), `canh-bao_${stamp}.csv`, 'text/csv;charset=utf-8;');
+  exportCsv(
+    alerts,
+    (a) => ({
+      Muc_do: SEVERITY_LABEL[a.severity] ?? a.severity,
+      Danh_muc: a.category,
+      Tieu_de: a.title,
+      Mo_ta: a.description,
+      Thoi_gian: new Date(a.occurredAt).toLocaleString('vi-VN'),
+    }),
+    'canh-bao',
+    dayjs().format('DDMMYYYY-HHmm')
+  );
 }

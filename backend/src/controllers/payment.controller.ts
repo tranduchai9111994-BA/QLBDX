@@ -27,6 +27,15 @@ export class PaymentController {
     }
   }
 
+  async update(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await paymentService.update(Number(req.params.id), req.body);
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
   async myShift(req: Request, res: Response): Promise<void> {
     try {
       const result = await paymentService.myShiftSummary(

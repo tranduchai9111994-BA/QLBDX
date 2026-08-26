@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, DatePicker, Select, Tag, Button, message, Input, InputNumber, Space } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { Table, Card, DatePicker, Select, Tag, Button, message, Input, InputNumber, Space, Modal, Form } from 'antd';
+import { DownloadOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import * as XLSX from 'xlsx';
 import api from '../api/axios';
@@ -38,6 +38,9 @@ const Payments: React.FC = () => {
   });
   const [searchInput, setSearchInput] = useState('');
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
+  const [editing, setEditing] = useState<Payment | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editForm] = Form.useForm();
 
   const buildParams = (): Record<string, string> => {
     const params: Record<string, string> = {};
@@ -91,6 +94,32 @@ const Payments: React.FC = () => {
 
   const methodLabel = (m: string) => (m === 'cash' ? 'Tiền mặt' : m === 'transfer' ? 'Chuyển khoản' : 'Thẻ');
 
+  const openEdit = (record: Payment) => {
+    setEditing(record);
+    editForm.setFieldsValue({
+      amount: Number(record.amount),
+      paymentMethod: record.paymentMethod,
+      notes: record.notes || '',
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editing) return;
+    try {
+      const values = await editForm.validateFields();
+      setSaving(true);
+      await api.put(`/payments/${editing.id}`, values);
+      message.success('Đã cập nhật giao dịch thanh toán');
+      setEditing(null);
+      fetchPayments(pagination.current, pagination.pageSize);
+    } catch (err: any) {
+      if (err?.errorFields) return; // lỗi validate form, không phải lỗi API
+      message.error(err?.response?.data?.message || 'Không cập nhật được giao dịch');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const exportExcel = async () => {
     setExporting(true);
     try {
@@ -120,19 +149,32 @@ const Payments: React.FC = () => {
   };
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: 'Biển số', key: 'licensePlate', render: (_: any, r: Payment) => (r.parkingRecord?.licensePlate || r.customerPackage?.vehicle?.licensePlate) ? <Tag className="plate-tag">{r.parkingRecord?.licensePlate || r.customerPackage?.vehicle?.licensePlate}</Tag> : '-' },
-    { title: 'Số tiền (đ)', dataIndex: 'amount', key: 'amount', render: (v: number) => <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{Number(v).toLocaleString()}</span> },
+    { title: 'ID', dataIndex: 'id', key: 'id', width: 60, ellipsis: true },
     {
-      title: 'Phương thức', dataIndex: 'paymentMethod', key: 'paymentMethod', render: (m: string) => (
+      title: 'Biển số', key: 'licensePlate', width: 140,
+      render: (_: any, r: Payment) => (r.parkingRecord?.licensePlate || r.customerPackage?.vehicle?.licensePlate) ? <Tag className="plate-tag">{r.parkingRecord?.licensePlate || r.customerPackage?.vehicle?.licensePlate}</Tag> : '-',
+    },
+    {
+      title: 'Số tiền (đ)', dataIndex: 'amount', key: 'amount', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ fontWeight: 600, color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}</span>,
+    },
+    {
+      title: 'Phương thức', dataIndex: 'paymentMethod', key: 'paymentMethod', width: 140,
+      render: (m: string) => (
         m === 'cash' ? <Tag className="chip-available">Tiền mặt</Tag> :
         m === 'transfer' ? <Tag color="purple">Chuyển khoản</Tag> :
         <Tag>Thẻ</Tag>
       ),
     },
-    { title: 'Loại', dataIndex: 'paymentType', key: 'paymentType', render: (t: string) => t === 'parking' ? 'Gửi xe' : 'Gói dịch vụ' },
-    { title: 'Ngày thanh toán', dataIndex: 'paidAt', key: 'paidAt', render: (d: string) => formatDateTime(d) },
-    { title: 'Người thu', key: 'creator', render: (_: any, r: Payment) => r.creator?.fullName || '-' },
+    { title: 'Loại', dataIndex: 'paymentType', key: 'paymentType', width: 120, ellipsis: true, render: (t: string) => t === 'parking' ? 'Gửi xe' : 'Gói dịch vụ' },
+    { title: 'Ngày thanh toán', dataIndex: 'paidAt', key: 'paidAt', width: 180, ellipsis: true, render: (d: string) => formatDateTime(d) },
+    { title: 'Người thu', key: 'creator', width: 160, ellipsis: true, render: (_: any, r: Payment) => r.creator?.fullName || '-' },
+    {
+      title: 'Thao tác', key: 'action', width: 90,
+      render: (_: any, r: Payment) => (
+        <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>Sửa</Button>
+      ),
+    },
   ];
 
   return (
@@ -201,6 +243,48 @@ const Payments: React.FC = () => {
           onChange={(p) => fetchPayments(p.current || 1, p.pageSize || pagination.pageSize)}
         />
       </Card>
+
+      <Modal
+        title="Sửa giao dịch thanh toán"
+        open={!!editing}
+        onCancel={() => setEditing(null)}
+        onOk={handleEditSave}
+        confirmLoading={saving}
+        okText="Lưu"
+        cancelText="Hủy"
+      >
+        {editing && (
+          <>
+            <p style={{ color: 'var(--on-surface-variant)', marginBottom: 16 }}>
+              Giao dịch #{editing.id} — biển số{' '}
+              <strong>{editing.parkingRecord?.licensePlate || editing.customerPackage?.vehicle?.licensePlate || '-'}</strong>
+            </p>
+            <Form form={editForm} layout="vertical">
+              <Form.Item
+                name="amount"
+                label="Số tiền (đ)"
+                rules={[{ required: true, message: 'Vui lòng nhập số tiền' }]}
+              >
+                <InputNumber style={{ width: '100%' }} min={0} step={1000} />
+              </Form.Item>
+              <Form.Item
+                name="paymentMethod"
+                label="Phương thức"
+                rules={[{ required: true, message: 'Vui lòng chọn phương thức' }]}
+              >
+                <Select>
+                  <Select.Option value="cash">Tiền mặt</Select.Option>
+                  <Select.Option value="card">Thẻ</Select.Option>
+                  <Select.Option value="transfer">Chuyển khoản</Select.Option>
+                </Select>
+              </Form.Item>
+              <Form.Item name="notes" label="Ghi chú">
+                <Input.TextArea rows={3} maxLength={500} placeholder="Lý do chỉnh sửa, ghi chú..." />
+              </Form.Item>
+            </Form>
+          </>
+        )}
+      </Modal>
     </div>
   );
 };

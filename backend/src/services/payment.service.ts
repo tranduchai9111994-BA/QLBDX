@@ -1,4 +1,5 @@
 import prisma from '../config/prisma';
+import { UpdatePaymentInput } from '../validators/payment.validator';
 
 export class PaymentService {
   async findAll(params: {
@@ -64,6 +65,28 @@ export class PaymentService {
     ]);
 
     return { data, total, page, pageSize };
+  }
+
+  /** Q10: cho phép admin sửa lại giao dịch thanh toán đã ghi nhận sai (nhầm số tiền, sai phương thức...) */
+  async update(id: number, data: UpdatePaymentInput) {
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) {
+      throw { status: 404, message: 'Không tìm thấy giao dịch thanh toán' };
+    }
+
+    return prisma.payment.update({
+      where: { id },
+      data: {
+        amount: data.amount,
+        paymentMethod: data.paymentMethod,
+        notes: data.notes ?? null,
+      },
+      include: {
+        creator: { select: { fullName: true } },
+        parkingRecord: { select: { licensePlate: true, entryTime: true, exitTime: true } },
+        customerPackage: { select: { vehicle: { select: { licensePlate: true } } } },
+      },
+    });
   }
 
   /**

@@ -164,14 +164,14 @@ const Vehicles: React.FC = () => {
   };
 
   const columns = [
-    { title: t('colLicensePlate'), dataIndex: 'licensePlate', key: 'licensePlate', render: (v: string) => <Tag className="plate-tag">{v}</Tag> },
-    { title: t('colOwner'), key: 'customerName', render: (_: unknown, r: Vehicle) => r.customer?.fullName || '-' },
-    { title: t('colVehicleType'), key: 'vehicleTypeName', render: (_: unknown, r: Vehicle) => r.vehicleType?.name || '-' },
-    { title: t('colBrand'), dataIndex: 'brand', key: 'brand', render: (v?: string) => v || '-' },
-    { title: t('colModel'), dataIndex: 'model', key: 'model', render: (v?: string) => v || '-' },
-    { title: t('colColor'), dataIndex: 'color', key: 'color', render: (v?: string) => v || '-' },
+    { title: t('colLicensePlate'), dataIndex: 'licensePlate', key: 'licensePlate', width: 140, render: (v: string) => <Tag className="plate-tag">{v}</Tag> },
+    { title: t('colOwner'), key: 'customerName', width: 180, ellipsis: true, render: (_: unknown, r: Vehicle) => r.customer?.fullName || '-' },
+    { title: t('colVehicleType'), key: 'vehicleTypeName', width: 150, ellipsis: true, render: (_: unknown, r: Vehicle) => r.vehicleType?.name || '-' },
+    { title: t('colBrand'), dataIndex: 'brand', key: 'brand', width: 130, ellipsis: true, render: (v?: string) => v || '-' },
+    { title: t('colModel'), dataIndex: 'model', key: 'model', width: 150, ellipsis: true, render: (v?: string) => v || '-' },
+    { title: t('colColor'), dataIndex: 'color', key: 'color', width: 110, ellipsis: true, render: (v?: string) => v || '-' },
     {
-      title: t('fieldStatus'), dataIndex: 'parkingStatus', key: 'parkingStatus',
+      title: t('fieldStatus'), dataIndex: 'parkingStatus', key: 'parkingStatus', width: 150,
       render: (status?: string) => (
         <StatusTag
           domain="vehicleParking"

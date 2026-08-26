@@ -24,6 +24,27 @@
     "start": "react-scripts start",
     "build": "react-scripts build"
   },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": ["src/**/*.tsx"],
+        "excludedFiles": ["src/theme/**", "**/*.test.tsx"],
+        "rules": {
+          "no-restricted-syntax": [
+            "warn",
+            {
+              "selector": "Literal[value=/^#([0-9a-fA-F]{3}){1,2}$/]",
+              "message": "T-12: khong hardcode ma mau hex trong .tsx - dung CSS variable (var(--ten-token)) khai bao trong design-system.css, hoac them token moi neu can."
+            }
+          ]
+        }
+      }
+    ]
+  },
   "browserslist": {
     "production": [
       ">0.2%",

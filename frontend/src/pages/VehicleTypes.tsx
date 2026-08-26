@@ -131,13 +131,22 @@ const VehicleTypes: React.FC = () => {
   };
 
   const columns = [
-    { title: t('colVehicleType'), dataIndex: 'name', key: 'name' },
-    { title: t('fieldNote'), dataIndex: 'description', key: 'description', render: (v?: string) => v || '-' },
-    { title: t('colHourlyRate'), dataIndex: 'hourlyRate', key: 'hourlyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
-    { title: t('colDailyRate'), dataIndex: 'dailyRate', key: 'dailyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
-    { title: 'Giá/tháng (đ)', dataIndex: 'monthlyRate', key: 'monthlyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
+    { title: t('colVehicleType'), dataIndex: 'name', key: 'name', width: 180, ellipsis: true },
+    { title: t('fieldNote'), dataIndex: 'description', key: 'description', width: 260, ellipsis: true, render: (v?: string) => v || '-' },
     {
-      title: 'Thao tác', key: 'action', render: (_: any, r: VehicleType) => (
+      title: t('colHourlyRate'), dataIndex: 'hourlyRate', key: 'hourlyRate', width: 130, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+    },
+    {
+      title: t('colDailyRate'), dataIndex: 'dailyRate', key: 'dailyRate', width: 130, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+    },
+    {
+      title: 'Giá/tháng (đ)', dataIndex: 'monthlyRate', key: 'monthlyRate', width: 140, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+    },
+    {
+      title: 'Thao tác', key: 'action', width: 320, render: (_: any, r: VehicleType) => (
         <Space wrap>
           <Button icon={<HistoryOutlined />} onClick={() => openHistoryModal(r)} size="small">Lịch sử giá</Button>
           <PermissionGate adminOnly fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
@@ -266,10 +275,16 @@ const VehicleTypes: React.FC = () => {
                 ? <Tag color="blue">Sắp áp dụng</Tag>
                 : <Tag color="green">Đã áp dụng</Tag>,
             },
-            { title: 'Hiệu lực từ', dataIndex: 'effectiveFrom', key: 'effectiveFrom', render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
-            { title: 'Giá/lượt', dataIndex: 'hourlyRate', key: 'hourlyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
-            { title: 'Giá/ngày', dataIndex: 'dailyRate', key: 'dailyRate', render: (v: number) => Number(v).toLocaleString() + 'đ' },
-            { title: 'Người đổi', key: 'changer', render: (_: any, r: RateHistoryEntry) => r.changer?.fullName || '-' },
+            { title: 'Hiệu lực từ', dataIndex: 'effectiveFrom', key: 'effectiveFrom', width: 120, ellipsis: true, render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
+            {
+              title: 'Giá/lượt', dataIndex: 'hourlyRate', key: 'hourlyRate', width: 110, align: 'right' as const,
+              render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+            },
+            {
+              title: 'Giá/ngày', dataIndex: 'dailyRate', key: 'dailyRate', width: 110, align: 'right' as const,
+              render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+            },
+            { title: 'Người đổi', key: 'changer', width: 140, ellipsis: true, render: (_: any, r: RateHistoryEntry) => r.changer?.fullName || '-' },
           ]}
           locale={{ emptyText: 'Chưa có lịch sử đổi giá — giá hiện tại là giá gốc khi tạo loại xe' }}
         />

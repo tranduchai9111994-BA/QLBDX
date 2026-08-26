@@ -104,23 +104,28 @@ const ParkingHistory: React.FC = () => {
       title: 'Biển số',
       dataIndex: 'licensePlate',
       key: 'licensePlate',
+      width: 130,
       render: (t: string) => (
         <Button type="link" style={{ padding: 0 }} onClick={() => { setPlateInput(t); lookupPlateHistory(t); }}>
           <Tag className="plate-tag">{t}</Tag>
         </Button>
       ),
     },
-    { title: 'Loại xe', key: 'vehicleTypeName', render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-' },
-    { title: 'Chỗ đỗ', key: 'spot', render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
-    { title: 'Khách', key: 'customer', render: (_: unknown, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai' },
-    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => formatDateTime(t) },
-    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (t?: string) => t ? formatDateTime(t) : '-' },
-    { title: 'Thời gian (phút)', dataIndex: 'duration', key: 'duration' },
-    { title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', render: (v?: number) => v ? Number(v).toLocaleString() : '0' },
+    { title: 'Loại xe', key: 'vehicleTypeName', width: 110, ellipsis: true, render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-' },
+    { title: 'Chỗ đỗ', key: 'spot', width: 160, ellipsis: true, render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
+    { title: 'Khách', key: 'customer', width: 170, ellipsis: true, render: (_: unknown, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai' },
+    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', width: 160, ellipsis: true, render: (t: string) => formatDateTime(t) },
+    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', width: 160, ellipsis: true, render: (t?: string) => t ? formatDateTime(t) : '-' },
+    { title: 'Thời gian (phút)', dataIndex: 'duration', key: 'duration', width: 130, ellipsis: true },
+    {
+      title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', width: 130, align: 'right' as const,
+      render: (v?: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v ? Number(v).toLocaleString() : '0'}</span>,
+    },
     {
       title: 'Ghi chú',
       dataIndex: 'notes',
       key: 'notes',
+      width: 220,
       ellipsis: true,
       render: (notes?: string) => {
         if (!notes) return '-';
@@ -135,16 +140,22 @@ const ParkingHistory: React.FC = () => {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
+      width: 120,
       render: (status: string) => <StatusTag domain="parkingRecord" value={status} />,
     },
-    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => formatDateTime(t) },
-    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (t?: string) => t ? formatDateTime(t) : '-' },
-    { title: 'Chỗ đỗ', key: 'spot', render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
-    { title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', render: (v?: number) => v ? Number(v).toLocaleString() : '0' },
+    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', width: 160, ellipsis: true, render: (t: string) => formatDateTime(t) },
+    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', width: 160, ellipsis: true, render: (t?: string) => t ? formatDateTime(t) : '-' },
+    { title: 'Chỗ đỗ', key: 'spot', width: 160, ellipsis: true, render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
+    {
+      title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', width: 130, align: 'right' as const,
+      render: (v?: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v ? Number(v).toLocaleString() : '0'}</span>,
+    },
     {
       title: 'Ghi chú',
       dataIndex: 'notes',
       key: 'notes',
+      width: 220,
+      ellipsis: true,
       render: (notes?: string) => notes?.includes('[NGOAI_LE:') ? <Tag color="orange">Checkout ngoại lệ</Tag> : (notes || '-'),
     },
   ];
@@ -263,9 +274,9 @@ const ParkingHistory: React.FC = () => {
           <>
             <Row gutter={16} style={{ marginBottom: 16 }}>
               <Col span={6}><Card><Statistic title="Tổng lượt" value={plateHistory.total} /></Card></Col>
-              <Col span={6}><Card><Statistic title="Đang đỗ" value={plateHistory.currentlyParked} valueStyle={{ color: '#005daa' }} /></Card></Col>
-              <Col span={6}><Card><Statistic title="Đã ra" value={plateHistory.completed} valueStyle={{ color: '#1a7a2e' }} /></Card></Col>
-              <Col span={6}><Card><Statistic title="Ngoại lệ" value={plateHistory.exceptionCount} valueStyle={{ color: '#934600' }} /></Card></Col>
+              <Col span={6}><Card><Statistic title="Đang đỗ" value={plateHistory.currentlyParked} valueStyle={{ color: 'var(--primary)' }} /></Card></Col>
+              <Col span={6}><Card><Statistic title="Đã ra" value={plateHistory.completed} valueStyle={{ color: 'var(--success)' }} /></Card></Col>
+              <Col span={6}><Card><Statistic title="Ngoại lệ" value={plateHistory.exceptionCount} valueStyle={{ color: 'var(--warning)' }} /></Card></Col>
             </Row>
             <Table
               columns={plateColumns}

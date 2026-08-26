@@ -26,7 +26,7 @@ export class AnalyticsService {
     const { start, end, label } = rangeForPeriod(period);
     const daysInRange = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
 
-    const [allRecords, completedRecords, zones, since30Records, activePackageCustomerIds] = await Promise.all([
+    const [allRecords, completedRecords, zones, occupancyRecords, since30Records, activePackageCustomerIds] = await Promise.all([
       prisma.parkingRecord.findMany({
         where: { entryTime: { gte: start, lte: end } },
         select: { entryTime: true },
@@ -42,6 +42,16 @@ export class AnalyticsService {
       prisma.parkingZone.findMany({
         include: { parkingSpots: { select: { status: true } } },
         orderBy: { id: 'asc' },
+      }),
+      // Mọi lượt đỗ có giao với khoảng [start, end] (kể cả đang parked) — dùng để tính % thời
+      // gian thực sự có xe trong kỳ, thay vì lấy trạng thái "hiện tại" (sai lệch khi xem kỳ quá khứ).
+      prisma.parkingRecord.findMany({
+        where: {
+          parkingSpotId: { not: null },
+          entryTime: { lte: end },
+          OR: [{ exitTime: null }, { exitTime: { gte: start } }],
+        },
+        select: { entryTime: true, exitTime: true, parkingSpotId: true, parkingSpot: { select: { zoneId: true } } },
       }),
       prisma.parkingRecord.findMany({
         where: { entryTime: { gte: new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000) } },
@@ -116,14 +126,27 @@ export class AnalyticsService {
       if (zoneId == null) continue;
       zoneRevenue.set(zoneId, (zoneRevenue.get(zoneId) || 0) + Number(r.fee || 0));
     }
+    // % thời gian có xe trong kỳ = tổng (giờ đỗ giao với kỳ) / (số chỗ × độ dài kỳ) — không
+    // phải trạng thái "đang occupied ngay lúc gọi API", vốn sai lệch khi xem báo cáo kỳ trước.
+    const periodMs = Math.max(1, end.getTime() - start.getTime());
+    const zoneOccupiedMs = new Map<number, number>();
+    for (const r of occupancyRecords) {
+      const zoneId = r.parkingSpot?.zoneId;
+      if (zoneId == null) continue;
+      const overlapStart = Math.max(new Date(r.entryTime).getTime(), start.getTime());
+      const overlapEnd = Math.min(r.exitTime ? new Date(r.exitTime).getTime() : end.getTime(), end.getTime());
+      const overlapMs = Math.max(0, overlapEnd - overlapStart);
+      zoneOccupiedMs.set(zoneId, (zoneOccupiedMs.get(zoneId) || 0) + overlapMs);
+    }
     const zoneEfficiency = zones.map((z) => {
       const total = z.parkingSpots.length;
-      const occupied = z.parkingSpots.filter((s) => s.status === 'occupied').length;
       const revenue = zoneRevenue.get(z.id) || 0;
+      const occupiedMs = zoneOccupiedMs.get(z.id) || 0;
+      const capacityMs = total * periodMs;
       return {
         zone: z.name,
         totalSpots: total,
-        avgOccupancy: total > 0 ? Math.round((occupied / total) * 1000) / 10 : 0,
+        avgOccupancy: capacityMs > 0 ? Math.round((occupiedMs / capacityMs) * 1000) / 10 : 0,
         revenue,
         revenuePerSpot: total > 0 ? Math.round(revenue / total) : 0,
       };

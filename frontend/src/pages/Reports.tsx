@@ -153,28 +153,46 @@ const Reports: React.FC = () => {
   const groupByLabel = groupBy === 'day' ? 'Ngày' : groupBy === 'month' ? 'Tháng' : 'Năm';
 
   const revenuePreviewColumns = [
-    { title: groupByLabel, dataIndex: 'period', key: 'period', render: (v: string) => formatPeriodLabel(v, groupBy) },
-    { title: 'Gửi lẻ (đ)', dataIndex: 'parkingRevenue', key: 'parkingRevenue', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
-    { title: 'Gói (đ)', dataIndex: 'packageRevenue', key: 'packageRevenue', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
-    { title: 'Tổng (đ)', dataIndex: 'totalRevenue', key: 'totalRevenue', align: 'right' as const, render: (v: number) => <strong>{fmt(Number(v))}</strong> },
-    { title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', align: 'right' as const },
+    { title: groupByLabel, dataIndex: 'period', key: 'period', width: 140, ellipsis: true, render: (v: string) => formatPeriodLabel(v, groupBy) },
+    {
+      title: 'Gửi lẻ (đ)', dataIndex: 'parkingRevenue', key: 'parkingRevenue', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
+    },
+    {
+      title: 'Gói (đ)', dataIndex: 'packageRevenue', key: 'packageRevenue', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
+    },
+    {
+      title: 'Tổng (đ)', dataIndex: 'totalRevenue', key: 'totalRevenue', width: 150, align: 'right' as const,
+      render: (v: number) => <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</strong>,
+    },
+    { title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', width: 100, align: 'right' as const },
   ];
   const vehiclePreviewColumns = [
-    { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType' },
-    { title: 'Số lượt', dataIndex: 'totalRecords', key: 'totalRecords', align: 'right' as const },
-    { title: 'Doanh thu (đ)', dataIndex: 'totalFees', key: 'totalFees', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+    { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType', width: 150, ellipsis: true },
+    { title: 'Số lượt', dataIndex: 'totalRecords', key: 'totalRecords', width: 100, align: 'right' as const },
+    {
+      title: 'Doanh thu (đ)', dataIndex: 'totalFees', key: 'totalFees', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
+    },
   ];
   const paymentMethodPreviewColumns = [
-    { title: 'Phương thức', dataIndex: 'label', key: 'label' },
-    { title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', align: 'right' as const },
-    { title: 'Doanh thu (đ)', dataIndex: 'totalAmount', key: 'totalAmount', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+    { title: 'Phương thức', dataIndex: 'label', key: 'label', width: 150, ellipsis: true },
+    { title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', width: 100, align: 'right' as const },
+    {
+      title: 'Doanh thu (đ)', dataIndex: 'totalAmount', key: 'totalAmount', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
+    },
   ];
   const exceptionPreviewColumns = [
-    { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate' },
-    { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType' },
-    { title: 'Lý do', dataIndex: 'reasonLabel', key: 'reasonLabel' },
-    { title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
-    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (v?: string) => v ? formatDateTime(v) : '-' },
+    { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', width: 120, ellipsis: true },
+    { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType', width: 120, ellipsis: true },
+    { title: 'Lý do', dataIndex: 'reasonLabel', key: 'reasonLabel', width: 180, ellipsis: true },
+    {
+      title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', width: 130, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
+    },
+    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', width: 160, ellipsis: true, render: (v?: string) => v ? formatDateTime(v) : '-' },
   ];
 
   const previewExceptionExcel = () => {
@@ -333,24 +351,24 @@ const Reports: React.FC = () => {
   const revenueColumns = [
     {
       title: groupBy === 'year' ? 'Năm' : groupBy === 'month' ? 'Tháng' : 'Ngày',
-      dataIndex: 'period', key: 'period',
+      dataIndex: 'period', key: 'period', width: 140, ellipsis: true,
       render: (d: string) => formatPeriodLabel(d, groupBy),
     },
     {
-      title: 'Gửi lẻ (đ)', dataIndex: 'parkingRevenue', key: 'parkingRevenue', align: 'right' as const,
-      render: (v: number) => <span style={{ color: 'var(--primary)' }}>{fmt(Number(v))}</span>,
+      title: 'Gửi lẻ (đ)', dataIndex: 'parkingRevenue', key: 'parkingRevenue', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
     },
     {
-      title: 'Vé tháng (đ)', dataIndex: 'packageRevenue', key: 'packageRevenue', align: 'right' as const,
-      render: (v: number) => <span style={{ color: 'var(--success)' }}>{fmt(Number(v))}</span>,
+      title: 'Vé tháng (đ)', dataIndex: 'packageRevenue', key: 'packageRevenue', width: 150, align: 'right' as const,
+      render: (v: number) => <span style={{ color: 'var(--success)', fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</span>,
     },
     {
-      title: 'Tổng (đ)', dataIndex: 'totalRevenue', key: 'totalRevenue', align: 'right' as const,
-      render: (v: number) => <strong style={{ color: 'var(--primary)' }}>{fmt(Number(v))}</strong>,
+      title: 'Tổng (đ)', dataIndex: 'totalRevenue', key: 'totalRevenue', width: 150, align: 'right' as const,
+      render: (v: number) => <strong style={{ color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</strong>,
     },
     {
       title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', align: 'right' as const,
-      width: 80,
+      width: 100,
     },
   ];
 
@@ -762,7 +780,7 @@ const Reports: React.FC = () => {
             }
           >
             {!exceptionStats?.totalCount ? (
-              <div style={{ textAlign: 'center', color: '#888', padding: '24px 0' }}>
+              <div style={{ textAlign: 'center', color: 'var(--outline)', padding: '24px 0' }}>
                 Không có checkout ngoại lệ trong kỳ được chọn
               </div>
             ) : (
@@ -828,6 +846,8 @@ const Reports: React.FC = () => {
                           title: 'Lý do',
                           dataIndex: 'label',
                           key: 'label',
+                          width: 200,
+                          ellipsis: true,
                           render: (v: string, r: { key: string }) => (
                             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ width: 10, height: 10, borderRadius: '50%', background: CHART_COLORS[exceptionStats.byReason.findIndex((x) => x.key === r.key) % CHART_COLORS.length], display: 'inline-block' }} />
@@ -835,10 +855,10 @@ const Reports: React.FC = () => {
                             </span>
                           ),
                         },
-                        { title: 'Số ca', dataIndex: 'count', key: 'count', align: 'right' as const, render: (v: number) => <strong>{v}</strong> },
+                        { title: 'Số ca', dataIndex: 'count', key: 'count', width: 100, align: 'right' as const, render: (v: number) => <strong>{v}</strong> },
                         {
-                          title: 'Phí ghi nhận', dataIndex: 'totalFeeWaived', key: 'totalFeeWaived', align: 'right' as const,
-                          render: (v: number) => <span style={{ color: 'var(--info)' }}>{fmt(v)}đ</span>,
+                          title: 'Phí ghi nhận', dataIndex: 'totalFeeWaived', key: 'totalFeeWaived', width: 150, align: 'right' as const,
+                          render: (v: number) => <span style={{ color: 'var(--info)', fontVariantNumeric: 'tabular-nums' }}>{fmt(v)}đ</span>,
                         },
                       ]}
                     />
@@ -857,19 +877,19 @@ const Reports: React.FC = () => {
                     pagination={{ pageSize: 10, showSizeChanger: false }}
                     scroll={{ x: 700 }}
                     columns={[
-                      { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-                      { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', render: (v: string) => <Tag className="plate-tag">{v}</Tag> },
-                      { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType', width: 100 },
-                      { title: 'Lý do ngoại lệ', dataIndex: 'reasonLabel', key: 'reasonLabel', render: (v: string) => <Tag color="warning">{v}</Tag> },
+                      { title: 'ID', dataIndex: 'id', key: 'id', width: 60, ellipsis: true },
+                      { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate', width: 130, render: (v: string) => <Tag className="plate-tag">{v}</Tag> },
+                      { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType', width: 100, ellipsis: true },
+                      { title: 'Lý do ngoại lệ', dataIndex: 'reasonLabel', key: 'reasonLabel', width: 160, render: (v: string) => <Tag color="warning">{v}</Tag> },
                       {
-                        title: 'Phí', dataIndex: 'fee', key: 'fee', align: 'right' as const,
-                        render: (v: number) => v === 0 ? <Tag color="default">Miễn phí</Tag> : <span>{fmt(v)}đ</span>,
+                        title: 'Phí', dataIndex: 'fee', key: 'fee', width: 120, align: 'right' as const,
+                        render: (v: number) => v === 0 ? <Tag color="default">Miễn phí</Tag> : <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(v)}đ</span>,
                       },
                       {
-                        title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime',
+                        title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', width: 140, ellipsis: true,
                         render: (v: string) => v ? dayjs(v).format('DD/MM HH:mm') : '-',
                       },
-                      { title: 'Nhân viên', dataIndex: 'staffName', key: 'staffName', width: 120 },
+                      { title: 'Nhân viên', dataIndex: 'staffName', key: 'staffName', width: 120, ellipsis: true },
                     ]}
                   />
                 </div>

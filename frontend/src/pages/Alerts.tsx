@@ -95,6 +95,7 @@ const Alerts: React.FC = () => {
       dataIndex: 'severity',
       key: 'severity',
       width: 130,
+      ellipsis: true,
       render: (severity: AlertItem['severity']) => {
         if (severity === 'danger') return <Tag color="red">Nguy hiểm</Tag>;
         if (severity === 'warning') return <Tag color="orange">Cảnh báo</Tag>;
@@ -106,6 +107,7 @@ const Alerts: React.FC = () => {
       dataIndex: 'category',
       key: 'category',
       width: 140,
+      ellipsis: true,
       render: (category: string) => {
         const labels: Record<string, string> = {
           parking: 'Đỗ xe',
@@ -122,6 +124,8 @@ const Alerts: React.FC = () => {
       title: 'Tiêu đề',
       dataIndex: 'title',
       key: 'title',
+      width: 220,
+      ellipsis: true,
       render: (title: string, record: AlertItem) => (
         <span style={{ fontWeight: 600 }}>
           {title}
@@ -135,6 +139,8 @@ const Alerts: React.FC = () => {
       title: 'Mô tả',
       dataIndex: 'description',
       key: 'description',
+      width: 300,
+      ellipsis: true,
       render: (description: string, record: AlertItem) => (
         <div>
           <div>{description}</div>
@@ -151,6 +157,7 @@ const Alerts: React.FC = () => {
       dataIndex: 'occurredAt',
       key: 'occurredAt',
       width: 180,
+      ellipsis: true,
       render: (value: string) => formatDateTime(value),
     },
     {
@@ -173,8 +180,8 @@ const Alerts: React.FC = () => {
             <Statistic
               title="Nguy hiểm"
               value={dangerCount}
-              prefix={<FireOutlined style={{ color: '#ba1a1a' }} />}
-              valueStyle={{ color: '#ba1a1a' }}
+              prefix={<FireOutlined style={{ color: 'var(--error)' }} />}
+              valueStyle={{ color: 'var(--error)' }}
             />
           </Card>
         </Col>
@@ -183,8 +190,8 @@ const Alerts: React.FC = () => {
             <Statistic
               title="Cảnh báo"
               value={warningCount}
-              prefix={<ExclamationCircleOutlined style={{ color: '#934600' }} />}
-              valueStyle={{ color: '#934600' }}
+              prefix={<ExclamationCircleOutlined style={{ color: 'var(--warning)' }} />}
+              valueStyle={{ color: 'var(--warning)' }}
             />
           </Card>
         </Col>
@@ -193,8 +200,8 @@ const Alerts: React.FC = () => {
             <Statistic
               title="Thông tin"
               value={infoCount}
-              prefix={<CheckCircleOutlined style={{ color: '#005daa' }} />}
-              valueStyle={{ color: '#005daa' }}
+              prefix={<CheckCircleOutlined style={{ color: 'var(--info)' }} />}
+              valueStyle={{ color: 'var(--info)' }}
             />
           </Card>
         </Col>
@@ -202,7 +209,7 @@ const Alerts: React.FC = () => {
 
       <Card>
         <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <CalendarOutlined style={{ color: '#666' }} />
+          <CalendarOutlined style={{ color: 'var(--on-surface-variant)' }} />
           <Segmented
             value={periodFilter}
             onChange={(v) => { setPeriodFilter(v as PeriodKey); if (v !== 'custom') setCustomRange(null); }}
@@ -224,7 +231,7 @@ const Alerts: React.FC = () => {
             />
           )}
           {periodFilter !== 'all' && (
-            <span style={{ fontSize: 12, color: '#888' }}>
+            <span style={{ fontSize: 12, color: 'var(--outline)' }}>
               Hiển thị {filteredAlerts.length} / {alerts.length} cảnh báo
             </span>
           )}
@@ -280,7 +287,7 @@ const Alerts: React.FC = () => {
                 items: [
                   {
                     key: 'excel',
-                    icon: <FileExcelOutlined style={{ color: '#1a7a2e' }} />,
+                    icon: <FileExcelOutlined style={{ color: 'var(--success)' }} />,
                     label: 'Xuất Excel (.xlsx)',
                     onClick: () => {
                       if (filteredAlerts.length === 0) { message.warning('Không có dữ liệu để xuất'); return; }
@@ -290,7 +297,7 @@ const Alerts: React.FC = () => {
                   },
                   {
                     key: 'csv',
-                    icon: <FileTextOutlined style={{ color: '#565e71' }} />,
+                    icon: <FileTextOutlined style={{ color: 'var(--secondary)' }} />,
                     label: 'Xuất CSV',
                     onClick: () => {
                       if (filteredAlerts.length === 0) { message.warning('Không có dữ liệu để xuất'); return; }

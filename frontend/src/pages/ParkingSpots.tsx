@@ -165,11 +165,11 @@ const ParkingSpots: React.FC = () => {
   };
 
   const spotColumns = [
-    { title: 'Mã chỗ', dataIndex: 'spotNumber', key: 'spotNumber', render: (t: string) => <Tag>{t}</Tag> },
-    { title: 'Khu vực', key: 'zoneName', render: (_: any, r: ParkingSpot) => r.zone?.name || '-' },
-    { title: 'Loại', dataIndex: 'spotType', key: 'spotType', render: (t: string) => t === 'vip' ? <Tag color="gold">VIP</Tag> : t === 'disabled' ? <Tag color="blue">Người khuyết tật</Tag> : <Tag>Tiêu chuẩn</Tag> },
+    { title: 'Mã chỗ', dataIndex: 'spotNumber', key: 'spotNumber', width: 100, render: (t: string) => <Tag>{t}</Tag> },
+    { title: 'Khu vực', key: 'zoneName', width: 160, ellipsis: true, render: (_: any, r: ParkingSpot) => r.zone?.name || '-' },
+    { title: 'Loại', dataIndex: 'spotType', key: 'spotType', width: 150, render: (t: string) => t === 'vip' ? <Tag color="gold">VIP</Tag> : t === 'disabled' ? <Tag color="blue">Người khuyết tật</Tag> : <Tag>Tiêu chuẩn</Tag> },
     {
-      title: 'Trạng thái', dataIndex: 'status', key: 'status',
+      title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 150,
       render: (t: string) => <Badge status={t === 'available' ? 'success' : t === 'occupied' ? 'error' : 'warning'} text={statusLabels[t] || t} />,
     },
     {
@@ -189,11 +189,11 @@ const ParkingSpots: React.FC = () => {
   ];
 
   const zoneColumns = [
-    { title: 'Tên khu vực', dataIndex: 'name', key: 'name', render: (t: string) => <span style={{ fontWeight: 500 }}>{t}</span> },
-    { title: 'Mô tả', dataIndex: 'description', key: 'description', render: (t?: string) => t || '-' },
-    { title: 'Tổng chỗ', dataIndex: 'totalSpots', key: 'totalSpots' },
-    { title: 'Trống', dataIndex: 'availableSpots', key: 'availableSpots', render: (v: number) => <Tag className="chip-available">{v}</Tag> },
-    { title: 'Đang dùng', dataIndex: 'occupiedSpots', key: 'occupiedSpots', render: (v: number) => <Tag className="chip-occupied">{v}</Tag> },
+    { title: 'Tên khu vực', dataIndex: 'name', key: 'name', width: 180, ellipsis: true, render: (t: string) => <span style={{ fontWeight: 500 }}>{t}</span> },
+    { title: 'Mô tả', dataIndex: 'description', key: 'description', width: 260, ellipsis: true, render: (t?: string) => t || '-' },
+    { title: 'Tổng chỗ', dataIndex: 'totalSpots', key: 'totalSpots', width: 100, ellipsis: true },
+    { title: 'Trống', dataIndex: 'availableSpots', key: 'availableSpots', width: 100, render: (v: number) => <Tag className="chip-available">{v}</Tag> },
+    { title: 'Đang dùng', dataIndex: 'occupiedSpots', key: 'occupiedSpots', width: 110, render: (v: number) => <Tag className="chip-occupied">{v}</Tag> },
     {
       title: 'Thao tác', key: 'action', width: 160, render: (_: any, r: ParkingZone) => (
         <div style={{ display: 'flex', gap: 8 }}>

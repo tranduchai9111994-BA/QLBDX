@@ -202,7 +202,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
     width: 150,
     render: (v: string) => {
       if (!v && c.required) return <Tag color="red">{t('importFieldMissing')}</Tag>;
-      return v || <span style={{ color: '#bbb' }}>-</span>;
+      return v || <span style={{ color: 'var(--outline)' }}>-</span>;
     },
   }));
 
@@ -217,7 +217,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
     <Modal
       title={
         <Space>
-          <UploadOutlined style={{ color: '#1677ff' }} />
+          <UploadOutlined style={{ color: 'var(--primary)' }} />
           {`${t('importTitle')} — ${title}`}
         </Space>
       }
@@ -240,11 +240,11 @@ const ImportModal: React.FC<ImportModalProps> = ({
       }
     >
       {/* Step 1: download template */}
-      <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f0f8ff', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <DownloadOutlined style={{ color: '#005daa', fontSize: 20 }} />
+      <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--info-container)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <DownloadOutlined style={{ color: 'var(--info)', fontSize: 20 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>{t('importStep1')}</div>
-          <div style={{ fontSize: 12, color: '#666' }}>
+          <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
             {t('importStep1Desc')}
           </div>
         </div>
@@ -258,14 +258,14 @@ const ImportModal: React.FC<ImportModalProps> = ({
       {/* Step 2: upload */}
       {parsedRows.length === 0 && !result && (
         <div>
-          <div style={{ fontWeight: 600, marginBottom: 8, color: '#444' }}>{t('importStep2')}</div>
+          <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--on-surface-variant)' }}>{t('importStep2')}</div>
           <Dragger
             accept=".xlsx,.xls,.csv"
             beforeUpload={parseFile}
             showUploadList={false}
-            style={{ background: '#fafcff', borderColor: '#b0c8f0' }}
+            style={{ background: 'var(--surface-container-lowest)', borderColor: 'var(--outline-variant)' }}
           >
-            <p className="ant-upload-drag-icon"><InboxOutlined style={{ color: '#005daa' }} /></p>
+            <p className="ant-upload-drag-icon"><InboxOutlined style={{ color: 'var(--info)' }} /></p>
             <p className="ant-upload-text">{t('importDragHint')}</p>
             <p className="ant-upload-hint">{t('importDragAccept')}</p>
           </Dragger>
@@ -276,7 +276,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
       {parsedRows.length > 0 && !result && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <CheckCircleOutlined style={{ color: '#52c41a' }} />
+            <CheckCircleOutlined style={{ color: 'var(--success)' }} />
             <span style={{ fontWeight: 600 }}>
               {t('importReadRowsPrefix')} <Tag color="blue">{parsedRows.length}</Tag> {t('importReadRowsSuffix')} <code>{fileName}</code>
             </span>
@@ -294,7 +294,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
             size="small"
             scroll={{ x: 'max-content' }}
             pagination={false}
-            footer={() => parsedRows.length > 10 ? <span style={{ color: '#888' }}>{t('importMoreRowsPrefix')} {parsedRows.length - 10} {t('importMoreRowsSuffix')}</span> : null}
+            footer={() => parsedRows.length > 10 ? <span style={{ color: 'var(--outline)' }}>{t('importMoreRowsPrefix')} {parsedRows.length - 10} {t('importMoreRowsSuffix')}</span> : null}
           />
         </div>
       )}
@@ -315,7 +315,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
           {result.errors.length > 0 && (
             <div style={{ marginTop: 12, maxHeight: 160, overflowY: 'auto' }}>
               {result.errors.map((e, i) => (
-                <div key={i} style={{ color: '#cf1322', fontSize: 12, marginBottom: 4 }}>
+                <div key={i} style={{ color: 'var(--error)', fontSize: 12, marginBottom: 4 }}>
                   <CloseCircleOutlined style={{ marginRight: 4 }} />{e}
                 </div>
               ))}

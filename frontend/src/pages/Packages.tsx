@@ -247,15 +247,19 @@ const Packages: React.FC = () => {
   };
 
   const columns = [
-    { title: t('colPackage'), dataIndex: 'name', key: 'name', render: (value: string) => <span style={{ fontWeight: 500 }}>{value}</span> },
-    { title: t('colVehicleType'), key: 'vehicleTypeName', render: (_: any, r: ParkingPackage) => r.vehicleType?.name || '-' },
-    { title: t('colPackageDuration'), dataIndex: 'durationDays', key: 'durationDays' },
-    { title: t('fieldPrice'), dataIndex: 'price', key: 'price', render: (v: number) => Number(v).toLocaleString() + 'đ' },
-    { title: t('fieldNote'), dataIndex: 'description', key: 'description', render: (v?: string) => v || '-' },
+    { title: t('colPackage'), dataIndex: 'name', key: 'name', width: 200, ellipsis: true, render: (value: string) => <span style={{ fontWeight: 500 }}>{value}</span> },
+    { title: t('colVehicleType'), key: 'vehicleTypeName', width: 150, ellipsis: true, render: (_: any, r: ParkingPackage) => r.vehicleType?.name || '-' },
+    { title: t('colPackageDuration'), dataIndex: 'durationDays', key: 'durationDays', width: 110, ellipsis: true },
+    {
+      title: t('fieldPrice'), dataIndex: 'price', key: 'price', width: 140, align: 'right' as const,
+      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+    },
+    { title: t('fieldNote'), dataIndex: 'description', key: 'description', width: 250, ellipsis: true, render: (v?: string) => v || '-' },
     {
       title: 'Trạng thái',
       dataIndex: 'isActive',
       key: 'isActive',
+      width: 120,
       render: (isActive: boolean) => <StatusTag domain="toggle" value={isActive} />,
     },
     {
@@ -439,9 +443,12 @@ const Packages: React.FC = () => {
                 </Tag>
               ),
             },
-            { title: 'Hiệu lực từ', dataIndex: 'effectiveFrom', key: 'effectiveFrom', render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
-            { title: 'Giá', dataIndex: 'price', key: 'price', render: (v: number) => Number(v).toLocaleString() + 'đ' },
-            { title: 'Người đổi', key: 'changer', render: (_: any, r: PriceHistoryEntry) => r.changer?.fullName || '-' },
+            { title: 'Hiệu lực từ', dataIndex: 'effectiveFrom', key: 'effectiveFrom', width: 120, ellipsis: true, render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
+            {
+              title: 'Giá', dataIndex: 'price', key: 'price', width: 130, align: 'right' as const,
+              render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(v).toLocaleString()}đ</span>,
+            },
+            { title: 'Người đổi', key: 'changer', width: 140, ellipsis: true, render: (_: any, r: PriceHistoryEntry) => r.changer?.fullName || '-' },
           ]}
           locale={{ emptyText: 'Chưa có lịch sử đổi giá — giá hiện tại là giá gốc khi tạo gói' }}
         />
