@@ -11,23 +11,17 @@ import { AxiosError } from 'axios';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/axios';
 import { CustomerPackage, Customer, ParkingPackage, Vehicle, CustomerPackageForm } from '../types';
-import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import ImportModal, { ColumnDef, ReferenceSheet } from '../components/ImportModal';
+import StatusTag from '../components/StatusTag';
+import PermissionGate from '../components/PermissionGate';
+import { confirmDanger } from '../utils/confirmDanger';
+import { defaultPagination } from '../utils/tablePagination';
 
 const { RangePicker } = DatePicker;
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  active:    { label: 'Hoạt động',      color: 'success' },
-  pending:   { label: 'Chưa hiệu lực',  color: 'gold' },
-  expired:   { label: 'Hết hạn',        color: 'default' },
-  cancelled: { label: 'Đã hủy',         color: 'error' },
-};
-
 const CustomerPackages: React.FC = () => {
-  const { user } = useAuth();
   const { t } = useLanguage();
-  const isAdmin = user?.role === 'admin';
 
   const [customerPackages, setCustomerPackages] = useState<CustomerPackage[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -154,21 +148,18 @@ const CustomerPackages: React.FC = () => {
 
   /* ── Cancel ───────────────────────────────────────────────────── */
   const handleCancelPackage = (record: CustomerPackage) => {
-    Modal.confirm({
+    confirmDanger({
       title: 'Xác nhận hủy gói',
       content: 'Gói sẽ được chuyển sang trạng thái "Đã hủy". Hệ thống giữ nguyên thanh toán và lịch sử.',
-      okText: 'Hủy gói', cancelText: 'Đóng', okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await api.put(`/customer-packages/${record.id}`, {
-            customerId: record.customerId, vehicleId: record.vehicleId, status: 'cancelled',
-          });
-          message.success('Đã hủy gói dịch vụ');
-          fetchData();
-        } catch (err) {
-          const error = err as AxiosError<{ message: string }>;
-          message.error(error.response?.data?.message || 'Không thể hủy gói');
-        }
+      okText: 'Hủy gói',
+      cancelText: 'Đóng',
+      successMessage: 'Đã hủy gói dịch vụ',
+      errorFallback: 'Không thể hủy gói',
+      onConfirm: async () => {
+        await api.put(`/customer-packages/${record.id}`, {
+          customerId: record.customerId, vehicleId: record.vehicleId, status: 'cancelled',
+        });
+        fetchData();
       },
     });
   };
@@ -309,21 +300,17 @@ const CustomerPackages: React.FC = () => {
     },
     {
       title: 'Trạng thái', dataIndex: 'status', key: 'status',
-      render: (s: string, r: CustomerPackage) => {
-        const cfg = STATUS_CONFIG[s] ?? { label: s, color: 'default' };
-        return (
-          <Space size={4}>
-            <Tag color={cfg.color}>{cfg.label}</Tag>
-            {s === 'active' && daysRemaining(r.endDate)}
-          </Space>
-        );
-      },
+      render: (s: string, r: CustomerPackage) => (
+        <Space size={4}>
+          <StatusTag domain="customerPackage" value={s} />
+          {s === 'active' && daysRemaining(r.endDate)}
+        </Space>
+      ),
     },
     {
       title: 'Thao tác', key: 'action', width: 280,
-      render: (_: unknown, r: CustomerPackage) => {
-        if (!isAdmin) return <Tag color="default">Staff chỉ được đăng ký mới</Tag>;
-        return (
+      render: (_: unknown, r: CustomerPackage) => (
+        <PermissionGate adminOnly fallback={<Tag color="default">Staff chỉ được đăng ký mới</Tag>}>
           <Space wrap size={4}>
             <Tooltip title="Chỉnh sửa thông tin gói">
               <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
@@ -346,8 +333,8 @@ const CustomerPackages: React.FC = () => {
               </Tooltip>
             )}
           </Space>
-        );
-      },
+        </PermissionGate>
+      ),
     },
   ];
 
@@ -420,11 +407,11 @@ const CustomerPackages: React.FC = () => {
           </Space>
           <div className="toolbar-right">
             <Space>
-              {isAdmin && (
+              <PermissionGate adminOnly>
                 <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
-                  Nhập Excel
+                  {t('btnImport')}
                 </Button>
-              )}
+              </PermissionGate>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setModal(true); }}>
                 Đăng ký gói dịch vụ
               </Button>
@@ -438,6 +425,7 @@ const CustomerPackages: React.FC = () => {
           rowKey="id"
           loading={loading}
           rowClassName={rowClassName}
+          pagination={defaultPagination({ pageSize: 10 })}
         />
       </Card>
 
@@ -558,7 +546,7 @@ const CustomerPackages: React.FC = () => {
       {/* ── Import modal ── */}
       <ImportModal
         open={importOpen}
-        title="Đăng ký gói"
+        title={t('menuCustomerPackages')}
         columns={importColumns}
         referenceSheets={importRefSheets}
         onImport={handleImport}

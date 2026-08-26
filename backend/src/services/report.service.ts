@@ -1,4 +1,6 @@
 import prisma from '../config/prisma';
+import { alertSettingsService } from './alertSettings.service';
+import { formatDateTimeVN, formatDateVN } from '../utils/formatDate';
 
 export class ReportService {
   async getDashboard() {
@@ -321,7 +323,10 @@ export class ReportService {
     };
   }
 
-  async getAlerts(longParkingHours = 24) {
+  async getAlerts(longParkingHoursOverride?: number) {
+    const settings = await alertSettingsService.get();
+    const longParkingHours = longParkingHoursOverride ?? settings.longParkingHours;
+
     const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -417,10 +422,10 @@ export class ReportService {
         where: {
           OR: [
             { amount: { lte: 0 } },
-            { amount: { gte: 5000000 } },
+            { amount: { gte: Number(settings.suspiciousPaymentHighAmount) } },
             {
               paymentType: 'parking',
-              amount: { gte: 300000 },
+              amount: { gte: Number(settings.suspiciousPaymentParkingAmount) },
             },
           ],
         },
@@ -467,7 +472,11 @@ export class ReportService {
       .map((record) => {
         const currentMinutes = Math.ceil((now.getTime() - new Date(record.entryTime).getTime()) / 60000);
         const avgMinutes = avgDurationByType.get(record.vehicleTypeId) || 0;
-        if (avgMinutes <= 0 || currentMinutes <= avgMinutes * 3 || currentMinutes < 60) return null;
+        if (
+          avgMinutes <= 0 ||
+          currentMinutes <= avgMinutes * settings.parkingAnomalyMultiplier ||
+          currentMinutes < settings.parkingAnomalyMinMinutes
+        ) return null;
         const currentHours = (currentMinutes / 60).toFixed(1);
         const avgHours = (avgMinutes / 60).toFixed(1);
         return {
@@ -475,7 +484,7 @@ export class ReportService {
           severity: 'warning',
           category: 'parking',
           title: 'Xe đỗ bất thường',
-          description: `${record.licensePlate} (${record.vehicleType.name}) đã đỗ ${currentHours}h, gấp hơn 3 lần trung bình ${avgHours}h của loại xe này. Cần kiểm tra.`,
+          description: `${record.licensePlate} (${record.vehicleType.name}) đã đỗ ${currentHours}h, gấp hơn ${settings.parkingAnomalyMultiplier} lần trung bình ${avgHours}h của loại xe này. Cần kiểm tra.`,
           occurredAt: record.entryTime,
           relatedPath: '/parking/history',
           smartLevel: 'rule_based',
@@ -491,13 +500,13 @@ export class ReportService {
     const revenueChangeAlerts: any[] = [];
     if (yesterdayRevenue > 0) {
       const changePercent = ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
-      if (changePercent <= -30) {
+      if (changePercent <= -settings.revenueDropPercent) {
         revenueChangeAlerts.push({
           id: 'revenue-change-today',
           severity: 'warning',
           category: 'revenue',
           title: 'Biến động doanh thu',
-          description: `Doanh thu hôm nay (tính đến ${now.toLocaleTimeString('vi-VN')}) là ${todayRevenue.toLocaleString('vi-VN')}đ, thấp hơn ${Math.abs(Math.round(changePercent))}% so với cùng thời điểm hôm qua (${yesterdayRevenue.toLocaleString('vi-VN')}đ).`,
+          description: `Doanh thu hôm nay (tính đến ${formatDateTimeVN(now)}) là ${todayRevenue.toLocaleString('vi-VN')}đ, thấp hơn ${Math.abs(Math.round(changePercent))}% so với cùng thời điểm hôm qua (${yesterdayRevenue.toLocaleString('vi-VN')}đ).`,
           occurredAt: now,
           relatedPath: '/reports',
           smartLevel: 'rule_based',
@@ -520,7 +529,7 @@ export class ReportService {
     const renewalOpportunityAlerts = expiringPackages
       .map((pkg) => {
         const frequency = freqByVehicleId.get(pkg.vehicleId) || 0;
-        if (frequency < 5) return null;
+        if (frequency < settings.renewalFrequencyThreshold) return null;
         const daysLeft = Math.ceil((new Date(pkg.endDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         return {
           id: `renewal-opportunity-${pkg.id}`,
@@ -549,7 +558,11 @@ export class ReportService {
     if (zoneStats.length >= 2) {
       const maxZone = zoneStats.reduce((a, b) => (b.occupancyRate > a.occupancyRate ? b : a));
       const minZone = zoneStats.reduce((a, b) => (b.occupancyRate < a.occupancyRate ? b : a));
-      if (maxZone.name !== minZone.name && maxZone.occupancyRate > 0.9 && minZone.occupancyRate < 0.3) {
+      if (
+        maxZone.name !== minZone.name &&
+        maxZone.occupancyRate > settings.zoneImbalanceMaxPercent / 100 &&
+        minZone.occupancyRate < settings.zoneImbalanceMinPercent / 100
+      ) {
         zoneImbalanceAlerts.push({
           id: 'zone-imbalance',
           severity: 'warning',
@@ -576,7 +589,7 @@ export class ReportService {
         severity: 'warning',
         category: 'package',
         title: 'Gói sắp hết hạn',
-        description: `${pkg.vehicle?.licensePlate || 'Không rõ biển số'} • ${pkg.customer?.fullName || 'Khách hàng'} • ${pkg.parkingPackage?.name || 'Gói dịch vụ'} hết hạn ngày ${pkg.endDate.toLocaleDateString('vi-VN')}.`,
+        description: `${pkg.vehicle?.licensePlate || 'Không rõ biển số'} • ${pkg.customer?.fullName || 'Khách hàng'} • ${pkg.parkingPackage?.name || 'Gói dịch vụ'} hết hạn ngày ${formatDateVN(pkg.endDate)}.`,
         occurredAt: pkg.endDate,
         relatedPath: '/customer-packages',
       })),
@@ -605,7 +618,7 @@ export class ReportService {
               relatedPath: '/parking-spots',
             };
           }
-          if (available <= 2 || available / total <= 0.1) {
+          if (available <= settings.zoneNearFullAvailable || available / total <= settings.zoneNearFullPercent / 100) {
             return {
               id: `zone-near-full-${zone.id}`,
               severity: 'warning',
@@ -624,7 +637,7 @@ export class ReportService {
         severity: 'warning',
         category: 'parking',
         title: 'Xe đỗ quá lâu',
-        description: `${record.licensePlate} (${record.vehicleType.name}) đã ở trong bãi từ ${record.entryTime.toLocaleString('vi-VN')} tại ${record.parkingSpot?.zone?.name || 'khu chưa rõ'} - ${record.parkingSpot?.spotNumber || 'chưa gán chỗ'}.`,
+        description: `${record.licensePlate} (${record.vehicleType.name}) đã ở trong bãi từ ${formatDateTimeVN(record.entryTime)} tại ${record.parkingSpot?.zone?.name || 'khu chưa rõ'} - ${record.parkingSpot?.spotNumber || 'chưa gán chỗ'}.`,
         occurredAt: record.entryTime,
         relatedPath: '/parking/history',
       })),

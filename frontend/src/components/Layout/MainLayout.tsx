@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Dropdown, MenuProps, Segmented } from 'antd';
+import { Menu, Dropdown, MenuProps, Segmented, Tooltip, Button, Badge } from 'antd';
 import {
   DashboardOutlined, CarOutlined, LoginOutlined, LogoutOutlined,
   UserOutlined, TeamOutlined, EnvironmentOutlined, GiftOutlined,
   DollarOutlined, BarChartOutlined, SettingOutlined, HistoryOutlined,
   AppstoreOutlined, AuditOutlined, AlertOutlined, FundOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { loadStaffPerms, getStaffVisibleKeys } from '../../utils/permConfig';
+import { useUpdateAvailable } from '../../hooks/useUpdateAvailable';
 
 const MainLayout: React.FC = () => {
   const { user, logout } = useAuth();
@@ -17,6 +19,7 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdmin = user?.role === 'admin';
+  const { updateAvailable, reload } = useUpdateAvailable();
 
   // Staff perm config
   const [staffVisible, setStaffVisible] = useState<Set<string>>(() =>
@@ -29,8 +32,7 @@ const MainLayout: React.FC = () => {
   }, []);
   const canSee = (key: string) => isAdmin || staffVisible.has(key);
 
-  const menuItems: MenuProps['items'] = [
-    canSee('dashboard') ? { key: '/', icon: <DashboardOutlined />, label: t('menuDashboard') } : null,
+  const operationsGroup: MenuProps['items'] = [
     {
       key: 'parking',
       icon: <CarOutlined />,
@@ -41,28 +43,56 @@ const MainLayout: React.FC = () => {
         canSee('parking-history') ? { key: '/parking/history', icon: <HistoryOutlined />, label: t('menuParkingHistory') } : null,
       ].filter(Boolean) as MenuProps['items'],
     },
-    canSee('parking-spots')     ? { key: '/parking-spots',      icon: <EnvironmentOutlined />, label: t('menuParkingSpots') }      : null,
-    canSee('customers')         ? { key: '/customers',           icon: <TeamOutlined />,        label: t('menuCustomers') }         : null,
-    canSee('vehicles')          ? { key: '/vehicles',            icon: <CarOutlined />,         label: t('menuVehicles') }          : null,
-    canSee('vehicle-types')     ? { key: '/vehicle-types',       icon: <AppstoreOutlined />,    label: t('menuVehicleTypes') }      : null,
+    canSee('payments') ? { key: '/payments', icon: <DollarOutlined />, label: t('menuPayments') } : null,
+    canSee('alerts')   ? { key: '/alerts',   icon: <AlertOutlined />,  label: t('menuAlerts') }   : null,
+  ].filter(Boolean) as MenuProps['items'];
+
+  const catalogGroup: MenuProps['items'] = [
+    canSee('parking-spots') ? { key: '/parking-spots', icon: <EnvironmentOutlined />, label: t('menuParkingSpots') } : null,
+    canSee('customers')     ? { key: '/customers',      icon: <TeamOutlined />,        label: t('menuCustomers') }    : null,
+    canSee('vehicles')      ? { key: '/vehicles',       icon: <CarOutlined />,         label: t('menuVehicles') }     : null,
+    canSee('vehicle-types') ? { key: '/vehicle-types',  icon: <AppstoreOutlined />,    label: t('menuVehicleTypes') } : null,
     (canSee('packages') || canSee('customer-packages'))
       ? {
           key: 'packages',
           icon: <GiftOutlined />,
           label: t('menuPackages'),
           children: [
-            canSee('packages')          ? { key: '/packages',          label: t('menuPackageList') }        : null,
-            canSee('customer-packages') ? { key: '/customer-packages', label: t('menuCustomerPackages') }   : null,
+            canSee('packages')          ? { key: '/packages',          label: t('menuPackageList') }      : null,
+            canSee('customer-packages') ? { key: '/customer-packages', label: t('menuCustomerPackages') } : null,
           ].filter(Boolean) as MenuProps['items'],
         }
       : null,
-    canSee('payments') ? { key: '/payments',      icon: <DollarOutlined />,   label: t('menuPayments') }      : null,
-    canSee('alerts')   ? { key: '/alerts',         icon: <AlertOutlined />,    label: t('menuAlerts') }        : null,
-    canSee('reports')  ? { key: '/reports',        icon: <BarChartOutlined />, label: t('menuReports') }       : null,
-    isAdmin ? { key: '/analytics', icon: <FundOutlined />, label: t('menuAnalytics') } : null,
+  ].filter(Boolean) as MenuProps['items'];
+
+  const adminGroup: MenuProps['items'] = [
+    canSee('reports') ? { key: '/reports', icon: <BarChartOutlined />, label: t('menuReports') } : null,
+    isAdmin ? { key: '/analytics',     icon: <FundOutlined />,    label: t('menuAnalytics') }    : null,
     isAdmin ? { key: '/users',         icon: <SettingOutlined />, label: t('menuUsers') }         : null,
     isAdmin ? { key: '/activity-logs', icon: <AuditOutlined />,   label: t('menuActivityLogs') }  : null,
   ].filter(Boolean) as MenuProps['items'];
+
+  // Nhóm menu là submenu thường (không phải type:'group') để có thể thu gọn/mở ra như Quản lý ra vào/Gói dịch vụ
+  const menuItems: MenuProps['items'] = [
+    canSee('dashboard') ? { key: '/', icon: <DashboardOutlined />, label: t('menuDashboard') } : null,
+    operationsGroup.length ? { key: 'grp-ops', icon: <CarOutlined />, label: t('menuGroupOps'), children: operationsGroup } : null,
+    catalogGroup.length ? { key: 'grp-catalog', icon: <AppstoreOutlined />, label: t('menuGroupCatalog'), children: catalogGroup } : null,
+    adminGroup.length ? { key: 'grp-admin', icon: <SettingOutlined />, label: t('menuGroupAdmin'), children: adminGroup } : null,
+  ].filter(Boolean) as MenuProps['items'];
+
+  const OPEN_KEYS_STORAGE = 'qlbdx_sidebar_open_keys_v1';
+  const [openKeys, setOpenKeys] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(OPEN_KEYS_STORAGE);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return ['grp-ops', 'grp-catalog', 'grp-admin', 'parking', 'packages'];
+  });
+
+  const handleOpenChange = (keys: string[]) => {
+    setOpenKeys(keys);
+    localStorage.setItem(OPEN_KEYS_STORAGE, JSON.stringify(keys));
+  };
 
   const userMenuItems: MenuProps['items'] = [
     { key: 'role', label: `${t('userRole')}: ${user?.role === 'admin' ? t('userRoleAdmin') : t('userRoleStaff')}`, disabled: true },
@@ -76,31 +106,24 @@ const MainLayout: React.FC = () => {
     if (key === 'myprofile') navigate('/profile');
   };
 
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const initials = user?.fullName
     ? user.fullName.split(' ').map((w) => w[0]).slice(-2).join('').toUpperCase()
     : 'U';
-
-  const dateLocale = lang === 'en' ? 'en-US' : 'vi-VN';
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--surface)' }}>
       {/* Sidebar */}
       <aside className="app-sidebar">
         <div className="sidebar-logo">
-          <div className="logo-icon">P</div>
+          <img className="logo-icon" src="/logo192.png" alt="" />
           <span className="logo-text">{t('appShort')}</span>
         </div>
         <Menu
           mode="inline"
           theme="dark"
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['parking', 'packages']}
+          openKeys={openKeys}
+          onOpenChange={handleOpenChange}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
@@ -112,14 +135,22 @@ const MainLayout: React.FC = () => {
           <span style={{ fontWeight: 700, fontSize: '1.25rem', color: 'var(--on-surface)' }}>
             {t('appName')}
           </span>
-          <span style={{ color: 'var(--on-surface-variant)', fontSize: '1rem', fontVariantNumeric: 'tabular-nums' }}>
-            {currentTime.toLocaleDateString(dateLocale, { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
-            {' — '}
-            {currentTime.toLocaleTimeString(dateLocale)}
-          </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Icon báo có bản cập nhật mới */}
+          {updateAvailable && (
+            <Tooltip title="Có bản cập nhật mới — bấm để tải lại trang">
+              <Badge dot offset={[-2, 2]}>
+                <Button
+                  shape="circle"
+                  icon={<SyncOutlined spin />}
+                  onClick={reload}
+                  style={{ color: 'var(--warning)', borderColor: 'var(--warning)' }}
+                />
+              </Badge>
+            </Tooltip>
+          )}
           {/* Language switcher */}
           <Segmented
             value={lang}

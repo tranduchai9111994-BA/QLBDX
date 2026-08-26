@@ -38,7 +38,7 @@ export class PackageController {
 
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const result = await packageService.update(Number(req.params.id), req.body);
+      const result = await packageService.update(Number(req.params.id), req.body, req.user?.id);
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
@@ -48,6 +48,24 @@ export class PackageController {
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const result = await packageService.delete(Number(req.params.id));
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async schedulePriceChange(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await packageService.schedulePriceChange(Number(req.params.id), req.body, req.user?.id);
+      res.status(201).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async getPriceHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await packageService.getPriceHistory(Number(req.params.id));
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

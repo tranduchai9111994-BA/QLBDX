@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Table, Tag, Button, Select, InputNumber, Row, Col, Statistic, Space, message, Dropdown, Segmented, DatePicker, Tooltip } from 'antd';
+import { Card, Table, Tag, Button, Select, InputNumber, Row, Col, Statistic, Space, message, Dropdown, Segmented, DatePicker, Tooltip, Tabs } from 'antd';
 import {
   AlertOutlined, CheckCircleOutlined, ExclamationCircleOutlined, FireOutlined,
   ReloadOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined,
-  CalendarOutlined, BulbOutlined,
+  CalendarOutlined, BulbOutlined, SettingOutlined, UnorderedListOutlined,
 } from '@ant-design/icons';
+import AlertSettingsPanel from '../components/AlertSettingsPanel';
+import { formatDateTime } from '../utils/dateFormat';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AlertItem } from '../types';
 import { exportAlertsExcel, exportAlertsCsv } from '../utils/reportExport';
 import { useLanguage } from '../context/LanguageContext';
+import { defaultPagination } from '../utils/tablePagination';
 
 type PeriodKey = 'all' | 'today' | '7days' | '30days' | 'thisMonth' | 'custom';
 
@@ -140,11 +143,6 @@ const Alerts: React.FC = () => {
               💡 Gợi ý: {record.suggestedAction}
             </div>
           )}
-          {record.context && (
-            <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: 2 }}>
-              {Object.entries(record.context).map(([k, v]) => `${k}: ${v}`).join(' · ')}
-            </div>
-          )}
         </div>
       ),
     },
@@ -153,7 +151,7 @@ const Alerts: React.FC = () => {
       dataIndex: 'occurredAt',
       key: 'occurredAt',
       width: 180,
-      render: (value: string) => new Date(value).toLocaleString('vi-VN'),
+      render: (value: string) => formatDateTime(value),
     },
     {
       title: 'Hành động',
@@ -167,10 +165,8 @@ const Alerts: React.FC = () => {
     },
   ];
 
-  return (
-    <div>
-      <h2 className="page-title">{t('pageAlerts')}</h2>
-
+  const listTab = (
+    <>
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
           <Card>
@@ -317,7 +313,7 @@ const Alerts: React.FC = () => {
           dataSource={filteredAlerts}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          pagination={defaultPagination({ pageSize: 10 })}
           locale={{
             emptyText: (
               <div style={{ padding: 32, color: 'var(--on-surface-variant)' }}>
@@ -328,6 +324,19 @@ const Alerts: React.FC = () => {
           }}
         />
       </Card>
+    </>
+  );
+
+  return (
+    <div>
+      <h2 className="page-title">{t('pageAlerts')}</h2>
+      <Tabs
+        defaultActiveKey="list"
+        items={[
+          { key: 'list', label: <><UnorderedListOutlined /> Danh sách cảnh báo</>, children: listTab },
+          { key: 'settings', label: <><SettingOutlined /> Cấu hình mức độ</>, children: <AlertSettingsPanel /> },
+        ]}
+      />
     </div>
   );
 };

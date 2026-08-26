@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const licensePlateRegex = /^\d{2}[A-Z]\d{4,5}$/;
+const licensePlateRegex = /^(\d{2}[A-Z]{1,2}\d{4,6}|[A-Z]{2}\d{3,5})$/;
 
 export const parkingEntrySchema = z.object({
   licensePlate: z.string().min(1, 'Vui lòng nhập biển số xe').regex(licensePlateRegex, 'Biển số không đúng định dạng (VD: 29A87642)'),

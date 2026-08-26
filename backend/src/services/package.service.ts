@@ -1,5 +1,7 @@
 import prisma from '../config/prisma';
-import { CreatePackageInput, UpdatePackageInput } from '../validators/package.validator';
+import { CreatePackageInput, SchedulePriceChangeInput, UpdatePackageInput } from '../validators/package.validator';
+import { syncDuePackagePrices } from './pricing.service';
+import { formatDateVN } from '../utils/formatDate';
 
 export class PackageService {
   async findAll(params: {
@@ -22,6 +24,8 @@ export class PackageService {
       minDuration,
       maxDuration,
     } = params;
+
+    await syncDuePackagePrices();
 
     return prisma.parkingPackage.findMany({
       where: {
@@ -98,11 +102,12 @@ export class PackageService {
     return { message: 'Thêm gói dịch vụ thành công', id: pkg.id };
   }
 
-  async update(id: number, data: UpdatePackageInput) {
+  async update(id: number, data: UpdatePackageInput, changedBy?: number) {
+    await syncDuePackagePrices();
+
     const [pkg, vehicleType, duplicatePackage, packageUsage] = await Promise.all([
       prisma.parkingPackage.findUnique({
         where: { id },
-        select: { id: true, vehicleTypeId: true },
       }),
       prisma.vehicleType.findUnique({
         where: { id: data.vehicleTypeId },
@@ -144,13 +149,64 @@ export class PackageService {
         name: data.name,
         vehicleTypeId: data.vehicleTypeId,
         durationDays: data.durationDays,
-        price: data.price,
         description: data.description ?? null,
         isActive: data.isActive ?? true,
       },
     });
 
+    // Giá đổi qua form sửa thông tin -> áp dụng ngay, vẫn lưu lịch sử để audit.
+    // Muốn đặt lịch cho tương lai -> dùng schedulePriceChange().
+    if (Number(pkg.price) !== data.price) {
+      await prisma.packagePriceHistory.create({
+        data: {
+          packageId: id,
+          price: data.price,
+          effectiveFrom: new Date(),
+          changedBy: changedBy ?? null,
+        },
+      });
+      await syncDuePackagePrices();
+    }
+
     return { message: 'Cập nhật thành công' };
+  }
+
+  /** Đặt lịch đổi giá gói — effectiveFrom có thể ở tương lai, hệ thống tự áp dụng đúng ngày. */
+  async schedulePriceChange(id: number, data: SchedulePriceChangeInput, changedBy?: number) {
+    const pkg = await prisma.parkingPackage.findUnique({ where: { id }, select: { id: true } });
+    if (!pkg) {
+      throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
+    }
+
+    const effectiveFrom = new Date(data.effectiveFrom);
+    if (Number.isNaN(effectiveFrom.getTime())) {
+      throw { status: 400, message: 'Ngày hiệu lực không hợp lệ' };
+    }
+
+    await prisma.packagePriceHistory.create({
+      data: {
+        packageId: id,
+        price: data.price,
+        effectiveFrom,
+        changedBy: changedBy ?? null,
+      },
+    });
+
+    if (effectiveFrom <= new Date()) {
+      await syncDuePackagePrices();
+      return { message: 'Đã cập nhật giá mới (áp dụng ngay lập tức)' };
+    }
+    return {
+      message: `Đã đặt lịch đổi giá — sẽ tự động áp dụng từ ${formatDateVN(effectiveFrom)}`,
+    };
+  }
+
+  async getPriceHistory(id: number) {
+    return prisma.packagePriceHistory.findMany({
+      where: { packageId: id },
+      include: { changer: { select: { fullName: true } } },
+      orderBy: { effectiveFrom: 'desc' },
+    });
   }
 
   async delete(id: number) {

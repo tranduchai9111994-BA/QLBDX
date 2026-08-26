@@ -15,6 +15,7 @@ import {
   CloseCircleOutlined, InboxOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface ColumnDef {
   key: string;         // field key (matches Excel header)
@@ -50,6 +51,7 @@ const { Dragger } = Upload;
 const ImportModal: React.FC<ImportModalProps> = ({
   open, title, columns, referenceSheets = [], onImport, onClose,
 }) => {
+  const { t } = useLanguage();
   const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState('');
   const [importing, setImporting] = useState(false);
@@ -125,7 +127,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
     XLSX.utils.book_append_sheet(wb, wsGuide, 'Hướng dẫn');
 
     XLSX.writeFile(wb, `template_${title.replace(/\s/g, '_').toLowerCase()}.xlsx`);
-    message.success('Đã tải template xuống');
+    message.success(t('importTemplateDownloaded'));
   };
 
   /* ── Parse uploaded file ─────────────────────────────────────── */
@@ -139,7 +141,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
         const raw: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
         if (raw.length < 2) {
-          message.warning('File không có dữ liệu.');
+          message.warning(t('importFileEmpty'));
           return;
         }
 
@@ -161,7 +163,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
         }
 
         if (rows.length === 0) {
-          message.warning('Không tìm thấy dữ liệu hợp lệ. Kiểm tra lại file.');
+          message.warning(t('importNoValidData'));
           return;
         }
 
@@ -169,7 +171,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
         setFileName(file.name);
         setResult(null);
       } catch (err) {
-        message.error('Không đọc được file. Hãy dùng file .xlsx hoặc .csv từ template.');
+        message.error(t('importFileReadError'));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -183,10 +185,10 @@ const ImportModal: React.FC<ImportModalProps> = ({
     try {
       const res = await onImport(parsedRows);
       setResult(res);
-      if (res.success > 0) message.success(`Nhập thành công ${res.success} bản ghi`);
-      if (res.errors.length > 0) message.warning(`${res.errors.length} dòng có lỗi`);
+      if (res.success > 0) message.success(`${t('importRecordsSuccessPrefix')} ${res.success} ${t('importRecordsSuccessSuffix')}`);
+      if (res.errors.length > 0) message.warning(`${res.errors.length} ${t('importRowsErrorSuffix')}`);
     } catch {
-      message.error('Có lỗi xảy ra khi nhập dữ liệu');
+      message.error(t('importGenericError'));
     } finally {
       setImporting(false);
     }
@@ -199,7 +201,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
     key: c.key,
     width: 150,
     render: (v: string) => {
-      if (!v && c.required) return <Tag color="red">Thiếu</Tag>;
+      if (!v && c.required) return <Tag color="red">{t('importFieldMissing')}</Tag>;
       return v || <span style={{ color: '#bbb' }}>-</span>;
     },
   }));
@@ -216,7 +218,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
       title={
         <Space>
           <UploadOutlined style={{ color: '#1677ff' }} />
-          {`Nhập dữ liệu — ${title}`}
+          {`${t('importTitle')} — ${title}`}
         </Space>
       }
       open={open}
@@ -226,14 +228,14 @@ const ImportModal: React.FC<ImportModalProps> = ({
         parsedRows.length > 0 && !result ? (
           <Space>
             <Button onClick={() => { setParsedRows([]); setFileName(''); }}>
-              <DeleteOutlined /> Chọn file khác
+              <DeleteOutlined /> {t('importChooseAnother')}
             </Button>
             <Button type="primary" loading={importing} onClick={handleImport} icon={<CheckCircleOutlined />}>
-              Nhập {parsedRows.length} dòng vào hệ thống
+              {t('importSubmit')} ({parsedRows.length})
             </Button>
           </Space>
         ) : (
-          <Button onClick={handleClose}>Đóng</Button>
+          <Button onClick={handleClose}>{t('btnClose')}</Button>
         )
       }
     >
@@ -241,13 +243,13 @@ const ImportModal: React.FC<ImportModalProps> = ({
       <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f0f8ff', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
         <DownloadOutlined style={{ color: '#005daa', fontSize: 20 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, marginBottom: 2 }}>Bước 1: Tải file mẫu (template)</div>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>{t('importStep1')}</div>
           <div style={{ fontSize: 12, color: '#666' }}>
-            File có 2 sheet: "Nhập dữ liệu" (nhập vào đây) và "Lựa chọn hợp lệ" (tham khảo giá trị).
+            {t('importStep1Desc')}
           </div>
         </div>
         <Button icon={<DownloadOutlined />} onClick={downloadTemplate} type="default">
-          Tải template
+          {t('btnDownloadTemplate')}
         </Button>
       </div>
 
@@ -256,7 +258,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
       {/* Step 2: upload */}
       {parsedRows.length === 0 && !result && (
         <div>
-          <div style={{ fontWeight: 600, marginBottom: 8, color: '#444' }}>Bước 2: Tải file đã điền lên</div>
+          <div style={{ fontWeight: 600, marginBottom: 8, color: '#444' }}>{t('importStep2')}</div>
           <Dragger
             accept=".xlsx,.xls,.csv"
             beforeUpload={parseFile}
@@ -264,8 +266,8 @@ const ImportModal: React.FC<ImportModalProps> = ({
             style={{ background: '#fafcff', borderColor: '#b0c8f0' }}
           >
             <p className="ant-upload-drag-icon"><InboxOutlined style={{ color: '#005daa' }} /></p>
-            <p className="ant-upload-text">Kéo file vào đây hoặc click để chọn</p>
-            <p className="ant-upload-hint">Chấp nhận .xlsx, .xls, .csv — theo đúng format template</p>
+            <p className="ant-upload-text">{t('importDragHint')}</p>
+            <p className="ant-upload-hint">{t('importDragAccept')}</p>
           </Dragger>
         </div>
       )}
@@ -276,13 +278,13 @@ const ImportModal: React.FC<ImportModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <CheckCircleOutlined style={{ color: '#52c41a' }} />
             <span style={{ fontWeight: 600 }}>
-              Đọc được <Tag color="blue">{parsedRows.length} dòng</Tag> từ <code>{fileName}</code>
+              {t('importReadRowsPrefix')} <Tag color="blue">{parsedRows.length}</Tag> {t('importReadRowsSuffix')} <code>{fileName}</code>
             </span>
           </div>
           <Alert
             type="info" showIcon
-            message="Kiểm tra dữ liệu trước khi nhập"
-            description="Ô màu đỏ = thiếu dữ liệu bắt buộc. Dòng lỗi sẽ bị bỏ qua khi nhập."
+            message={t('importPreview')}
+            description={t('importPreviewDesc')}
             style={{ marginBottom: 12 }}
           />
           <Table
@@ -292,7 +294,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
             size="small"
             scroll={{ x: 'max-content' }}
             pagination={false}
-            footer={() => parsedRows.length > 10 ? <span style={{ color: '#888' }}>... và {parsedRows.length - 10} dòng nữa</span> : null}
+            footer={() => parsedRows.length > 10 ? <span style={{ color: '#888' }}>{t('importMoreRowsPrefix')} {parsedRows.length - 10} {t('importMoreRowsSuffix')}</span> : null}
           />
         </div>
       )}
@@ -303,7 +305,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
           <Alert
             type={result.errors.length === 0 ? 'success' : 'warning'}
             showIcon
-            message={`Hoàn tất: ${result.success} thành công / ${result.errors.length} lỗi`}
+            message={`${t('importResultDone')}: ${result.success} ${t('importResultSuccessLabel')} / ${result.errors.length} ${t('importResultErrorLabel')}`}
             style={{ marginBottom: 12 }}
           />
           <Progress

@@ -1,6 +1,7 @@
 import prisma from '../config/prisma';
 import { CreateCustomerPackageInput } from '../validators/customerPackage.validator';
 import { getPackageLifecycleStatus } from '../utils/businessRules';
+import { syncDuePackagePrices } from './pricing.service';
 
 export class CustomerPackageService {
   private async syncExpiredStatuses(now = new Date()) {
@@ -130,6 +131,7 @@ export class CustomerPackageService {
 
   async create(data: CreateCustomerPackageInput, createdByUserId: number) {
     await this.syncExpiredStatuses();
+    await syncDuePackagePrices();
 
     const startDate = new Date(data.startDate);
     startDate.setHours(0, 0, 0, 0);
@@ -301,6 +303,7 @@ export class CustomerPackageService {
    */
   async getPackageRecommendation(customerId: number) {
     await this.syncExpiredStatuses();
+    await syncDuePackagePrices();
 
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },

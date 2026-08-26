@@ -10,6 +10,7 @@ import api from '../api/axios';
 import { CustomerPackage, ParkingRecord, ParkingZone, VehicleType } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { formatDateTime, formatDate } from '../utils/dateFormat';
 
 interface PackageRecommendation {
   recommendation: 'yearly' | 'quarterly' | 'monthly' | 'none';
@@ -146,13 +147,13 @@ const ParkingExit: React.FC = () => {
             <div class="row"><div class="label">Loại xe</div><div class="value">${receipt.vehicleTypeName}</div></div>
             <div class="row"><div class="label">Khách hàng</div><div class="value">${receipt.customerName}</div></div>
             <div class="row"><div class="label">Chỗ đỗ</div><div class="value">${receipt.spotName}</div></div>
-            <div class="row"><div class="label">Giờ vào</div><div class="value">${new Date(receipt.entryTime).toLocaleString('vi-VN')}</div></div>
-            <div class="row"><div class="label">Giờ ra</div><div class="value">${new Date(receipt.exitTime).toLocaleString('vi-VN')}</div></div>
+            <div class="row"><div class="label">Giờ vào</div><div class="value">${formatDateTime(receipt.entryTime)}</div></div>
+            <div class="row"><div class="label">Giờ ra</div><div class="value">${formatDateTime(receipt.exitTime)}</div></div>
             <div class="row"><div class="label">Thời gian đỗ</div><div class="value">${formatDuration(receipt.durationMinutes)}</div></div>
             <div class="row"><div class="label">Người thu</div><div class="value">${receipt.collectorName}</div></div>
             <div class="row"><div class="label">Phương thức thanh toán</div><div class="value">${paymentMethodLabel}</div></div>
             <div class="row"><div class="label">Phí gửi xe</div><div class="value ${receipt.hasPackage || receipt.fee === 0 ? 'free' : 'total'}">${receipt.hasPackage && receipt.fee === 0 ? 'Miễn phí (có gói)' : `${Number(receipt.fee).toLocaleString('vi-VN')} đ`}</div></div>
-            <div class="footer">Biên nhận được in từ hệ thống lúc ${new Date().toLocaleString('vi-VN')}</div>
+            <div class="footer">Biên nhận được in từ hệ thống lúc ${formatDateTime(new Date())}</div>
           </div>
         </body>
       </html>
@@ -294,12 +295,12 @@ const ParkingExit: React.FC = () => {
             (new Date(pkg.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
           );
           return (
-            <Tooltip title={`Gói: ${pkg.parkingPackage?.name || '—'} · HH: ${new Date(pkg.endDate).toLocaleDateString('vi-VN')} (còn ${daysLeft} ngày)`}>
+            <Tooltip title={`Gói: ${pkg.parkingPackage?.name || '—'} · HH: ${formatDate(pkg.endDate)} (còn ${daysLeft} ngày)`}>
               <Tag color="green" icon={<GiftOutlined />}>Xe tháng</Tag>
             </Tooltip>
           );
         }
-        return <Tag color="default" icon={<UserOutlined />}>Vãn lai</Tag>;
+        return <Tag color="default" icon={<UserOutlined />}>Vãng lai</Tag>;
       },
     },
     { title: 'Loại xe', key: 'vehicleTypeName', render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-' },
@@ -313,7 +314,7 @@ const ParkingExit: React.FC = () => {
     },
     {
       title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime',
-      render: (t: string) => new Date(t).toLocaleString('vi-VN'),
+      render: (t: string) => formatDateTime(t),
     },
     {
       title: 'Thời gian đỗ', key: 'duration',
@@ -379,7 +380,7 @@ const ParkingExit: React.FC = () => {
             options={[
               { label: `Tất cả (${records.length})`, value: 'all' },
               { label: `Xe tháng (${monthlyCount})`, value: 'monthly' },
-              { label: `Vãn lai (${dailyCount})`, value: 'daily' },
+              { label: `Vãng lai (${dailyCount})`, value: 'daily' },
             ]}
           />
           <Space wrap style={{ marginLeft: 'auto' }}>
@@ -443,7 +444,7 @@ const ParkingExit: React.FC = () => {
                     <strong>Xe tháng</strong> — {activePkg.parkingPackage?.name || 'Gói dịch vụ'}
                   </span>
                 }
-                description={`Hết hạn: ${new Date(activePkg.endDate).toLocaleDateString('vi-VN')} · Xe ra sẽ được miễn phí`}
+                description={`Hết hạn: ${formatDate(activePkg.endDate)} · Xe ra sẽ được miễn phí`}
               />
             ) : (
               <Alert
@@ -460,8 +461,8 @@ const ParkingExit: React.FC = () => {
               <div className="info-row"><span className="info-label">Biển số</span><Tag className="plate-tag">{exitModal.licensePlate}</Tag></div>
               <div className="info-row"><span className="info-label">Loại xe</span><span className="info-value">{exitModal.vehicleType?.name || '-'}</span></div>
               <div className="info-row"><span className="info-label">Khách hàng</span><span className="info-value">{exitModal.vehicle?.customer?.fullName || 'Khách vãng lai'}</span></div>
-              <div className="info-row"><span className="info-label">Giờ vào</span><span className="info-value">{new Date(exitModal.entryTime).toLocaleString('vi-VN')}</span></div>
-              <div className="info-row"><span className="info-label">Giờ ra</span><span className="info-value">{new Date().toLocaleString('vi-VN')}</span></div>
+              <div className="info-row"><span className="info-label">Giờ vào</span><span className="info-value">{formatDateTime(exitModal.entryTime)}</span></div>
+              <div className="info-row"><span className="info-label">Giờ ra</span><span className="info-value">{formatDateTime(new Date())}</span></div>
               {previewLoading ? (
                 <div className="info-row"><span className="info-label">Phí gửi xe</span><span className="info-value">Đang tính...</span></div>
               ) : previewFee && (

@@ -10,14 +10,15 @@
   --on-primary: #ffffff;
   --primary-hover: #0075d5;
 
-  /* Surface Hierarchy */
-  --surface: #f9f9ff;
+  /* Surface Hierarchy — nền hạ tông đủ để card nổi tự nhiên không cần viền đậm */
+  --surface: #f4f6fb;
   --surface-container-lowest: #ffffff;
   --surface-container-low: #f1f3ff;
   --surface-container: #eaecf6;
   --surface-container-high: #e0e8ff;
   --surface-container-highest: #d4daf0;
   --surface-bright: #f5f7ff;
+  --card-hairline: rgba(19, 27, 44, 0.06);
 
   /* Inverse (Sidebar) */
   --inverse-surface: #283042;
@@ -48,6 +49,10 @@
   --tertiary: #934600;
   --tertiary-container: #ffdcbe;
 
+  /* Chart accents — dùng riêng cho phân loại dữ liệu trên biểu đồ (không mang nghĩa semantic) */
+  --chart-accent-1: #6750a4;
+  --chart-accent-2: #2e7d32;
+
   /* Spacing */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
@@ -62,12 +67,29 @@
   --radius-xl: 16px;
   --radius-full: 9999px;
 
-  /* Shadows - ambient only */
-  --shadow-ambient: 0 20px 40px rgba(19, 27, 44, 0.06);
-  --shadow-float: 0 8px 24px rgba(19, 27, 44, 0.12);
+  /* Elevation scale — thay cho việc chỉ có 2 shadow rời rạc.
+     elev-0 = nền trang, elev-1 = card mặc định, elev-2 = card hover/popover, elev-3 = modal/drawer */
+  --elev-0: none;
+  --elev-1: 0 1px 2px rgba(19, 27, 44, 0.04), 0 1px 3px rgba(19, 27, 44, 0.06);
+  --elev-2: 0 4px 12px rgba(19, 27, 44, 0.08);
+  --elev-3: 0 12px 32px rgba(19, 27, 44, 0.14);
+
+  /* Alias giữ tương thích ngược cho các rule cũ còn tham chiếu 2 tên này —
+     trỏ về elevation scale để có 1 nguồn chân lý duy nhất. */
+  --shadow-ambient: var(--elev-2);
+  --shadow-float: var(--elev-3);
 
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Type scale — quy ước cỡ chữ theo cấp thông tin, dùng thay cho việc mỗi nơi tự chọn rem */
+  --fs-display: 700 1.75rem/1.2 var(--font-family);   /* con số chủ đạo duy nhất của trang */
+  --fs-metric: 650 1.375rem/1.2 var(--font-family);    /* giá trị KPI card */
+  --fs-h1: 600 1.25rem/1.3 var(--font-family);         /* tiêu đề trang */
+  --fs-h2: 600 1rem/1.3 var(--font-family);            /* tiêu đề section/card */
+  --fs-body: 400 0.875rem/1.5 var(--font-family);      /* nội dung, cell bảng */
+  --fs-caption: 500 0.75rem/1.4 var(--font-family);    /* nhãn, meta, sub-note */
+  --fs-overline: 600 0.6875rem/1.4 var(--font-family); /* nhãn KPI, header bảng — dùng kèm uppercase + letter-spacing */
 
   /* Sidebar */
   --sidebar-width: 240px;
@@ -97,14 +119,14 @@ body {
 
 /* Cards: no borders, tonal layering */
 .ant-card {
-  border: none !important;
+  border: 1px solid var(--card-hairline) !important;
   border-radius: var(--radius-default) !important;
   background: var(--surface-container-lowest) !important;
-  box-shadow: none !important;
+  box-shadow: var(--elev-1) !important;
   transition: box-shadow 0.2s ease;
 }
 .ant-card:hover {
-  box-shadow: var(--shadow-ambient) !important;
+  box-shadow: var(--elev-2) !important;
 }
 .ant-card .ant-card-head {
   border-bottom: none !important;
@@ -130,11 +152,10 @@ body {
 /* Header: gradient accent */
 .ant-table-thead > tr > th,
 .ant-table-thead > tr > td {
-  background: linear-gradient(135deg, #0e3a6e 0%, #005daa 100%) !important;
-  border-bottom: none !important;
-  font-weight: 700 !important;
-  color: #fff !important;
-  font-size: 0.72rem !important;
+  background: var(--surface-container-low) !important;
+  border-bottom: 1px solid var(--outline-variant) !important;
+  font: var(--fs-overline) !important;
+  color: var(--on-surface-variant) !important;
   text-transform: uppercase !important;
   letter-spacing: 0.06em !important;
   padding: 12px 16px !important;
@@ -193,6 +214,18 @@ body {
   background: linear-gradient(135deg, var(--primary-container) 0%, var(--primary) 100%) !important;
   box-shadow: 0 4px 12px rgba(0, 93, 170, 0.3) !important;
   transform: translateY(-1px);
+}
+/* Nút "ghost" (viền màu, nền trong suốt) — nếu không loại trừ khỏi rule gradient ở trên,
+   chữ sẽ cùng màu xanh với nền khiến gần như không đọc được. */
+.ant-btn-primary.ant-btn-background-ghost {
+  background: transparent !important;
+  border: 1px solid var(--primary) !important;
+  color: var(--primary) !important;
+}
+.ant-btn-primary.ant-btn-background-ghost:hover {
+  background: var(--primary-container-hover, rgba(0, 93, 170, 0.08)) !important;
+  color: var(--primary) !important;
+  transform: none;
 }
 .ant-btn-default {
   border: 1px solid var(--outline-variant) !important;
@@ -369,14 +402,9 @@ body {
 .app-sidebar .sidebar-logo .logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%);
   border-radius: var(--radius-default);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-size: 14px;
+  object-fit: cover;
+  display: block;
   flex-shrink: 0;
 }
 .app-sidebar .sidebar-logo .logo-text {
@@ -489,17 +517,20 @@ body {
   left: 0;
   width: 4px;
   height: 100%;
-  background: var(--primary);
+  background: var(--outline-variant);
   border-radius: 0 2px 2px 0;
 }
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-ambient) !important;
+  box-shadow: var(--elev-2) !important;
 }
+/* Chỉ dùng modifier semantic khi KPI thật sự đang ở trạng thái đó (vượt ngưỡng...),
+   KHÔNG dùng để "tô màu cho đẹp" 1 chỉ số trung tính — xem UIUX_AUDIT §RC-3. */
 .stat-card.stat-success::after { background: var(--success); }
 .stat-card.stat-warning::after { background: var(--warning); }
 .stat-card.stat-error::after { background: var(--error); }
 .stat-card.stat-info::after { background: var(--info); }
+.stat-card.stat-primary::after { background: var(--primary); }
 
 .stat-card .ant-statistic-title {
   font-size: 0.75rem !important;

@@ -47,14 +47,13 @@ const Login: React.FC = () => {
           />
         </div>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            width: 56, height: 56, margin: '0 auto 16px',
-            background: 'linear-gradient(135deg, #005daa 0%, #0075d5 100%)',
-            borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontSize: 24, fontWeight: 700,
-          }}>P</div>
+          <img
+            src="/logo192.png"
+            alt=""
+            style={{ width: 56, height: 56, margin: '0 auto 16px', borderRadius: 12, display: 'block' }}
+          />
           <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--on-surface)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-            ParkManager
+            Quản lý bãi đỗ xe
           </h2>
           <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.875rem', margin: 0 }}>
             {lang === 'en' ? 'Sign in to continue' : 'Đăng nhập để tiếp tục'}

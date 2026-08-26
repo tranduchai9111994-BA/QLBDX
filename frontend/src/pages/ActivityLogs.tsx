@@ -13,6 +13,7 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/axios';
 import { ActivityLog, ActivityLogPage } from '../types';
+import { formatDateTime } from '../utils/dateFormat';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -53,7 +54,7 @@ const ActivityLogs: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState<Filters>({
     dateRange: null,
     action: undefined,
@@ -128,7 +129,7 @@ const ActivityLogs: React.FC = () => {
     if (!data.length) return;
     const header = ['Thời gian', 'Người dùng', 'Hành động', 'Đối tượng', 'Thực thể ID', 'IP', 'HTTP', 'Mô tả'];
     const rows = data.map(d => [
-      dayjs(d.createdAt).format('DD/MM/YYYY HH:mm:ss'),
+      formatDateTime(d.createdAt),
       d.username,
       ACTION_CONFIG[d.action]?.label || d.action,
       ENTITY_LABELS[d.entity || ''] || d.entity || '',
@@ -148,7 +149,7 @@ const ActivityLogs: React.FC = () => {
     if (!data.length) return;
     const headers = ['Thời gian', 'Người dùng', 'Họ tên', 'Hành động', 'Đối tượng', 'Thực thể ID', 'IP', 'HTTP Status', 'Nội dung'];
     const rows = data.map(d => [
-      dayjs(d.createdAt).format('DD/MM/YYYY HH:mm:ss'),
+      formatDateTime(d.createdAt),
       d.username,
       d.user?.fullName || '',
       ACTION_CONFIG[d.action]?.label || d.action,
@@ -175,7 +176,7 @@ const ActivityLogs: React.FC = () => {
       width: 160,
       render: (v: string) => (
         <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
-          {dayjs(v).format('DD/MM/YYYY HH:mm:ss')}
+          {formatDateTime(v)}
         </span>
       ),
     },
@@ -417,9 +418,14 @@ const ActivityLogs: React.FC = () => {
             current: page,
             pageSize,
             total,
-            showSizeChanger: false,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '30', '50', '100'],
+            showQuickJumper: true,
             showTotal: (t) => `Tổng ${t} bản ghi`,
-            onChange: (p) => setPage(p),
+            onChange: (p, ps) => {
+              if (ps !== pageSize) { setPageSize(ps); setPage(1); }
+              else setPage(p);
+            },
           }}
           rowClassName={(record) =>
             record.action === 'LOGIN_FAILED' ? 'ant-table-row-danger' : ''

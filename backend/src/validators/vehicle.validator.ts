@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-const licensePlateRegex = /^\d{2}[A-Z]\d{4,5}$/;
+// Biển số ô tô/xe máy chuẩn (29A12345, 59FA2345, 59N156789...) hoặc mã nội bộ 2 chữ cái cho xe không có biển
+// (VD: XD001 cho xe đạp) — client chuẩn hoá bỏ dấu -/./khoảng trắng trước khi validate.
+const licensePlateRegex = /^(\d{2}[A-Z]{1,2}\d{4,6}|[A-Z]{2}\d{3,5})$/;
 
 export const createVehicleSchema = z.object({
   customerId: z.number().int().positive('CustomerId không hợp lệ'),

@@ -4,14 +4,15 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, UploadOutli
 import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { Customer, CustomerForm } from '../types';
-import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import ImportModal, { ColumnDef } from '../components/ImportModal';
+import StatusTag from '../components/StatusTag';
+import PermissionGate from '../components/PermissionGate';
+import FilterBar from '../components/FilterBar';
+import { defaultPagination } from '../utils/tablePagination';
 
 const Customers: React.FC = () => {
-  const { user } = useAuth();
   const { t } = useLanguage();
-  const isAdmin = user?.role === 'admin';
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [modal, setModal] = useState<boolean>(false);
@@ -134,20 +135,20 @@ const Customers: React.FC = () => {
     { title: t('fieldAddress'), dataIndex: 'address', key: 'address', render: (v?: string) => v || '-' },
     {
       title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive',
-      render: (isActive: boolean) => isActive
-        ? <Tag color="green">{t('statusActive')}</Tag>
-        : <Tag>{t('statusInactive')}</Tag>,
+      render: (isActive: boolean) => (
+        <StatusTag domain="toggle" value={isActive} label={isActive ? t('statusActive') : t('statusInactive')} />
+      ),
     },
     {
       title: t('fieldAction'), key: 'action', width: 220,
       render: (_: unknown, r: Customer) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
-          {isAdmin ? (
+          <PermissionGate adminOnly>
             <Popconfirm title={t('confirmDelete')} onConfirm={() => handleDelete(r.id)}>
               <Button icon={<DeleteOutlined />} danger size="small" disabled={!r.isActive}>{t('statusInactive')}</Button>
             </Popconfirm>
-          ) : null}
+          </PermissionGate>
         </div>
       ),
     },
@@ -156,44 +157,41 @@ const Customers: React.FC = () => {
   return (
     <div>
       <h2 className="page-title">{t('pageCustomers')}</h2>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <Space>
+          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+            {t('btnAddCustomer')}
+          </Button>
+        </Space>
+      </div>
+      <FilterBar onReset={resetFilters}>
+        <Input.Search
+          placeholder="Tìm tên, SĐT, CCCD, email..."
+          style={{ width: 320 }}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
+          allowClear
+        />
+        <Select
+          value={filters.status}
+          style={{ width: 190 }}
+          onChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+          options={[
+            { value: 'all', label: 'Tất cả trạng thái' },
+            { value: 'active', label: 'Đang hoạt động' },
+            { value: 'inactive', label: 'Ngừng hoạt động' },
+          ]}
+        />
+      </FilterBar>
       <Card>
-        <div className="toolbar">
-          <Space wrap>
-            <Input.Search
-              placeholder="Tìm tên, SĐT, CCCD, email..."
-              style={{ width: 320 }}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
-              allowClear
-            />
-            <Select
-              value={filters.status}
-              style={{ width: 190 }}
-              onChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-              options={[
-                { value: 'all', label: 'Tất cả trạng thái' },
-                { value: 'active', label: 'Đang hoạt động' },
-                { value: 'inactive', label: 'Ngừng hoạt động' },
-              ]}
-            />
-            <Button icon={<ReloadOutlined />} onClick={resetFilters}>Xóa bộ lọc</Button>
-          </Space>
-          <div className="toolbar-right">
-            <Space>
-              <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-                {t('btnAddCustomer')}
-              </Button>
-            </Space>
-          </div>
-        </div>
-        <Table columns={columns} dataSource={customers} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+        <Table columns={columns} dataSource={customers} rowKey="id" loading={loading} pagination={defaultPagination({ pageSize: 10 })} />
       </Card>
 
       <ImportModal
         open={importOpen}
-        title="Khách hàng"
+        title={t('menuCustomers')}
         columns={importColumns}
         onImport={handleImport}
         onClose={() => setImportOpen(false)}

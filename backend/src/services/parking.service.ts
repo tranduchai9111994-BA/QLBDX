@@ -11,6 +11,7 @@ import {
   normalizeLicensePlate,
 } from '../utils/businessRules';
 import { calculateParkingFee } from '../utils/feeCalculator';
+import { syncDueVehicleTypeRates } from './pricing.service';
 
 const EXCEPTION_REASON_LABEL: Record<string, string> = {
   lost_ticket: 'Mất vé / mất phiếu',
@@ -25,7 +26,7 @@ export class ParkingService {
     const normalizedPlate = normalizeLicensePlate(licensePlate);
     const vehicles = await prisma.vehicle.findMany({
       include: {
-        vehicleType: { select: { name: true } },
+        vehicleType: { select: { name: true, hourlyRate: true, dailyRate: true } },
       },
     });
 
@@ -82,8 +83,8 @@ export class ParkingService {
     const calc = calculateParkingFee(
       durationMs,
       {
-        hourlyRate: Number(record.vehicleType.hourlyRate),
-        dailyRate: Number(record.vehicleType.dailyRate),
+        hourlyRate: Number(record.hourlyRateApplied ?? record.vehicleType.hourlyRate),
+        dailyRate: Number(record.dailyRateApplied ?? record.vehicleType.dailyRate),
       },
       { hasPackage }
     );
@@ -200,6 +201,8 @@ export class ParkingService {
   }
 
   async entry(data: ParkingEntryInput, createdByUserId: number) {
+    await syncDueVehicleTypeRates();
+
     const normalizedPlate = normalizeLicensePlate(data.licensePlate);
 
     const parkedRecords = await prisma.parkingRecord.findMany({
@@ -216,7 +219,7 @@ export class ParkingService {
       this.findVehicleByNormalizedPlate(normalizedPlate),
       prisma.vehicleType.findUnique({
         where: { id: data.vehicleTypeId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, hourlyRate: true, dailyRate: true },
       }),
       prisma.parkingSpot.findUnique({
         where: { id: data.parkingSpotId },
@@ -242,6 +245,9 @@ export class ParkingService {
 
     const effectiveVehicleTypeId = vehicle?.vehicleTypeId ?? data.vehicleTypeId;
     const effectiveVehicleTypeName = vehicle?.vehicleType.name ?? requestedVehicleType.name;
+    // Chốt giá tại thời điểm xe vào — không bị ảnh hưởng nếu admin đổi giá trong lúc xe đang đỗ.
+    const effectiveHourlyRate = vehicle?.vehicleType.hourlyRate ?? requestedVehicleType.hourlyRate;
+    const effectiveDailyRate = vehicle?.vehicleType.dailyRate ?? requestedVehicleType.dailyRate;
     const compatibleAvailableSpots = availableSpots.filter((spot) =>
       isSpotCompatibleWithVehicleType(spot, effectiveVehicleTypeName)
     );
@@ -266,6 +272,8 @@ export class ParkingService {
         parkingSpotId: data.parkingSpotId,
         notes: data.notes ?? null,
         createdBy: createdByUserId,
+        hourlyRateApplied: effectiveHourlyRate,
+        dailyRateApplied: effectiveDailyRate,
       },
     });
 
@@ -345,8 +353,8 @@ export class ParkingService {
     const calc = calculateParkingFee(
       durationMs,
       {
-        hourlyRate: Number(record.vehicleType.hourlyRate),
-        dailyRate: Number(record.vehicleType.dailyRate),
+        hourlyRate: Number(record.hourlyRateApplied ?? record.vehicleType.hourlyRate),
+        dailyRate: Number(record.dailyRateApplied ?? record.vehicleType.dailyRate),
       },
       { hasPackage }
     );
@@ -369,12 +377,15 @@ export class ParkingService {
     zoneId?: number;
     vehicleTypeId?: number;
     search?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const { from, to, licensePlate, zoneId, vehicleTypeId, search } = params;
     const normalizedPlate = licensePlate ? normalizeLicensePlate(licensePlate) : '';
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 20));
 
-    return prisma.parkingRecord.findMany({
-      where: {
+    const where = {
         status: 'completed',
         ...((from || to)
           ? {
@@ -408,23 +419,33 @@ export class ParkingService {
               ],
             }
           : {}),
-      },
-      include: {
-        vehicleType: { select: { name: true } },
-        parkingSpot: {
-          select: {
-            spotNumber: true,
-            zone: { select: { name: true } },
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.parkingRecord.findMany({
+        where,
+        include: {
+          vehicleType: { select: { name: true } },
+          parkingSpot: {
+            select: {
+              spotNumber: true,
+              zone: { select: { name: true } },
+            },
+          },
+          vehicle: {
+            select: {
+              customer: { select: { fullName: true } },
+            },
           },
         },
-        vehicle: {
-          select: {
-            customer: { select: { fullName: true } },
-          },
-        },
-      },
-      orderBy: { exitTime: 'desc' },
-    });
+        orderBy: { exitTime: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.parkingRecord.count({ where }),
+    ]);
+
+    return { data, total, page, pageSize };
   }
 
   async plateHistory(licensePlate: string) {

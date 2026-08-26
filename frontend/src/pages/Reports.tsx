@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card, DatePicker, Row, Col, Table, message, Select, Statistic,
-  Radio, Button, Dropdown, Tag, Progress,
+  Radio, Button, Dropdown, Tag, Progress, Modal, Space, Alert,
 } from 'antd';
 import { useLanguage } from '../context/LanguageContext';
 import {
   DollarOutlined, CarOutlined, RiseOutlined, BarChartOutlined,
   DownloadOutlined, FileExcelOutlined, FileTextOutlined, PrinterOutlined,
-  CreditCardOutlined, ClockCircleOutlined,
+  CreditCardOutlined, ClockCircleOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import {
@@ -22,17 +22,23 @@ import {
   exportPaymentMethodCsv, printRevenueReport, formatPeriodLabel,
   exportExceptionExcel,
 } from '../utils/reportExport';
+import { getChartColors, chartColor } from '../utils/chartTheme';
+import { formatDateTime } from '../utils/dateFormat';
 
 const { RangePicker } = DatePicker;
 
-const CHART_COLORS = ['#005daa', '#1a7a2e', '#934600', '#ba1a1a', '#6750a4', '#0075d5', '#2e7d32'];
-const METHOD_COLORS: Record<string, string> = {
-  cash: '#1a7a2e',
-  card: '#005daa',
-  transfer: '#934600',
-};
-
 type GroupBy = 'day' | 'month' | 'year';
+
+interface ExportPreview {
+  title: string;
+  formatLabel: string;
+  summary: { label: string; value: string }[];
+  columns: any[];
+  data: any[];
+  totalRows: number;
+  confirmText: string;
+  run: () => void;
+}
 
 function autoGroupBy(from: Dayjs, to: Dayjs): GroupBy {
   const days = to.diff(from, 'day');
@@ -56,6 +62,14 @@ const Reports: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>('bar');
   const [activePreset, setActivePreset] = useState<string>('Năm nay');
+  const [exportPreview, setExportPreview] = useState<ExportPreview | null>(null);
+
+  const CHART_COLORS = useMemo(() => getChartColors(), []);
+  const METHOD_COLORS: Record<string, string> = useMemo(() => ({
+    cash: chartColor.success(),
+    card: chartColor.primary(),
+    transfer: chartColor.warning(),
+  }), []);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -135,15 +149,77 @@ const Reports: React.FC = () => {
     totals,
   };
 
+  const periodLabel = `${dateRange[0].format('DD/MM/YYYY')} – ${dateRange[1].format('DD/MM/YYYY')}`;
+  const groupByLabel = groupBy === 'day' ? 'Ngày' : groupBy === 'month' ? 'Tháng' : 'Năm';
+
+  const revenuePreviewColumns = [
+    { title: groupByLabel, dataIndex: 'period', key: 'period', render: (v: string) => formatPeriodLabel(v, groupBy) },
+    { title: 'Gửi lẻ (đ)', dataIndex: 'parkingRevenue', key: 'parkingRevenue', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+    { title: 'Gói (đ)', dataIndex: 'packageRevenue', key: 'packageRevenue', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+    { title: 'Tổng (đ)', dataIndex: 'totalRevenue', key: 'totalRevenue', align: 'right' as const, render: (v: number) => <strong>{fmt(Number(v))}</strong> },
+    { title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', align: 'right' as const },
+  ];
+  const vehiclePreviewColumns = [
+    { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType' },
+    { title: 'Số lượt', dataIndex: 'totalRecords', key: 'totalRecords', align: 'right' as const },
+    { title: 'Doanh thu (đ)', dataIndex: 'totalFees', key: 'totalFees', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+  ];
+  const paymentMethodPreviewColumns = [
+    { title: 'Phương thức', dataIndex: 'label', key: 'label' },
+    { title: 'Số GD', dataIndex: 'totalTransactions', key: 'totalTransactions', align: 'right' as const },
+    { title: 'Doanh thu (đ)', dataIndex: 'totalAmount', key: 'totalAmount', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+  ];
+  const exceptionPreviewColumns = [
+    { title: 'Biển số', dataIndex: 'licensePlate', key: 'licensePlate' },
+    { title: 'Loại xe', dataIndex: 'vehicleType', key: 'vehicleType' },
+    { title: 'Lý do', dataIndex: 'reasonLabel', key: 'reasonLabel' },
+    { title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', align: 'right' as const, render: (v: number) => fmt(Number(v)) },
+    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (v?: string) => v ? formatDateTime(v) : '-' },
+  ];
+
+  const previewExceptionExcel = () => {
+    if (!exceptionStats?.totalCount) { message.warning('Không có dữ liệu ngoại lệ trong kỳ này'); return; }
+    setExportPreview({
+      title: 'Xem trước — Excel Checkout ngoại lệ',
+      formatLabel: 'Excel (.xlsx) — 3 sheet: Tổng hợp, Chi tiết, Ca miễn phí',
+      summary: [
+        { label: 'Kỳ báo cáo', value: periodLabel },
+        { label: 'Tổng ca ngoại lệ', value: `${exceptionStats.totalCount} ca` },
+        { label: 'Ca miễn phí', value: `${exceptionStats.waivedCount} ca` },
+        { label: 'Tổng phí ghi nhận', value: `${fmt(exceptionStats.totalFeeImpact)} đ` },
+      ],
+      columns: exceptionPreviewColumns,
+      data: exceptionStats.records.slice(0, 10),
+      totalRows: exceptionStats.records.length,
+      confirmText: 'Tải xuống Excel',
+      run: () => { exportExceptionExcel(exceptionStats, dateRange); message.success('Đã xuất Excel checkout ngoại lệ'); },
+    });
+  };
+
   const exportItems = [
     {
       key: 'excel',
-      icon: <FileExcelOutlined style={{ color: '#1a7a2e' }} />,
+      icon: <FileExcelOutlined style={{ color: 'var(--success)' }} />,
       label: 'Excel — Đa sheet (Tổng hợp + Doanh thu + Loại xe + PTTT)',
       onClick: () => {
         if (!revenue.length) { message.warning('Chưa có dữ liệu'); return; }
-        exportRevenueExcel(exportPayload);
-        message.success('Đã xuất Excel đa sheet');
+        setExportPreview({
+          title: 'Xem trước — Excel đa sheet',
+          formatLabel: 'Excel (.xlsx) — 4 sheet: Tổng hợp, Doanh thu, Loại xe, PTTT',
+          summary: [
+            { label: 'Kỳ báo cáo', value: periodLabel },
+            { label: 'Nhóm theo', value: groupByLabel },
+            { label: 'Tổng doanh thu', value: `${fmt(totals.totalRevenue)} đ` },
+            { label: 'Số dòng doanh thu (sheet chính)', value: `${revenue.length} dòng` },
+            { label: 'Số loại xe', value: `${vehicleStats.length} dòng` },
+            { label: 'Số phương thức thanh toán', value: `${paymentMethods?.byMethod.length ?? 0} dòng` },
+          ],
+          columns: revenuePreviewColumns,
+          data: revenue.slice(0, 10),
+          totalRows: revenue.length,
+          confirmText: 'Tải xuống Excel',
+          run: () => { exportRevenueExcel(exportPayload); message.success('Đã xuất Excel đa sheet'); },
+        });
       },
     },
     { type: 'divider' as const },
@@ -151,36 +227,94 @@ const Reports: React.FC = () => {
       key: 'csv-rev',
       icon: <FileTextOutlined />,
       label: 'CSV — Doanh thu theo kỳ',
-      onClick: () => { exportRevenueCsv(exportPayload); },
+      onClick: () => {
+        if (!revenue.length) { message.warning('Chưa có dữ liệu'); return; }
+        setExportPreview({
+          title: 'Xem trước — CSV Doanh thu theo kỳ',
+          formatLabel: 'CSV (.csv)',
+          summary: [
+            { label: 'Kỳ báo cáo', value: periodLabel },
+            { label: 'Nhóm theo', value: groupByLabel },
+            { label: 'Số dòng', value: `${revenue.length} dòng` },
+          ],
+          columns: revenuePreviewColumns,
+          data: revenue.slice(0, 10),
+          totalRows: revenue.length,
+          confirmText: 'Tải xuống CSV',
+          run: () => { exportRevenueCsv(exportPayload); message.success('Đã xuất CSV doanh thu'); },
+        });
+      },
     },
     {
       key: 'csv-veh',
       icon: <FileTextOutlined />,
       label: 'CSV — Phân loại xe',
-      onClick: () => { exportVehicleCsv(exportPayload); },
+      onClick: () => {
+        if (!vehicleStats.length) { message.warning('Chưa có dữ liệu'); return; }
+        setExportPreview({
+          title: 'Xem trước — CSV Phân loại xe',
+          formatLabel: 'CSV (.csv)',
+          summary: [
+            { label: 'Kỳ báo cáo', value: periodLabel },
+            { label: 'Số dòng', value: `${vehicleStats.length} dòng` },
+          ],
+          columns: vehiclePreviewColumns,
+          data: vehicleStats.slice(0, 10),
+          totalRows: vehicleStats.length,
+          confirmText: 'Tải xuống CSV',
+          run: () => { exportVehicleCsv(exportPayload); message.success('Đã xuất CSV phân loại xe'); },
+        });
+      },
     },
     {
       key: 'csv-pm',
       icon: <FileTextOutlined />,
       label: 'CSV — Phương thức thanh toán',
-      onClick: () => { exportPaymentMethodCsv(exportPayload); },
+      onClick: () => {
+        if (!paymentMethods?.byMethod.length) { message.warning('Chưa có dữ liệu'); return; }
+        setExportPreview({
+          title: 'Xem trước — CSV Phương thức thanh toán',
+          formatLabel: 'CSV (.csv)',
+          summary: [
+            { label: 'Kỳ báo cáo', value: periodLabel },
+            { label: 'Số dòng', value: `${paymentMethods.byMethod.length} dòng` },
+          ],
+          columns: paymentMethodPreviewColumns,
+          data: paymentMethods.byMethod.slice(0, 10),
+          totalRows: paymentMethods.byMethod.length,
+          confirmText: 'Tải xuống CSV',
+          run: () => { exportPaymentMethodCsv(exportPayload); message.success('Đã xuất CSV phương thức thanh toán'); },
+        });
+      },
     },
     {
       key: 'excel-exc',
-      icon: <FileExcelOutlined style={{ color: '#ba1a1a' }} />,
+      icon: <FileExcelOutlined style={{ color: 'var(--error)' }} />,
       label: 'Excel — Checkout ngoại lệ (chi tiết + theo lý do)',
-      onClick: () => {
-        if (!exceptionStats?.totalCount) { message.warning('Không có dữ liệu ngoại lệ trong kỳ này'); return; }
-        exportExceptionExcel(exceptionStats, dateRange);
-        message.success('Đã xuất Excel checkout ngoại lệ');
-      },
+      onClick: previewExceptionExcel,
     },
     { type: 'divider' as const },
     {
       key: 'print',
       icon: <PrinterOutlined />,
       label: 'In / Xuất PDF (layout chuẩn A4)',
-      onClick: () => { printRevenueReport(exportPayload); },
+      onClick: () => {
+        if (!revenue.length) { message.warning('Chưa có dữ liệu'); return; }
+        setExportPreview({
+          title: 'Xem trước — In / Xuất PDF',
+          formatLabel: 'Trang in A4 (mở cửa sổ xem trước, có thể Lưu thành PDF từ hộp thoại in)',
+          summary: [
+            { label: 'Kỳ báo cáo', value: periodLabel },
+            { label: 'Nhóm theo', value: groupByLabel },
+            { label: 'Tổng doanh thu', value: `${fmt(totals.totalRevenue)} đ` },
+          ],
+          columns: revenuePreviewColumns,
+          data: revenue.slice(0, 10),
+          totalRows: revenue.length,
+          confirmText: 'Mở xem trước & In',
+          run: () => { printRevenueReport(exportPayload); },
+        });
+      },
     },
   ];
 
@@ -204,11 +338,11 @@ const Reports: React.FC = () => {
     },
     {
       title: 'Gửi lẻ (đ)', dataIndex: 'parkingRevenue', key: 'parkingRevenue', align: 'right' as const,
-      render: (v: number) => <span style={{ color: '#005daa' }}>{fmt(Number(v))}</span>,
+      render: (v: number) => <span style={{ color: 'var(--primary)' }}>{fmt(Number(v))}</span>,
     },
     {
       title: 'Vé tháng (đ)', dataIndex: 'packageRevenue', key: 'packageRevenue', align: 'right' as const,
-      render: (v: number) => <span style={{ color: '#1a7a2e' }}>{fmt(Number(v))}</span>,
+      render: (v: number) => <span style={{ color: 'var(--success)' }}>{fmt(Number(v))}</span>,
     },
     {
       title: 'Tổng (đ)', dataIndex: 'totalRevenue', key: 'totalRevenue', align: 'right' as const,
@@ -255,7 +389,7 @@ const Reports: React.FC = () => {
                   borderRadius: 6,
                   border: `1px solid ${isActive ? 'var(--primary)' : 'var(--outline-variant)'}`,
                   background: isActive ? 'var(--primary)' : 'var(--surface)',
-                  color: isActive ? '#ffffff' : 'var(--on-surface)',
+                  color: isActive ? 'var(--on-primary)' : 'var(--on-surface)',
                   cursor: 'pointer',
                   fontSize: 13,
                   fontWeight: isActive ? 600 : 400,
@@ -280,8 +414,8 @@ const Reports: React.FC = () => {
         <Col xs={12} sm={8} xl={4}>
           <Card className="stat-card stat-info">
             <Statistic title="Tổng doanh thu" value={totals.totalRevenue}
-              prefix={<DollarOutlined style={{ color: '#005daa' }} />}
-              valueStyle={{ color: '#005daa', fontSize: '1.2rem', fontWeight: 700 }}
+              prefix={<DollarOutlined style={{ color: 'var(--primary)' }} />}
+              valueStyle={{ color: 'var(--primary)', fontSize: '1.2rem', fontWeight: 700 }}
               formatter={(v) => fmt(Number(v))}
               suffix={<span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>đ</span>}
             />
@@ -290,8 +424,8 @@ const Reports: React.FC = () => {
         <Col xs={12} sm={8} xl={4}>
           <Card className="stat-card stat-success">
             <Statistic title="Gửi lẻ" value={totals.totalParkingRev}
-              prefix={<CarOutlined style={{ color: '#1a7a2e' }} />}
-              valueStyle={{ color: '#1a7a2e', fontSize: '1.2rem', fontWeight: 700 }}
+              prefix={<CarOutlined style={{ color: 'var(--success)' }} />}
+              valueStyle={{ color: 'var(--success)', fontSize: '1.2rem', fontWeight: 700 }}
               formatter={(v) => fmt(Number(v))}
               suffix={<span style={{ fontSize: 13 }}>đ</span>}
             />
@@ -301,8 +435,8 @@ const Reports: React.FC = () => {
         <Col xs={12} sm={8} xl={4}>
           <Card className="stat-card stat-warning">
             <Statistic title="Vé tháng/quý/năm" value={totals.totalPackageRev}
-              prefix={<RiseOutlined style={{ color: '#934600' }} />}
-              valueStyle={{ color: '#934600', fontSize: '1.2rem', fontWeight: 700 }}
+              prefix={<RiseOutlined style={{ color: 'var(--warning)' }} />}
+              valueStyle={{ color: 'var(--warning)', fontSize: '1.2rem', fontWeight: 700 }}
               formatter={(v) => fmt(Number(v))}
               suffix={<span style={{ fontSize: 13 }}>đ</span>}
             />
@@ -312,33 +446,33 @@ const Reports: React.FC = () => {
         <Col xs={12} sm={8} xl={4}>
           <Card className="stat-card stat-error">
             <Statistic title="Tổng lượt xe" value={totals.totalVehicles}
-              prefix={<BarChartOutlined style={{ color: '#ba1a1a' }} />}
-              valueStyle={{ color: '#ba1a1a', fontSize: '1.2rem', fontWeight: 700 }}
+              prefix={<BarChartOutlined style={{ color: 'var(--error)' }} />}
+              valueStyle={{ color: 'var(--error)', fontSize: '1.2rem', fontWeight: 700 }}
             />
             <div style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 4 }}>{totals.totalTransactions.toLocaleString()} giao dịch</div>
           </Card>
         </Col>
         <Col xs={12} sm={8} xl={4}>
-          <Card className="stat-card" style={{ borderLeft: '4px solid #6750a4' }}>
+          <Card className="stat-card" style={{ borderLeft: '4px solid var(--chart-accent-1)' }}>
             <Statistic title="Trung bình / GD" value={totals.avgTransaction}
-              prefix={<CreditCardOutlined style={{ color: '#6750a4' }} />}
-              valueStyle={{ color: '#6750a4', fontSize: '1.2rem', fontWeight: 700 }}
+              prefix={<CreditCardOutlined style={{ color: 'var(--chart-accent-1)' }} />}
+              valueStyle={{ color: 'var(--chart-accent-1)', fontSize: '1.2rem', fontWeight: 700 }}
               formatter={(v) => fmt(Number(v))}
               suffix={<span style={{ fontSize: 13 }}>đ</span>}
             />
           </Card>
         </Col>
         <Col xs={12} sm={8} xl={4}>
-          <Card className="stat-card" style={{ borderLeft: '4px solid #0075d5' }}>
+          <Card className="stat-card" style={{ borderLeft: '4px solid var(--primary-container)' }}>
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--on-surface-variant)', marginBottom: 8, fontWeight: 600 }}>
               Kỳ cao nhất
             </div>
             {topPeriod ? (
               <>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0075d5' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-container)' }}>
                   {formatPeriodLabel(topPeriod.period, groupBy)}
                 </div>
-                <div style={{ fontSize: 12, color: '#0075d5', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--primary-container)', marginTop: 2 }}>
                   {fmt(Number(topPeriod.totalRevenue))} đ
                 </div>
               </>
@@ -375,8 +509,8 @@ const Reports: React.FC = () => {
                   <YAxis tick={{ fontSize: 11, fill: 'var(--on-surface-variant)' }} tickFormatter={fmtM} />
                   <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 8px 24px rgba(19,27,44,0.12)' }} formatter={(v: number) => `${fmt(v)}đ`} />
                   <Legend />
-                  <Bar dataKey="Gửi lẻ" stackId="rev" fill="#005daa" />
-                  <Bar dataKey="Vé tháng" stackId="rev" fill="#1a7a2e" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Gửi lẻ" stackId="rev" fill="var(--primary)" />
+                  <Bar dataKey="Vé tháng" stackId="rev" fill="var(--success)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               ) : chartType === 'line' ? (
                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -385,20 +519,20 @@ const Reports: React.FC = () => {
                   <YAxis tick={{ fontSize: 11, fill: 'var(--on-surface-variant)' }} tickFormatter={fmtM} />
                   <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 8px 24px rgba(19,27,44,0.12)' }} formatter={(v: number) => `${fmt(v)}đ`} />
                   <Legend />
-                  <Line type="monotone" dataKey="Tổng DT" stroke="#005daa" strokeWidth={2.5} dot={chartData.length <= 24} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="Gửi lẻ" stroke="#1a7a2e" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
-                  <Line type="monotone" dataKey="Vé tháng" stroke="#934600" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+                  <Line type="monotone" dataKey="Tổng DT" stroke="var(--primary)" strokeWidth={2.5} dot={chartData.length <= 24} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="Gửi lẻ" stroke="var(--success)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+                  <Line type="monotone" dataKey="Vé tháng" stroke="var(--warning)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                 </LineChart>
               ) : (
                 <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorParking" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#005daa" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#005daa" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.5} />
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.05} />
                     </linearGradient>
                     <linearGradient id="colorPackage" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1a7a2e" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#1a7a2e" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="var(--success)" stopOpacity={0.5} />
+                      <stop offset="95%" stopColor="var(--success)" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--outline-variant)" vertical={false} />
@@ -406,8 +540,8 @@ const Reports: React.FC = () => {
                   <YAxis tick={{ fontSize: 11, fill: 'var(--on-surface-variant)' }} tickFormatter={fmtM} />
                   <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 8px 24px rgba(19,27,44,0.12)' }} formatter={(v: number) => `${fmt(v)}đ`} />
                   <Legend />
-                  <Area type="monotone" dataKey="Gửi lẻ" stackId="1" stroke="#005daa" fill="url(#colorParking)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="Vé tháng" stackId="1" stroke="#1a7a2e" fill="url(#colorPackage)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Gửi lẻ" stackId="1" stroke="var(--primary)" fill="url(#colorParking)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Vé tháng" stackId="1" stroke="var(--success)" fill="url(#colorPackage)" strokeWidth={2} />
                 </AreaChart>
               )}
             </ResponsiveContainer>
@@ -440,7 +574,7 @@ const Reports: React.FC = () => {
                       <span style={{ width: 10, height: 10, borderRadius: '50%', background: CHART_COLORS[i % CHART_COLORS.length], flexShrink: 0 }} />
                       <span style={{ flex: 1 }}>{vs.vehicleType}</span>
                       <Tag style={{ margin: 0 }}>{vs.totalRecords} lượt</Tag>
-                      <span style={{ color: '#005daa', fontWeight: 600, minWidth: 80, textAlign: 'right' }}>{fmt(vs.totalFees)}đ</span>
+                      <span style={{ color: 'var(--primary)', fontWeight: 600, minWidth: 80, textAlign: 'right' }}>{fmt(vs.totalFees)}đ</span>
                     </div>
                   ))}
                 </div>
@@ -470,7 +604,7 @@ const Reports: React.FC = () => {
                         paddingAngle={3}
                       >
                         {paymentMethods.byMethod.map((m) => (
-                          <Cell key={m.method} fill={METHOD_COLORS[m.method] ?? '#6750a4'} />
+                          <Cell key={m.method} fill={METHOD_COLORS[m.method] ?? 'var(--chart-accent-1)'} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(v: number) => `${fmt(v)}đ`} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 8px 24px rgba(19,27,44,0.12)' }} />
@@ -485,12 +619,12 @@ const Reports: React.FC = () => {
                         <div key={m.method}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
                             <span style={{ fontWeight: 600 }}>{m.label}</span>
-                            <span style={{ color: METHOD_COLORS[m.method] ?? '#6750a4', fontWeight: 700 }}>{pct}%</span>
+                            <span style={{ color: METHOD_COLORS[m.method] ?? 'var(--chart-accent-1)', fontWeight: 700 }}>{pct}%</span>
                           </div>
                           <Progress
                             percent={pct}
                             showInfo={false}
-                            strokeColor={METHOD_COLORS[m.method] ?? '#6750a4'}
+                            strokeColor={METHOD_COLORS[m.method] ?? 'var(--chart-accent-1)'}
                             trailColor="var(--surface-container)"
                             size={['100%', 8]}
                           />
@@ -541,8 +675,8 @@ const Reports: React.FC = () => {
                     <Cell
                       key={i}
                       fill={entry.count === Math.max(...hourlyChartData.map((d) => d.count))
-                        ? '#ba1a1a'
-                        : entry.count > 0 ? '#005daa' : '#eaecf6'}
+                        ? 'var(--error)'
+                        : entry.count > 0 ? 'var(--primary)' : 'var(--surface-container)'}
                     />
                   ))}
                 </Bar>
@@ -562,8 +696,8 @@ const Reports: React.FC = () => {
               <ResponsiveContainer width="100%" height={80}>
                 <RadialBarChart cx="50%" cy="50%" innerRadius="30%" outerRadius="90%"
                   data={[
-                    { name: 'Gửi lẻ', value: parkingRatio, fill: '#005daa' },
-                    { name: 'Vé tháng', value: packageRatio, fill: '#1a7a2e' },
+                    { name: 'Gửi lẻ', value: parkingRatio, fill: 'var(--primary)' },
+                    { name: 'Vé tháng', value: packageRatio, fill: 'var(--success)' },
                   ]}
                   startAngle={180} endAngle={0}
                 >
@@ -591,8 +725,8 @@ const Reports: React.FC = () => {
                 <Table.Summary fixed>
                   <Table.Summary.Row style={{ fontWeight: 700, background: 'var(--surface-container)' }}>
                     <Table.Summary.Cell index={0}>Tổng cộng</Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} align="right"><span style={{ color: '#005daa' }}>{fmt(totals.totalParkingRev)}</span></Table.Summary.Cell>
-                    <Table.Summary.Cell index={2} align="right"><span style={{ color: '#1a7a2e' }}>{fmt(totals.totalPackageRev)}</span></Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} align="right"><span style={{ color: 'var(--primary)' }}>{fmt(totals.totalParkingRev)}</span></Table.Summary.Cell>
+                    <Table.Summary.Cell index={2} align="right"><span style={{ color: 'var(--success)' }}>{fmt(totals.totalPackageRev)}</span></Table.Summary.Cell>
                     <Table.Summary.Cell index={3} align="right"><span style={{ color: 'var(--primary)', fontWeight: 700 }}>{fmt(totals.totalRevenue)}</span></Table.Summary.Cell>
                     <Table.Summary.Cell index={4} align="right">{totals.totalTransactions}</Table.Summary.Cell>
                   </Table.Summary.Row>
@@ -621,10 +755,7 @@ const Reports: React.FC = () => {
               <Button
                 size="small" icon={<FileExcelOutlined />}
                 disabled={!exceptionStats?.totalCount}
-                onClick={() => {
-                  if (!exceptionStats?.totalCount) return;
-                  exportExceptionExcel(exceptionStats, dateRange);
-                }}
+                onClick={previewExceptionExcel}
               >
                 Xuất Excel
               </Button>
@@ -639,23 +770,23 @@ const Reports: React.FC = () => {
                 {/* KPI row */}
                 <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
                   <Col xs={8}>
-                    <div style={{ textAlign: 'center', padding: '12px 0', background: '#fff1f0', borderRadius: 8 }}>
-                      <div style={{ fontSize: 26, fontWeight: 700, color: '#cf1322' }}>{exceptionStats.totalCount}</div>
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Tổng ca ngoại lệ</div>
+                    <div style={{ textAlign: 'center', padding: '12px 0', background: 'var(--error-container)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--error)' }}>{exceptionStats.totalCount}</div>
+                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>Tổng ca ngoại lệ</div>
                     </div>
                   </Col>
                   <Col xs={8}>
-                    <div style={{ textAlign: 'center', padding: '12px 0', background: '#fffbe6', borderRadius: 8 }}>
-                      <div style={{ fontSize: 26, fontWeight: 700, color: '#d46b08' }}>{exceptionStats.waivedCount}</div>
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Ca miễn phí</div>
+                    <div style={{ textAlign: 'center', padding: '12px 0', background: 'var(--warning-container)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--warning)' }}>{exceptionStats.waivedCount}</div>
+                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>Ca miễn phí</div>
                     </div>
                   </Col>
                   <Col xs={8}>
-                    <div style={{ textAlign: 'center', padding: '12px 0', background: '#e6f4ff', borderRadius: 8 }}>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: '#0958d9' }}>
+                    <div style={{ textAlign: 'center', padding: '12px 0', background: 'var(--info-container)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--info)' }}>
                         {fmt(exceptionStats.totalFeeImpact)}đ
                       </div>
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Phí ghi nhận</div>
+                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>Phí ghi nhận</div>
                     </div>
                   </Col>
                 </Row>
@@ -707,7 +838,7 @@ const Reports: React.FC = () => {
                         { title: 'Số ca', dataIndex: 'count', key: 'count', align: 'right' as const, render: (v: number) => <strong>{v}</strong> },
                         {
                           title: 'Phí ghi nhận', dataIndex: 'totalFeeWaived', key: 'totalFeeWaived', align: 'right' as const,
-                          render: (v: number) => <span style={{ color: '#0958d9' }}>{fmt(v)}đ</span>,
+                          render: (v: number) => <span style={{ color: 'var(--info)' }}>{fmt(v)}đ</span>,
                         },
                       ]}
                     />
@@ -747,6 +878,52 @@ const Reports: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <Modal
+        title={<span><EyeOutlined style={{ color: 'var(--primary)', marginRight: 8 }} />{exportPreview?.title}</span>}
+        open={!!exportPreview}
+        onCancel={() => setExportPreview(null)}
+        width={720}
+        footer={[
+          <Button key="cancel" onClick={() => setExportPreview(null)}>Hủy</Button>,
+          <Button
+            key="confirm" type="primary" icon={<DownloadOutlined />}
+            onClick={() => { exportPreview?.run(); setExportPreview(null); }}
+          >
+            {exportPreview?.confirmText}
+          </Button>,
+        ]}
+      >
+        {exportPreview && (
+          <div>
+            <Alert
+              type="info" showIcon
+              message={exportPreview.formatLabel}
+              style={{ marginBottom: 14, borderRadius: 8 }}
+            />
+            <Space wrap size={[8, 8]} style={{ marginBottom: 14 }}>
+              {exportPreview.summary.map((s) => (
+                <Tag key={s.label} color="blue" style={{ padding: '4px 10px' }}>
+                  {s.label}: <b>{s.value}</b>
+                </Tag>
+              ))}
+            </Space>
+            <Table
+              size="small"
+              columns={exportPreview.columns}
+              dataSource={exportPreview.data}
+              rowKey={(_, i) => String(i)}
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              footer={() => exportPreview.totalRows > exportPreview.data.length
+                ? <span style={{ color: 'var(--on-surface-variant)' }}>
+                    Xem trước {exportPreview.data.length}/{exportPreview.totalRows} dòng — file tải xuống sẽ có đầy đủ {exportPreview.totalRows} dòng
+                  </span>
+                : null}
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

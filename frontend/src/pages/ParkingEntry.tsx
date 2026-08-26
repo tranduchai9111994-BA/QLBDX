@@ -5,6 +5,7 @@ import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { VehicleType, ParkingSpot, Vehicle, ParkingEntryForm, ParkingRecord, PackageCheckResult, SmartLookupInsights, SmartLookupResult } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { formatDateTime, formatDate } from '../utils/dateFormat';
 
 const normalizeText = (value?: string) =>
   (value || '')
@@ -161,7 +162,7 @@ const ParkingEntry: React.FC = () => {
     { title: 'Loại xe', key: 'vehicleType', render: (_: any, r: ParkingRecord) => r.vehicleType?.name || '-' },
     { title: 'Chỗ đỗ', key: 'spot', render: (_: any, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
     { title: 'Khách hàng', key: 'customer', render: (_: any, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai' },
-    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => new Date(t).toLocaleString('vi-VN') },
+    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => formatDateTime(t) },
     {
       title: 'Thời gian đỗ', key: 'duration', render: (_: any, r: ParkingRecord) => {
         const mins = Math.ceil((Date.now() - new Date(r.entryTime).getTime()) / 60000);
@@ -195,7 +196,7 @@ const ParkingEntry: React.FC = () => {
           type="warning"
           showIcon
           message={`Gói dịch vụ sắp hết hạn — còn ${packageCheck.daysUntilExpiry} ngày`}
-          description={`Gói "${packageCheck.package?.parkingPackage?.name || 'vé tháng'}" hết hạn vào ${new Date(packageCheck.package!.endDate).toLocaleDateString('vi-VN')}. Vui lòng nhắc khách hàng gia hạn để tránh bị tính phí.`}
+          description={`Gói "${packageCheck.package?.parkingPackage?.name || 'vé tháng'}" hết hạn vào ${formatDate(packageCheck.package!.endDate)}. Vui lòng nhắc khách hàng gia hạn để tránh bị tính phí.`}
           style={{ marginBottom: 20, borderRadius: 8 }}
         />
       )}
@@ -204,7 +205,7 @@ const ParkingEntry: React.FC = () => {
         <Col xs={24} lg={14}>
           <Card>
             <Form form={form} layout="vertical" onFinish={onFinish}>
-              <Form.Item label="Biển số xe" name="licensePlate" rules={[{ required: true, message: 'Vui lòng nhập biển số xe' }, { pattern: /^\d{2}[A-Z]\d{4,5}$/, message: 'Biển số không đúng định dạng (VD: 29A87642)' }]}>
+              <Form.Item label="Biển số xe" name="licensePlate" rules={[{ required: true, message: 'Vui lòng nhập biển số xe' }, { pattern: /^(\d{2}[A-Z]{1,2}\d{4,6}|[A-Z]{2}\d{3,5})$/, message: 'Biển số không đúng định dạng (VD: 29A87642, 59FA2345, hoặc mã nội bộ như XD001)' }]}>
                 <Input placeholder="VD: 29A87642" onBlur={lookupPlate} style={{ textTransform: 'uppercase' }} />
               </Form.Item>
               <Form.Item label="Loại xe" name="vehicleTypeId" rules={[{ required: true, message: 'Vui lòng chọn loại xe' }]}>
@@ -267,7 +268,7 @@ const ParkingEntry: React.FC = () => {
               {smartInsights.hasActivePackage ? (
                 <div style={{ marginBottom: 8 }}>
                   Gói: <b>{smartInsights.packageName}</b>
-                  {smartInsights.packageExpiry && ` (hết hạn ${new Date(smartInsights.packageExpiry).toLocaleDateString('vi-VN')})`}
+                  {smartInsights.packageExpiry && ` (hết hạn ${formatDate(smartInsights.packageExpiry)})`}
                 </div>
               ) : smartInsights.isFrequent ? (
                 <Alert

@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Card, Modal, Form, Input, InputNumber, Select, message, Tag, Space } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, StopOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Table, Button, Card, Modal, Form, Input, InputNumber, Select, DatePicker, message, Tag, Space } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, StopOutlined, CheckCircleOutlined, ClockCircleOutlined, HistoryOutlined, UploadOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
+import dayjs from 'dayjs';
 import api from '../api/axios';
-import { ParkingPackage, VehicleType, PackageForm } from '../types';
-import { useAuth } from '../context/AuthContext';
+import { ParkingPackage, VehicleType, PackageForm, SchedulePriceChangeForm, PriceHistoryEntry } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import ImportModal, { ColumnDef, ReferenceSheet } from '../components/ImportModal';
+import StatusTag from '../components/StatusTag';
+import PermissionGate from '../components/PermissionGate';
+import FilterBar from '../components/FilterBar';
+import { confirmDanger } from '../utils/confirmDanger';
+import { defaultPagination } from '../utils/tablePagination';
 
 const Packages: React.FC = () => {
-  const { user } = useAuth();
   const { t } = useLanguage();
-  const canManage = user?.role === 'admin';
   const [packages, setPackages] = useState<ParkingPackage[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -57,6 +61,13 @@ const Packages: React.FC = () => {
   useEffect(() => { fetchData(); }, [filters]);
 
   const [submitting, setSubmitting] = useState(false);
+  const [scheduleTarget, setScheduleTarget] = useState<ParkingPackage | null>(null);
+  const [scheduleForm] = Form.useForm<SchedulePriceChangeForm>();
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<ParkingPackage | null>(null);
+  const [historyData, setHistoryData] = useState<PriceHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleSubmit = async (values: PackageForm) => {
     setSubmitting(true);
@@ -94,21 +105,13 @@ const Packages: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
-    Modal.confirm({
-      title: 'Xác nhận xóa',
+    confirmDanger({
       content: 'Nếu gói đã được sử dụng, hệ thống sẽ chặn xóa và yêu cầu ngừng áp dụng thay vì xóa cứng.',
-      okText: 'Xóa',
-      cancelText: 'Hủy',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await api.delete(`/packages/${id}`);
-          message.success('Xóa thành công');
-          fetchData();
-        } catch (err) {
-          const error = err as AxiosError<{ message: string }>;
-          message.error(error.response?.data?.message || 'Không thể xóa');
-        }
+      successMessage: 'Xóa thành công',
+      errorFallback: 'Không thể xóa',
+      onConfirm: async () => {
+        await api.delete(`/packages/${id}`);
+        fetchData();
       },
     });
   };
@@ -129,6 +132,105 @@ const Packages: React.FC = () => {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || 'Không thể cập nhật trạng thái gói');
     }
+  };
+
+  const openScheduleModal = (record: ParkingPackage) => {
+    setScheduleTarget(record);
+    scheduleForm.setFieldsValue({
+      price: record.price,
+      effectiveFrom: dayjs(),
+    });
+  };
+
+  const handleScheduleSubmit = async (values: SchedulePriceChangeForm) => {
+    if (!scheduleTarget) return;
+    setScheduleSubmitting(true);
+    try {
+      const res = await api.post(`/packages/${scheduleTarget.id}/price-changes`, {
+        price: values.price,
+        effectiveFrom: dayjs(values.effectiveFrom).toISOString(),
+      });
+      message.success(res.data.message);
+      setScheduleTarget(null);
+      scheduleForm.resetFields();
+      fetchData();
+    } catch (err) {
+      const error = err as AxiosError<{ message: string }>;
+      message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
+
+  const openHistoryModal = async (record: ParkingPackage) => {
+    setHistoryTarget(record);
+    setHistoryLoading(true);
+    try {
+      const res = await api.get<PriceHistoryEntry[]>(`/packages/${record.id}/price-changes`);
+      setHistoryData(res.data);
+    } catch {
+      message.error('Không tải được lịch sử giá');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  /* ── Import ─────────────────────────────────────────────────── */
+  const importColumns: ColumnDef[] = [
+    { key: 'name', label: 'Tên gói', required: true, example: 'Vé tháng xe máy' },
+    { key: 'vehicleType', label: 'Loại xe', required: true, example: '',
+      choices: vehicleTypes.map((vt) => vt.name), note: 'Xem sheet Lựa chọn' },
+    { key: 'durationDays', label: 'Thời hạn (ngày)', required: true, example: '30' },
+    { key: 'price', label: 'Giá (đ)', required: true, example: '200000' },
+    { key: 'description', label: 'Mô tả', required: false, example: 'Gói gửi xe máy theo tháng' },
+  ];
+
+  const importRefSheets: ReferenceSheet[] = [
+    {
+      name: 'DS Loại xe',
+      headers: ['Loại xe', 'Mô tả'],
+      rows: vehicleTypes.map((vt) => [vt.name, vt.description ?? '']),
+    },
+  ];
+
+  const handleImport = async (rows: Record<string, string>[]) => {
+    let success = 0;
+    const errors: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2;
+      if (!row.name || !row.vehicleType || !row.durationDays || !row.price) {
+        errors.push(`Dòng ${rowNum}: Thiếu Tên gói, Loại xe, Thời hạn hoặc Giá`);
+        continue;
+      }
+      const vt = vehicleTypes.find((vt) => vt.name.trim() === row.vehicleType.trim());
+      if (!vt) { errors.push(`Dòng ${rowNum}: Không tìm thấy loại xe "${row.vehicleType}"`); continue; }
+      const durationDays = Number(row.durationDays);
+      const price = Number(row.price);
+      if (!Number.isFinite(durationDays) || durationDays <= 0) {
+        errors.push(`Dòng ${rowNum}: Thời hạn "${row.durationDays}" không hợp lệ`);
+        continue;
+      }
+      if (!Number.isFinite(price) || price <= 0) {
+        errors.push(`Dòng ${rowNum}: Giá "${row.price}" không hợp lệ`);
+        continue;
+      }
+      try {
+        await api.post('/packages', {
+          name: row.name,
+          vehicleTypeId: vt.id,
+          durationDays,
+          price,
+          description: row.description || undefined,
+        });
+        success++;
+      } catch (err) {
+        const error = err as AxiosError<{ message: string }>;
+        errors.push(`Dòng ${rowNum}: ${error.response?.data?.message ?? 'Lỗi không xác định'}`);
+      }
+    }
+    if (success > 0) fetchData();
+    return { success, errors };
   };
 
   const resetFilters = () => {
@@ -154,24 +256,22 @@ const Packages: React.FC = () => {
       title: 'Trạng thái',
       dataIndex: 'isActive',
       key: 'isActive',
-      render: (isActive: boolean) => isActive ? <Tag color="green">Đang áp dụng</Tag> : <Tag>Ngừng áp dụng</Tag>,
+      render: (isActive: boolean) => <StatusTag domain="toggle" value={isActive} />,
     },
     {
-      title: 'Thao tác', key: 'action', width: 320, render: (_: any, r: ParkingPackage) => (
+      title: 'Thao tác', key: 'action', width: 420, render: (_: any, r: ParkingPackage) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {canManage ? (
-            <>
-              <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
-              {r.isActive ? (
-                <Button icon={<StopOutlined />} onClick={() => handleToggleActive(r, false)} size="small">Ngừng áp dụng</Button>
-              ) : (
-                <Button icon={<CheckCircleOutlined />} onClick={() => handleToggleActive(r, true)} size="small" type="primary" ghost>Kích hoạt lại</Button>
-              )}
-              <Button icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} size="small" danger>Xóa</Button>
-            </>
-          ) : (
-            <Tag color="default">Chỉ quản trị được sửa</Tag>
-          )}
+          <Button icon={<HistoryOutlined />} onClick={() => openHistoryModal(r)} size="small">Lịch sử giá</Button>
+          <PermissionGate adminOnly fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
+            <Button icon={<ClockCircleOutlined />} onClick={() => openScheduleModal(r)} size="small">Đặt lịch đổi giá</Button>
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
+            {r.isActive ? (
+              <Button icon={<StopOutlined />} onClick={() => handleToggleActive(r, false)} size="small">Ngừng áp dụng</Button>
+            ) : (
+              <Button icon={<CheckCircleOutlined />} onClick={() => handleToggleActive(r, true)} size="small" type="primary" ghost>Kích hoạt lại</Button>
+            )}
+            <Button icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} size="small" danger>Xóa</Button>
+          </PermissionGate>
         </div>
       ),
     },
@@ -180,78 +280,89 @@ const Packages: React.FC = () => {
   return (
     <div>
       <h2 className="page-title">{t('pagePackages')}</h2>
-      <Card>
-        <div className="toolbar">
-          <Space wrap>
-            <Input.Search
-              placeholder="Tìm tên gói, mô tả, loại xe..."
-              style={{ width: 320 }}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
-              allowClear
-            />
-            <Select
-              value={filters.vehicleTypeId}
-              allowClear
-              placeholder="Lọc theo loại xe"
-              style={{ width: 180 }}
-              onChange={(value) => setFilters((prev) => ({ ...prev, vehicleTypeId: value }))}
-              options={vehicleTypes.map((vehicleType) => ({
-                value: vehicleType.id,
-                label: vehicleType.name,
-              }))}
-            />
-            <Select
-              value={filters.status}
-              style={{ width: 180 }}
-              onChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-              options={[
-                { value: 'all', label: 'Tất cả trạng thái' },
-                { value: 'active', label: 'Đang áp dụng' },
-                { value: 'inactive', label: 'Ngừng áp dụng' },
-              ]}
-            />
-            <InputNumber
-              placeholder="Giá từ"
-              style={{ width: 130 }}
-              value={filters.minPrice}
-              onChange={(value) => setFilters((prev) => ({ ...prev, minPrice: value ?? undefined }))}
-              min={0}
-            />
-            <InputNumber
-              placeholder="Giá đến"
-              style={{ width: 130 }}
-              value={filters.maxPrice}
-              onChange={(value) => setFilters((prev) => ({ ...prev, maxPrice: value ?? undefined }))}
-              min={0}
-            />
-            <InputNumber
-              placeholder="Ngày từ"
-              style={{ width: 120 }}
-              value={filters.minDuration}
-              onChange={(value) => setFilters((prev) => ({ ...prev, minDuration: value ?? undefined }))}
-              min={1}
-            />
-            <InputNumber
-              placeholder="Ngày đến"
-              style={{ width: 120 }}
-              value={filters.maxDuration}
-              onChange={(value) => setFilters((prev) => ({ ...prev, maxDuration: value ?? undefined }))}
-              min={1}
-            />
-            <Button icon={<ReloadOutlined />} onClick={resetFilters}>Xóa bộ lọc</Button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <PermissionGate adminOnly>
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+              {t('btnAddPackage')}
+            </Button>
           </Space>
-          <div className="toolbar-right">
-            {canManage && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-                {t('btnAddPackage')}
-              </Button>
-            )}
-          </div>
-        </div>
-        <Table columns={columns} dataSource={packages} rowKey="id" loading={loading} />
+        </PermissionGate>
+      </div>
+      <div>
+        <FilterBar onReset={resetFilters}>
+          <Input.Search
+            placeholder="Tìm tên gói, mô tả, loại xe..."
+            style={{ width: 320 }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
+            allowClear
+          />
+          <Select
+            value={filters.vehicleTypeId}
+            allowClear
+            placeholder="Lọc theo loại xe"
+            style={{ width: 180 }}
+            onChange={(value) => setFilters((prev) => ({ ...prev, vehicleTypeId: value }))}
+            options={vehicleTypes.map((vehicleType) => ({
+              value: vehicleType.id,
+              label: vehicleType.name,
+            }))}
+          />
+          <Select
+            value={filters.status}
+            style={{ width: 180 }}
+            onChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+            options={[
+              { value: 'all', label: 'Tất cả trạng thái' },
+              { value: 'active', label: 'Đang áp dụng' },
+              { value: 'inactive', label: 'Ngừng áp dụng' },
+            ]}
+          />
+          <InputNumber
+            placeholder="Giá từ"
+            style={{ width: 130 }}
+            value={filters.minPrice}
+            onChange={(value) => setFilters((prev) => ({ ...prev, minPrice: value ?? undefined }))}
+            min={0}
+          />
+          <InputNumber
+            placeholder="Giá đến"
+            style={{ width: 130 }}
+            value={filters.maxPrice}
+            onChange={(value) => setFilters((prev) => ({ ...prev, maxPrice: value ?? undefined }))}
+            min={0}
+          />
+          <InputNumber
+            placeholder="Ngày từ"
+            style={{ width: 120 }}
+            value={filters.minDuration}
+            onChange={(value) => setFilters((prev) => ({ ...prev, minDuration: value ?? undefined }))}
+            min={1}
+          />
+          <InputNumber
+            placeholder="Ngày đến"
+            style={{ width: 120 }}
+            value={filters.maxDuration}
+            onChange={(value) => setFilters((prev) => ({ ...prev, maxDuration: value ?? undefined }))}
+            min={1}
+          />
+        </FilterBar>
+      </div>
+      <Card>
+        <Table columns={columns} dataSource={packages} rowKey="id" loading={loading} pagination={defaultPagination({ pageSize: 10 })} />
       </Card>
+
+      <ImportModal
+        open={importOpen}
+        title={t('menuPackages')}
+        columns={importColumns}
+        referenceSheets={importRefSheets}
+        onImport={handleImport}
+        onClose={() => setImportOpen(false)}
+      />
 
       <Modal
         title={editing ? 'Sửa gói dịch vụ' : 'Thêm gói dịch vụ'}
@@ -281,6 +392,59 @@ const Packages: React.FC = () => {
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={`Đặt lịch đổi giá — ${scheduleTarget?.name || ''}`}
+        open={!!scheduleTarget}
+        onCancel={() => { setScheduleTarget(null); scheduleForm.resetFields(); }}
+        onOk={() => scheduleForm.submit()}
+        okText="Lưu lịch đổi giá"
+        cancelText="Hủy"
+        okButtonProps={{ loading: scheduleSubmitting }}
+      >
+        <p style={{ color: 'var(--on-surface-variant)', marginBottom: 16 }}>
+          Chọn ngày hiệu lực là <b>hôm nay</b> để áp dụng ngay, hoặc chọn ngày trong tương lai để hệ thống
+          tự động áp dụng đúng ngày đó. Khách đã đăng ký gói giữ nguyên giá đã trả, không bị ảnh hưởng.
+        </p>
+        <Form form={scheduleForm} layout="vertical" onFinish={handleScheduleSubmit}>
+          <Form.Item name="price" label="Giá mới (đ)" rules={[{ required: true }]}>
+            <InputNumber style={{ width: '100%' }} min={0} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => (v ? Number(v.replace(/\$\s?|(,*)/g, '')) : 0) as any} />
+          </Form.Item>
+          <Form.Item name="effectiveFrom" label="Ngày hiệu lực" rules={[{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }]}>
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" disabledDate={(d) => d.isBefore(dayjs().startOf('day'))} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Lịch sử giá — ${historyTarget?.name || ''}`}
+        open={!!historyTarget}
+        onCancel={() => { setHistoryTarget(null); setHistoryData([]); }}
+        footer={null}
+        width={560}
+      >
+        <Table
+          size="small"
+          loading={historyLoading}
+          dataSource={historyData}
+          rowKey="id"
+          pagination={false}
+          columns={[
+            {
+              title: 'Trạng thái', key: 'state', width: 110,
+              render: (_: any, r: PriceHistoryEntry) => (
+                <Tag color={dayjs(r.effectiveFrom).isAfter(dayjs()) ? 'blue' : 'green'}>
+                  {dayjs(r.effectiveFrom).isAfter(dayjs()) ? 'Sắp áp dụng' : 'Đã áp dụng'}
+                </Tag>
+              ),
+            },
+            { title: 'Hiệu lực từ', dataIndex: 'effectiveFrom', key: 'effectiveFrom', render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
+            { title: 'Giá', dataIndex: 'price', key: 'price', render: (v: number) => Number(v).toLocaleString() + 'đ' },
+            { title: 'Người đổi', key: 'changer', render: (_: any, r: PriceHistoryEntry) => r.changer?.fullName || '-' },
+          ]}
+          locale={{ emptyText: 'Chưa có lịch sử đổi giá — giá hiện tại là giá gốc khi tạo gói' }}
+        />
       </Modal>
     </div>
   );

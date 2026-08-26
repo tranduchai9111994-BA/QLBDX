@@ -63,6 +63,8 @@ export class ParkingController {
         zoneId: req.query.zoneId ? Number(req.query.zoneId) : undefined,
         vehicleTypeId: req.query.vehicleTypeId ? Number(req.query.vehicleTypeId) : undefined,
         search: req.query.search as string | undefined,
+        page: req.query.page ? Number(req.query.page) : undefined,
+        pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
       });
       res.json(result);
     } catch (err: any) {

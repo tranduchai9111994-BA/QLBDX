@@ -6,6 +6,8 @@ import api from '../api/axios';
 import { ParkingSpot, ParkingZone, ParkingZoneForm, ParkingSpotForm, ParkingSpotUpdateForm } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { confirmDanger } from '../utils/confirmDanger';
+import { defaultPagination } from '../utils/tablePagination';
 
 const statusLabels: Record<string, string> = {
   available: 'Trống',
@@ -95,22 +97,15 @@ const ParkingSpots: React.FC = () => {
   };
 
   const handleDeleteZone = (id: number) => {
-    Modal.confirm({
+    confirmDanger({
       title: 'Xác nhận xóa khu vực',
       content: 'Nếu khu vực còn chỗ đỗ hoặc đã phát sinh lịch sử gửi xe, hệ thống sẽ chặn xóa để bảo toàn dữ liệu.',
-      okText: 'Xóa',
-      cancelText: 'Hủy',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await api.delete(`/parking-zones/${id}`);
-          message.success('Xóa khu vực thành công');
-          if (selectedZone === id) setSelectedZone(null);
-          fetchData();
-        } catch (err) {
-          const error = err as AxiosError<{ message: string }>;
-          message.error(error.response?.data?.message || 'Không thể xóa khu vực');
-        }
+      successMessage: 'Xóa khu vực thành công',
+      errorFallback: 'Không thể xóa khu vực',
+      onConfirm: async () => {
+        await api.delete(`/parking-zones/${id}`);
+        if (selectedZone === id) setSelectedZone(null);
+        fetchData();
       },
     });
   };
@@ -157,21 +152,14 @@ const ParkingSpots: React.FC = () => {
   };
 
   const handleDeleteSpot = (id: number) => {
-    Modal.confirm({
+    confirmDanger({
       title: 'Xác nhận xóa chỗ đỗ',
       content: 'Nếu chỗ đỗ đang được dùng hoặc đã có lịch sử, hệ thống sẽ chặn xóa.',
-      okText: 'Xóa',
-      cancelText: 'Hủy',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await api.delete(`/parking-spots/${id}`);
-          message.success('Xóa chỗ đỗ thành công');
-          fetchData();
-        } catch (err) {
-          const error = err as AxiosError<{ message: string }>;
-          message.error(error.response?.data?.message || 'Không thể xóa chỗ đỗ');
-        }
+      successMessage: 'Xóa chỗ đỗ thành công',
+      errorFallback: 'Không thể xóa chỗ đỗ',
+      onConfirm: async () => {
+        await api.delete(`/parking-spots/${id}`);
+        fetchData();
       },
     });
   };
@@ -308,7 +296,7 @@ const ParkingSpots: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <Table columns={spotColumns} dataSource={filteredSpotRows} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
+                <Table columns={spotColumns} dataSource={filteredSpotRows} rowKey="id" loading={loading} pagination={defaultPagination({ pageSize: 20 })} />
               </>
             ),
           },

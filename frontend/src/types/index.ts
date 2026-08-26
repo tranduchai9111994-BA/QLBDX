@@ -60,6 +60,25 @@ export interface VehicleTypeForm {
   monthlyRate: number;
 }
 
+export interface ScheduleRateChangeForm {
+  hourlyRate: number;
+  dailyRate: number;
+  monthlyRate: number;
+  effectiveFrom: any;
+}
+
+export interface RateHistoryEntry {
+  id: number;
+  vehicleTypeId: number;
+  hourlyRate: number;
+  dailyRate: number;
+  monthlyRate: number;
+  effectiveFrom: string;
+  changedBy?: number | null;
+  createdAt: string;
+  changer?: { fullName: string } | null;
+}
+
 // Vehicle
 export interface Vehicle {
   id: number;
@@ -142,6 +161,21 @@ export interface PackageForm {
   durationDays: number;
   price: number;
   description?: string;
+}
+
+export interface SchedulePriceChangeForm {
+  price: number;
+  effectiveFrom: any;
+}
+
+export interface PriceHistoryEntry {
+  id: number;
+  packageId: number;
+  price: number;
+  effectiveFrom: string;
+  changedBy?: number | null;
+  createdAt: string;
+  changer?: { fullName: string } | null;
 }
 
 // Customer Package

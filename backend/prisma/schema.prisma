@@ -19,9 +19,11 @@ model User {
   createdAt    DateTime  @default(now()) @map("CreatedAt")
   updatedAt    DateTime  @default(now()) @updatedAt @map("UpdatedAt")
 
-  parkingRecords ParkingRecord[] @relation("CreatedByUser")
-  payments       Payment[]       @relation("PaymentCreatedBy")
-  activityLogs   UserActivityLog[]
+  parkingRecords         ParkingRecord[]          @relation("CreatedByUser")
+  payments               Payment[]                @relation("PaymentCreatedBy")
+  activityLogs           UserActivityLog[]
+  vehicleTypeRateChanges VehicleTypeRateHistory[]
+  packagePriceChanges    PackagePriceHistory[]
 
   @@map("Users")
 }
@@ -55,8 +57,29 @@ model VehicleType {
   vehicles        Vehicle[]
   parkingPackages ParkingPackage[]
   parkingRecords  ParkingRecord[]
+  rateHistory     VehicleTypeRateHistory[]
 
   @@map("VehicleTypes")
+}
+
+/// Lịch sử giá theo giờ/ngày/tháng của 1 loại xe. Mỗi lần đổi giá (ngay hoặc đặt lịch
+/// cho tương lai) tạo 1 dòng mới — KHÔNG sửa đè các dòng cũ. "Giá hiện hành" = dòng có
+/// effectiveFrom lớn nhất mà effectiveFrom <= thời điểm hiện tại.
+model VehicleTypeRateHistory {
+  id            Int      @id @default(autoincrement()) @map("Id")
+  vehicleTypeId Int      @map("VehicleTypeId")
+  hourlyRate    Decimal  @map("HourlyRate") @db.Decimal(10, 2)
+  dailyRate     Decimal  @map("DailyRate") @db.Decimal(10, 2)
+  monthlyRate   Decimal  @map("MonthlyRate") @db.Decimal(10, 2)
+  effectiveFrom DateTime @map("EffectiveFrom")
+  changedBy     Int?     @map("ChangedBy")
+  createdAt     DateTime @default(now()) @map("CreatedAt")
+
+  vehicleType VehicleType @relation(fields: [vehicleTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changer     User?       @relation(fields: [changedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([vehicleTypeId, effectiveFrom])
+  @@map("VehicleTypeRateHistory")
 }
 
 model Vehicle {
@@ -75,6 +98,8 @@ model Vehicle {
   parkingRecords  ParkingRecord[]
   customerPackages CustomerPackage[]
 
+  @@index([customerId])
+  @@index([vehicleTypeId])
   @@map("Vehicles")
 }
 
@@ -102,6 +127,7 @@ model ParkingSpot {
   parkingRecords ParkingRecord[]
 
   @@unique([zoneId, spotNumber])
+  @@index([status])
   @@map("ParkingSpots")
 }
 
@@ -117,8 +143,27 @@ model ParkingPackage {
 
   vehicleType      VehicleType       @relation(fields: [vehicleTypeId], references: [id])
   customerPackages CustomerPackage[]
+  priceHistory     PackagePriceHistory[]
 
   @@map("ParkingPackages")
+}
+
+/// Lịch sử giá của 1 gói dịch vụ. Cùng nguyên tắc với VehicleTypeRateHistory: mỗi lần
+/// đổi giá tạo dòng mới, không sửa đè. Khách đã đăng ký gói giữ nguyên giá đã trả
+/// (xem Payment.amount) — đổi giá KHÔNG ảnh hưởng ngược các đăng ký đã có.
+model PackagePriceHistory {
+  id            Int      @id @default(autoincrement()) @map("Id")
+  packageId     Int      @map("PackageId")
+  price         Decimal  @map("Price") @db.Decimal(10, 2)
+  effectiveFrom DateTime @map("EffectiveFrom")
+  changedBy     Int?     @map("ChangedBy")
+  createdAt     DateTime @default(now()) @map("CreatedAt")
+
+  parkingPackage ParkingPackage @relation(fields: [packageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changer        User?          @relation(fields: [changedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([packageId, effectiveFrom])
+  @@map("PackagePriceHistory")
 }
 
 model CustomerPackage {
@@ -136,6 +181,11 @@ model CustomerPackage {
   vehicle        Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payments       Payment[]      @relation("PackagePayment")
 
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([status])
+  @@index([endDate])
+  @@index([startDate])
   @@map("CustomerPackages")
 }
 
@@ -149,6 +199,11 @@ model ParkingRecord {
   exitTime      DateTime? @map("ExitTime")
   duration      Int?      @map("Duration")
   fee           Decimal?  @map("Fee") @db.Decimal(10, 2)
+  /// Giá/giờ, giá/ngày CHỐT tại thời điểm xe vào bãi — dùng để tính phí lúc xe ra,
+  /// không bị ảnh hưởng nếu admin đổi giá VehicleType trong lúc xe đang đỗ.
+  /// Null với bản ghi cũ trước khi có tính năng này (fallback về giá VehicleType hiện tại).
+  hourlyRateApplied Decimal? @map("HourlyRateApplied") @db.Decimal(10, 2)
+  dailyRateApplied  Decimal? @map("DailyRateApplied") @db.Decimal(10, 2)
   status        String    @default("parked") @map("Status") @db.NVarChar(20)
   notes         String?   @map("Notes") @db.NVarChar(500)
   createdBy     Int?      @map("CreatedBy")
@@ -160,6 +215,14 @@ model ParkingRecord {
   creator     User?        @relation("CreatedByUser", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payments    Payment[]    @relation("ParkingPayment")
 
+  // Bảng lớn nhất hệ thống (tăng nhanh theo thời gian) — mọi query Dashboard/Báo cáo/
+  // Phân tích đều loc theo status/entryTime/exitTime, nên các index nay la bat buoc.
+  @@index([status, entryTime])
+  @@index([entryTime])
+  @@index([exitTime])
+  @@index([vehicleTypeId])
+  @@index([parkingSpotId])
+  @@index([vehicleId])
   @@map("ParkingRecords")
 }
 
@@ -179,6 +242,10 @@ model Payment {
   customerPackage CustomerPackage? @relation("PackagePayment", fields: [customerPackageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   creator         User?            @relation("PaymentCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([status, paidAt])
+  @@index([paidAt])
+  @@index([parkingRecordId])
+  @@index([customerPackageId])
   @@map("Payments")
 }
 
@@ -196,5 +263,28 @@ model UserActivityLog {
 
   user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([createdAt])
+  @@index([userId])
   @@map("UserActivityLogs")
+}
+
+/// Ngưỡng định nghĩa mức độ cảnh báo (nguy hiểm/cảnh báo/thông tin) — mỗi bãi xe có thể tự chỉnh
+/// vì "thế nào là nguy hiểm" khác nhau tuỳ khách hàng. Bảng dạng singleton, luôn dùng id = 1.
+model AlertSettings {
+  id                             Int      @id @default(1) @map("Id")
+  zoneNearFullAvailable          Int      @default(2) @map("ZoneNearFullAvailable")
+  zoneNearFullPercent            Float    @default(10) @map("ZoneNearFullPercent")
+  zoneImbalanceMaxPercent        Float    @default(90) @map("ZoneImbalanceMaxPercent")
+  zoneImbalanceMinPercent        Float    @default(30) @map("ZoneImbalanceMinPercent")
+  longParkingHours               Int      @default(24) @map("LongParkingHours")
+  parkingAnomalyMultiplier       Float    @default(3) @map("ParkingAnomalyMultiplier")
+  parkingAnomalyMinMinutes       Int      @default(60) @map("ParkingAnomalyMinMinutes")
+  suspiciousPaymentHighAmount    Decimal  @default(5000000) @map("SuspiciousPaymentHighAmount") @db.Decimal(12, 2)
+  suspiciousPaymentParkingAmount Decimal  @default(300000) @map("SuspiciousPaymentParkingAmount") @db.Decimal(12, 2)
+  revenueDropPercent             Float    @default(30) @map("RevenueDropPercent")
+  renewalFrequencyThreshold      Int      @default(5) @map("RenewalFrequencyThreshold")
+  updatedAt                      DateTime @default(now()) @updatedAt @map("UpdatedAt")
+  updatedBy                      Int?     @map("UpdatedBy")
+
+  @@map("AlertSettings")
 }

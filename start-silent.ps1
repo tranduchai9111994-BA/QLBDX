@@ -23,6 +23,18 @@ function Write-Log($message) {
 
 Write-Log "=== Khoi dong QLBDX (Fast=$Fast) ==="
 
+# 0) Fast-path: neu app da chay san (VD: bam icon lan 2, hoac chi dong tab trinh duyet
+#    truoc do), mo thang trinh duyet thay vi kill + khoi dong lai tu dau (tiet kiem 10-15s).
+#    exit 0 ngay khi phat hien da chay - khong chay tiep cac buoc ben duoi.
+try {
+    $already = Invoke-WebRequest http://127.0.0.1:3000 -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+    if ($already.StatusCode -lt 500) {
+        Write-Log "Frontend da chay san - mo trinh duyet ngay, khong khoi dong lai."
+        Start-Process 'http://localhost:3000'
+        exit 0
+    }
+} catch {}
+
 # 1) Dam bao SQL Server (MSSQLSERVER) dang chay — co the hien UAC neu dang tat
 $svc = Get-Service MSSQLSERVER -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -ne 'Running') {
@@ -78,14 +90,14 @@ Start-Process cmd.exe -ArgumentList '/c set BROWSER=none&& npm start' -WorkingDi
 # 6) Doi Frontend san sang (toi da 3 phut) roi tu mo trinh duyet
 Write-Log "Dang doi Frontend san sang..."
 $ok = $false
-for ($i = 0; $i -lt 90; $i++) {
-    Start-Sleep -Seconds 2
+for ($i = 0; $i -lt 180; $i++) {
     try {
         # Dung 127.0.0.1 thay vi localhost: Invoke-WebRequest co the treo vai giay khi
         # thu resolve "localhost" qua IPv6 truoc khi fallback IPv4.
-        $r = Invoke-WebRequest http://127.0.0.1:3000 -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+        $r = Invoke-WebRequest http://127.0.0.1:3000 -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
         if ($r.StatusCode -lt 500) { $ok = $true; break }
     } catch {}
+    Start-Sleep -Milliseconds 500
 }
 
 if ($ok) {

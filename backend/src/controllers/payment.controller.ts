@@ -18,7 +18,22 @@ export class PaymentController {
         search: req.query.search as string | undefined,
         minAmount: parseNumber(req.query.minAmount),
         maxAmount: parseNumber(req.query.maxAmount),
+        page: parseNumber(req.query.page),
+        pageSize: parseNumber(req.query.pageSize),
       });
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
+  async myShift(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await paymentService.myShiftSummary(
+        req.user!.id,
+        req.query.from as string | undefined,
+        req.query.to as string | undefined,
+      );
       res.json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });

@@ -4,14 +4,15 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, UploadOutli
 import { AxiosError } from 'axios';
 import api from '../api/axios';
 import { Vehicle, VehicleType, Customer, VehicleForm } from '../types';
-import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import ImportModal, { ColumnDef, ReferenceSheet } from '../components/ImportModal';
+import StatusTag from '../components/StatusTag';
+import PermissionGate from '../components/PermissionGate';
+import FilterBar from '../components/FilterBar';
+import { defaultPagination } from '../utils/tablePagination';
 
 const Vehicles: React.FC = () => {
-  const { user } = useAuth();
   const { t } = useLanguage();
-  const isAdmin = user?.role === 'admin';
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -171,20 +172,24 @@ const Vehicles: React.FC = () => {
     { title: t('colColor'), dataIndex: 'color', key: 'color', render: (v?: string) => v || '-' },
     {
       title: t('fieldStatus'), dataIndex: 'parkingStatus', key: 'parkingStatus',
-      render: (status?: string) => status === 'parked'
-        ? <Tag color="red">{t('statusParked')}</Tag>
-        : <Tag color="green">{t('statusOutside')}</Tag>,
+      render: (status?: string) => (
+        <StatusTag
+          domain="vehicleParking"
+          value={status === 'parked' ? 'parked' : 'outside'}
+          label={status === 'parked' ? t('statusParked') : t('statusOutside')}
+        />
+      ),
     },
     {
       title: t('fieldAction'), key: 'action', width: 220,
       render: (_: unknown, r: Vehicle) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
-          {isAdmin ? (
+          <PermissionGate adminOnly>
             <Popconfirm title={t('confirmDelete')} onConfirm={() => handleDelete(r.id)}>
               <Button icon={<DeleteOutlined />} danger size="small">{t('btnDelete')}</Button>
             </Popconfirm>
-          ) : null}
+          </PermissionGate>
         </div>
       ),
     },
@@ -193,69 +198,66 @@ const Vehicles: React.FC = () => {
   return (
     <div>
       <h2 className="page-title">{t('pageVehicles')}</h2>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <Space>
+          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+            {t('btnAddVehicle')}
+          </Button>
+        </Space>
+      </div>
+      <FilterBar onReset={resetFilters}>
+        <Input.Search
+          placeholder="Tìm biển số, chủ xe, hãng, model..."
+          style={{ width: 320 }}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
+          allowClear
+        />
+        <Select
+          value={filters.customerId}
+          allowClear
+          placeholder="Lọc theo khách hàng"
+          style={{ width: 220 }}
+          onChange={(value) => setFilters((prev) => ({ ...prev, customerId: value }))}
+          showSearch
+          filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+          options={customers.map((customer) => ({
+            value: customer.id,
+            label: `${customer.fullName} - ${customer.phone}`,
+          }))}
+        />
+        <Select
+          value={filters.vehicleTypeId}
+          allowClear
+          placeholder="Lọc theo loại xe"
+          style={{ width: 180 }}
+          onChange={(value) => setFilters((prev) => ({ ...prev, vehicleTypeId: value }))}
+          options={vehicleTypes.map((vehicleType) => ({
+            value: vehicleType.id,
+            label: vehicleType.name,
+          }))}
+        />
+        <Select
+          value={filters.parkingStatus}
+          allowClear
+          placeholder="Trạng thái xe"
+          style={{ width: 180 }}
+          onChange={(value) => setFilters((prev) => ({ ...prev, parkingStatus: value }))}
+          options={[
+            { value: 'parked', label: 'Đang trong bãi' },
+            { value: 'outside', label: 'Đang ở ngoài' },
+          ]}
+        />
+      </FilterBar>
       <Card>
-        <div className="toolbar">
-          <Space wrap>
-            <Input.Search
-              placeholder="Tìm biển số, chủ xe, hãng, model..."
-              style={{ width: 320 }}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onSearch={(value) => setFilters((prev) => ({ ...prev, search: value.trim() }))}
-              allowClear
-            />
-            <Select
-              value={filters.customerId}
-              allowClear
-              placeholder="Lọc theo khách hàng"
-              style={{ width: 220 }}
-              onChange={(value) => setFilters((prev) => ({ ...prev, customerId: value }))}
-              showSearch
-              filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-              options={customers.map((customer) => ({
-                value: customer.id,
-                label: `${customer.fullName} - ${customer.phone}`,
-              }))}
-            />
-            <Select
-              value={filters.vehicleTypeId}
-              allowClear
-              placeholder="Lọc theo loại xe"
-              style={{ width: 180 }}
-              onChange={(value) => setFilters((prev) => ({ ...prev, vehicleTypeId: value }))}
-              options={vehicleTypes.map((vehicleType) => ({
-                value: vehicleType.id,
-                label: vehicleType.name,
-              }))}
-            />
-            <Select
-              value={filters.parkingStatus}
-              allowClear
-              placeholder="Trạng thái xe"
-              style={{ width: 180 }}
-              onChange={(value) => setFilters((prev) => ({ ...prev, parkingStatus: value }))}
-              options={[
-                { value: 'parked', label: 'Đang trong bãi' },
-                { value: 'outside', label: 'Đang ở ngoài' },
-              ]}
-            />
-            <Button icon={<ReloadOutlined />} onClick={resetFilters}>Xóa bộ lọc</Button>
-          </Space>
-          <div className="toolbar-right">
-            <Space>
-              <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-                {t('btnAddVehicle')}
-              </Button>
-            </Space>
-          </div>
-        </div>
-        <Table columns={columns} dataSource={vehicles} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+        <Table columns={columns} dataSource={vehicles} rowKey="id" loading={loading} pagination={defaultPagination({ pageSize: 10 })} />
       </Card>
 
       <ImportModal
         open={importOpen}
-        title="Phương tiện"
+        title={t('menuVehicles')}
         columns={importColumns}
         referenceSheets={importRefSheets}
         onImport={handleImport}
@@ -283,7 +285,7 @@ const Vehicles: React.FC = () => {
               {vehicleTypes.map((vt) => <Select.Option key={vt.id} value={vt.id}>{vt.name}</Select.Option>)}
             </Select>
           </Form.Item>
-          <Form.Item name="licensePlate" label="Biển số xe" rules={[{ required: true, message: 'Vui lòng nhập biển số' }, { pattern: /^\d{2}[A-Z]\d{4,5}$/, message: 'Biển số không đúng định dạng (VD: 29A87642)' }]}>
+          <Form.Item name="licensePlate" label="Biển số xe" rules={[{ required: true, message: 'Vui lòng nhập biển số' }, { pattern: /^(\d{2}[A-Z]{1,2}\d{4,6}|[A-Z]{2}\d{3,5})$/, message: 'Biển số không đúng định dạng (VD: 29A87642, 59FA2345, hoặc mã nội bộ như XD001)' }]}>
             <Input placeholder="VD: 29A87642" style={{ textTransform: 'uppercase' }} onChange={(e) => form.setFieldsValue({ licensePlate: normalizePlate(e.target.value) })} />
           </Form.Item>
           <Form.Item name="brand" label="Hãng xe">

@@ -18,6 +18,9 @@ import {
   SCREEN_ROUTE_MAP,
 } from '../utils/permConfig';
 import { useLanguage } from '../context/LanguageContext';
+import StatusTag from '../components/StatusTag';
+import { confirmDanger } from '../utils/confirmDanger';
+import { defaultPagination } from '../utils/tablePagination';
 
 const ACCESS_LABEL: Record<AccessLevel, { text: string; color: string }> = {
   full:   { text: 'Đầy đủ',  color: '#52c41a' },
@@ -85,19 +88,12 @@ const Users: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
-    Modal.confirm({
-      title: 'Xác nhận xóa',
+    confirmDanger({
       content: 'Nếu người dùng đã phát sinh dữ liệu, hệ thống sẽ chuyển sang ngừng hoạt động thay vì xóa cứng.',
-      okText: 'Xóa', cancelText: 'Hủy',
-      onOk: async () => {
-        try {
-          await api.delete(`/users/${id}`);
-          message.success('Xóa thành công');
-          fetchUsers();
-        } catch (err) {
-          const error = err as AxiosError<{ message: string }>;
-          message.error(error.response?.data?.message || 'Có lỗi xảy ra');
-        }
+      successMessage: 'Xóa thành công',
+      onConfirm: async () => {
+        await api.delete(`/users/${id}`);
+        fetchUsers();
       },
     });
   };
@@ -148,9 +144,9 @@ const Users: React.FC = () => {
     },
     {
       title: t('fieldStatus'), dataIndex: 'isActive', key: 'isActive',
-      render: (v?: boolean) => v === false
-        ? <Tag color="default">{t('statusInactive')}</Tag>
-        : <Tag color="green">{t('statusActive')}</Tag>,
+      render: (v?: boolean) => (
+        <StatusTag domain="user" value={v !== false} label={v === false ? t('statusInactive') : t('statusActive')} />
+      ),
     },
     {
       title: t('fieldAction'), key: 'action', width: 180,
@@ -320,7 +316,7 @@ const Users: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-                <Table columns={columns} dataSource={filteredUsers} rowKey="id" loading={loading} />
+                <Table columns={columns} dataSource={filteredUsers} rowKey="id" loading={loading} pagination={defaultPagination({ pageSize: 10 })} />
               </Card>
             ),
           },

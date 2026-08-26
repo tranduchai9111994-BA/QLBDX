@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Card, DatePicker, Input, Tag, Button, Select, Space, message, Modal, Statistic, Row, Col, Alert } from 'antd';
-import { ReloadOutlined, SearchOutlined, HistoryOutlined } from '@ant-design/icons';
+import { SearchOutlined, HistoryOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/axios';
 import { ParkingRecord, ParkingZone, VehicleType } from '../types';
+import StatusTag from '../components/StatusTag';
+import FilterBar from '../components/FilterBar';
+import { defaultPagination } from '../utils/tablePagination';
+import { formatDateTime } from '../utils/dateFormat';
 
 const { RangePicker } = DatePicker;
 
@@ -14,6 +18,13 @@ interface Filters {
   search: string;
   zoneId?: number;
   vehicleTypeId?: number;
+}
+
+interface ParkingHistoryResponse {
+  data: ParkingRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 interface PlateHistoryResponse {
@@ -33,14 +44,15 @@ const ParkingHistory: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [plateInput, setPlateInput] = useState('');
   const [filters, setFilters] = useState<Filters>({ from: null, to: null, licensePlate: '', search: '' });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [plateModalOpen, setPlateModalOpen] = useState(false);
   const [plateLoading, setPlateLoading] = useState(false);
   const [plateHistory, setPlateHistory] = useState<PlateHistoryResponse | null>(null);
 
-  const fetchRecords = async () => {
+  const fetchRecords = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
-      const params: Record<string, string | number> = {};
+      const params: Record<string, string | number> = { page, pageSize };
       if (filters.from) params.from = filters.from;
       if (filters.to) params.to = filters.to;
       if (filters.licensePlate) params.licensePlate = filters.licensePlate;
@@ -48,11 +60,12 @@ const ParkingHistory: React.FC = () => {
       if (filters.zoneId) params.zoneId = filters.zoneId;
       if (filters.vehicleTypeId) params.vehicleTypeId = filters.vehicleTypeId;
       const [historyRes, zonesRes, vehicleTypesRes] = await Promise.all([
-        api.get<ParkingRecord[]>('/parking/history', { params }),
+        api.get<ParkingHistoryResponse>('/parking/history', { params }),
         api.get<ParkingZone[]>('/parking-zones'),
         api.get<VehicleType[]>('/vehicle-types'),
       ]);
-      setRecords(historyRes.data);
+      setRecords(historyRes.data.data);
+      setPagination({ current: historyRes.data.page, pageSize: historyRes.data.pageSize, total: historyRes.data.total });
       setZones(zonesRes.data);
       setVehicleTypes(vehicleTypesRes.data);
     } catch {
@@ -62,7 +75,8 @@ const ParkingHistory: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchRecords(); }, [filters]);
+  // Đổi bộ lọc -> quay về trang 1
+  useEffect(() => { fetchRecords(1, pagination.pageSize); }, [filters]);
 
   const lookupPlateHistory = async (plate?: string) => {
     const value = (plate || plateInput).trim();
@@ -99,8 +113,8 @@ const ParkingHistory: React.FC = () => {
     { title: 'Loại xe', key: 'vehicleTypeName', render: (_: unknown, r: ParkingRecord) => r.vehicleType?.name || '-' },
     { title: 'Chỗ đỗ', key: 'spot', render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
     { title: 'Khách', key: 'customer', render: (_: unknown, r: ParkingRecord) => r.vehicle?.customer?.fullName || 'Khách vãng lai' },
-    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => new Date(t).toLocaleString('vi-VN') },
-    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (t?: string) => t ? new Date(t).toLocaleString('vi-VN') : '-' },
+    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => formatDateTime(t) },
+    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (t?: string) => t ? formatDateTime(t) : '-' },
     { title: 'Thời gian (phút)', dataIndex: 'duration', key: 'duration' },
     { title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', render: (v?: number) => v ? Number(v).toLocaleString() : '0' },
     {
@@ -121,10 +135,10 @@ const ParkingHistory: React.FC = () => {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => status === 'parked' ? <Tag color="blue">Đang đỗ</Tag> : <Tag color="green">Đã ra</Tag>,
+      render: (status: string) => <StatusTag domain="parkingRecord" value={status} />,
     },
-    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => new Date(t).toLocaleString('vi-VN') },
-    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (t?: string) => t ? new Date(t).toLocaleString('vi-VN') : '-' },
+    { title: 'Giờ vào', dataIndex: 'entryTime', key: 'entryTime', render: (t: string) => formatDateTime(t) },
+    { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', render: (t?: string) => t ? formatDateTime(t) : '-' },
     { title: 'Chỗ đỗ', key: 'spot', render: (_: unknown, r: ParkingRecord) => r.parkingSpot ? `${r.parkingSpot.zone?.name} — ${r.parkingSpot.spotNumber}` : '-' },
     { title: 'Phí (đ)', dataIndex: 'fee', key: 'fee', render: (v?: number) => v ? Number(v).toLocaleString() : '0' },
     {
@@ -179,42 +193,40 @@ const ParkingHistory: React.FC = () => {
         </Space>
       </Card>
 
+      <FilterBar onReset={resetFilters}>
+        <RangePicker
+          value={filters.from && filters.to ? [dayjs(filters.from), dayjs(filters.to)] : undefined}
+          onChange={handleDateChange}
+          format="DD/MM/YYYY"
+          placeholder={['Từ ngày', 'Đến ngày']}
+        />
+        <Input.Search
+          placeholder="Tìm biển số, khách, khu, ghi chú..."
+          style={{ width: 280 }}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onSearch={(value) => setFilters({ ...filters, search: value.trim(), licensePlate: '' })}
+          allowClear
+        />
+        <Select
+          value={filters.zoneId}
+          allowClear
+          placeholder="Lọc theo khu"
+          style={{ width: 180 }}
+          onChange={(value) => setFilters({ ...filters, zoneId: value })}
+          options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
+        />
+        <Select
+          value={filters.vehicleTypeId}
+          allowClear
+          placeholder="Lọc theo loại xe"
+          style={{ width: 180 }}
+          onChange={(value) => setFilters({ ...filters, vehicleTypeId: value })}
+          options={vehicleTypes.map((vehicleType) => ({ value: vehicleType.id, label: vehicleType.name }))}
+        />
+      </FilterBar>
+
       <Card>
-        <div className="toolbar">
-          <Space wrap>
-            <RangePicker
-              value={filters.from && filters.to ? [dayjs(filters.from), dayjs(filters.to)] : undefined}
-              onChange={handleDateChange}
-              format="DD/MM/YYYY"
-              placeholder={['Từ ngày', 'Đến ngày']}
-            />
-            <Input.Search
-              placeholder="Tìm biển số, khách, khu, ghi chú..."
-              style={{ width: 280 }}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onSearch={(value) => setFilters({ ...filters, search: value.trim(), licensePlate: '' })}
-              allowClear
-            />
-            <Select
-              value={filters.zoneId}
-              allowClear
-              placeholder="Lọc theo khu"
-              style={{ width: 180 }}
-              onChange={(value) => setFilters({ ...filters, zoneId: value })}
-              options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
-            />
-            <Select
-              value={filters.vehicleTypeId}
-              allowClear
-              placeholder="Lọc theo loại xe"
-              style={{ width: 180 }}
-              onChange={(value) => setFilters({ ...filters, vehicleTypeId: value })}
-              options={vehicleTypes.map((vehicleType) => ({ value: vehicleType.id, label: vehicleType.name }))}
-            />
-            <Button icon={<ReloadOutlined />} onClick={resetFilters}>Xóa bộ lọc</Button>
-          </Space>
-        </div>
         {filters.licensePlate && (
           <Alert
             type="info"
@@ -224,7 +236,18 @@ const ParkingHistory: React.FC = () => {
             action={<Button size="small" onClick={() => setFilters({ ...filters, licensePlate: '' })}>Bỏ lọc biển số</Button>}
           />
         )}
-        <Table columns={columns} dataSource={records} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
+        <Table
+          columns={columns}
+          dataSource={records}
+          rowKey="id"
+          loading={loading}
+          pagination={defaultPagination({
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+          })}
+          onChange={(p) => fetchRecords(p.current || 1, p.pageSize || pagination.pageSize)}
+        />
       </Card>
 
       <Modal

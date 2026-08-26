@@ -13,6 +13,7 @@ import paymentRoutes from './payment.routes';
 import reportRoutes from './report.routes';
 import activityLogRoutes from './activityLog.routes';
 import analyticsRoutes from './analytics.routes';
+import alertSettingsRoutes from './alertSettings.routes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/payments', paymentRoutes);
 router.use('/reports', reportRoutes);
 router.use('/activity-logs', activityLogRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/alert-settings', alertSettingsRoutes);
 
 export default router;
