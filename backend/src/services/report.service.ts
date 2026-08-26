@@ -1,5 +1,6 @@
 import prisma from '../config/prisma';
 import { alertSettingsService } from './alertSettings.service';
+import { alertRuleTierService } from './alertRuleTier.service';
 import { formatDateTimeVN, formatDateVN } from '../utils/formatDate';
 
 export class ReportService {
@@ -325,14 +326,24 @@ export class ReportService {
 
   async getAlerts(longParkingHoursOverride?: number) {
     const settings = await alertSettingsService.get();
-    const longParkingHours = longParkingHoursOverride ?? settings.longParkingHours;
+    const tiers = await alertRuleTierService.getAllGrouped();
+    const evalTier = (ruleType: Parameters<typeof alertRuleTierService.evaluate>[0], value: number) =>
+      alertRuleTierService.evaluate(ruleType, value, tiers);
+
+    // Ngưỡng thấp nhất của "Xe đỗ quá lâu" quyết định câu query DB (lấy candidate) — nếu admin
+    // chưa cấu hình mốc nào, coi như tắt tính năng này (không query, không báo).
+    const longParkingTierThresholds = (tiers.longParkingHours || []).map((t) => t.threshold);
+    const longParkingHours = longParkingHoursOverride ?? (longParkingTierThresholds.length ? Math.min(...longParkingTierThresholds) : null);
+
+    const suspiciousPaymentTierThresholds = (tiers.suspiciousPaymentAmount || []).map((t) => t.threshold);
+    const suspiciousPaymentGate = suspiciousPaymentTierThresholds.length ? Math.min(...suspiciousPaymentTierThresholds) : null;
 
     const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const next7Days = new Date(today);
     next7Days.setDate(next7Days.getDate() + 7);
-    const longParkingThreshold = new Date(now.getTime() - longParkingHours * 60 * 60 * 1000);
+    const longParkingThreshold = longParkingHours != null ? new Date(now.getTime() - longParkingHours * 60 * 60 * 1000) : null;
     const since30 = new Date(now);
     since30.setDate(since30.getDate() - 30);
     const yesterdayStart = new Date(today);
@@ -387,24 +398,26 @@ export class ReportService {
         },
         orderBy: { id: 'asc' },
       }),
-      prisma.parkingRecord.findMany({
-        where: {
-          status: 'parked',
-          entryTime: { lte: longParkingThreshold },
-        },
-        include: {
-          vehicle: { select: { customer: { select: { fullName: true } } } },
-          parkingSpot: {
-            select: {
-              spotNumber: true,
-              zone: { select: { name: true } },
+      longParkingThreshold
+        ? prisma.parkingRecord.findMany({
+            where: {
+              status: 'parked',
+              entryTime: { lte: longParkingThreshold },
             },
-          },
-          vehicleType: { select: { name: true } },
-        },
-        orderBy: { entryTime: 'asc' },
-        take: 20,
-      }),
+            include: {
+              vehicle: { select: { customer: { select: { fullName: true } } } },
+              parkingSpot: {
+                select: {
+                  spotNumber: true,
+                  zone: { select: { name: true } },
+                },
+              },
+              vehicleType: { select: { name: true } },
+            },
+            orderBy: { entryTime: 'asc' },
+            take: 20,
+          })
+        : Promise.resolve([]),
       prisma.parkingSpot.findMany({
         where: {
           status: 'occupied',
@@ -422,7 +435,7 @@ export class ReportService {
         where: {
           OR: [
             { amount: { lte: 0 } },
-            { amount: { gte: Number(settings.suspiciousPaymentHighAmount) } },
+            ...(suspiciousPaymentGate != null ? [{ amount: { gte: suspiciousPaymentGate } }] : []),
             {
               paymentType: 'parking',
               amount: { gte: Number(settings.suspiciousPaymentParkingAmount) },
@@ -472,19 +485,18 @@ export class ReportService {
       .map((record) => {
         const currentMinutes = Math.ceil((now.getTime() - new Date(record.entryTime).getTime()) / 60000);
         const avgMinutes = avgDurationByType.get(record.vehicleTypeId) || 0;
-        if (
-          avgMinutes <= 0 ||
-          currentMinutes <= avgMinutes * settings.parkingAnomalyMultiplier ||
-          currentMinutes < settings.parkingAnomalyMinMinutes
-        ) return null;
+        if (avgMinutes <= 0 || currentMinutes < settings.parkingAnomalyMinMinutes) return null;
+        const multiplier = currentMinutes / avgMinutes;
+        const severity = evalTier('parkingAnomalyMultiplier', multiplier);
+        if (!severity) return null;
         const currentHours = (currentMinutes / 60).toFixed(1);
         const avgHours = (avgMinutes / 60).toFixed(1);
         return {
           id: `parking-anomaly-${record.id}`,
-          severity: 'warning',
+          severity,
           category: 'parking',
           title: 'Xe đỗ bất thường',
-          description: `${record.licensePlate} (${record.vehicleType.name}) đã đỗ ${currentHours}h, gấp hơn ${settings.parkingAnomalyMultiplier} lần trung bình ${avgHours}h của loại xe này. Cần kiểm tra.`,
+          description: `${record.licensePlate} (${record.vehicleType.name}) đã đỗ ${currentHours}h, gấp ${multiplier.toFixed(1)} lần trung bình ${avgHours}h của loại xe này. Cần kiểm tra.`,
           occurredAt: record.entryTime,
           relatedPath: '/parking/history',
           smartLevel: 'rule_based',
@@ -500,10 +512,11 @@ export class ReportService {
     const revenueChangeAlerts: any[] = [];
     if (yesterdayRevenue > 0) {
       const changePercent = ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
-      if (changePercent <= -settings.revenueDropPercent) {
+      const dropSeverity = changePercent < 0 ? evalTier('revenueDropPercent', Math.abs(changePercent)) : null;
+      if (dropSeverity) {
         revenueChangeAlerts.push({
           id: 'revenue-change-today',
-          severity: 'warning',
+          severity: dropSeverity,
           category: 'revenue',
           title: 'Biến động doanh thu',
           description: `Doanh thu hôm nay (tính đến ${formatDateTimeVN(now)}) là ${todayRevenue.toLocaleString('vi-VN')}đ, thấp hơn ${Math.abs(Math.round(changePercent))}% so với cùng thời điểm hôm qua (${yesterdayRevenue.toLocaleString('vi-VN')}đ).`,
@@ -529,11 +542,12 @@ export class ReportService {
     const renewalOpportunityAlerts = expiringPackages
       .map((pkg) => {
         const frequency = freqByVehicleId.get(pkg.vehicleId) || 0;
-        if (frequency < settings.renewalFrequencyThreshold) return null;
+        const severity = evalTier('renewalFrequency', frequency);
+        if (!severity) return null;
         const daysLeft = Math.ceil((new Date(pkg.endDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         return {
           id: `renewal-opportunity-${pkg.id}`,
-          severity: 'info',
+          severity,
           category: 'package',
           title: 'Cơ hội gia hạn',
           description: `${pkg.customer?.fullName || 'Khách hàng'} có gói sắp hết (còn ${daysLeft} ngày), tần suất đỗ ${frequency} lần/tháng — nên liên hệ gia hạn.`,
@@ -558,14 +572,13 @@ export class ReportService {
     if (zoneStats.length >= 2) {
       const maxZone = zoneStats.reduce((a, b) => (b.occupancyRate > a.occupancyRate ? b : a));
       const minZone = zoneStats.reduce((a, b) => (b.occupancyRate < a.occupancyRate ? b : a));
-      if (
-        maxZone.name !== minZone.name &&
-        maxZone.occupancyRate > settings.zoneImbalanceMaxPercent / 100 &&
-        minZone.occupancyRate < settings.zoneImbalanceMinPercent / 100
-      ) {
+      const imbalanceSeverity = maxZone.name !== minZone.name && minZone.occupancyRate < settings.zoneImbalanceMinPercent / 100
+        ? evalTier('zoneImbalanceMaxPercent', maxZone.occupancyRate * 100)
+        : null;
+      if (imbalanceSeverity) {
         zoneImbalanceAlerts.push({
           id: 'zone-imbalance',
-          severity: 'warning',
+          severity: imbalanceSeverity,
           category: 'parking',
           title: 'Mất cân bằng khu vực',
           description: `${maxZone.name} quá tải (${Math.round(maxZone.occupancyRate * 100)}%), ${minZone.name} còn trống nhiều (${Math.round(minZone.occupancyRate * 100)}% đã dùng). Cân nhắc điều phối.`,
@@ -582,6 +595,17 @@ export class ReportService {
         });
       }
     }
+
+    // Mốc "lỏng nhất" (ít nghiêm trọng nhất còn cấu hình) — dùng làm mức độ dự phòng khi 1 tình
+    // huống được phát hiện qua ngưỡng phụ (VD: số chỗ trống tuyệt đối) chứ không qua % chính.
+    const zoneNearFullTiers = tiers.zoneNearFullPercent || [];
+    const loosestZoneNearFullSeverity = zoneNearFullTiers.length
+      ? zoneNearFullTiers.reduce((a, b) => (b.threshold > a.threshold ? b : a)).severity
+      : null;
+    const suspiciousPaymentTiers = tiers.suspiciousPaymentAmount || [];
+    const loosestSuspiciousPaymentSeverity = suspiciousPaymentTiers.length
+      ? suspiciousPaymentTiers.reduce((a, b) => (b.threshold < a.threshold ? b : a)).severity
+      : null;
 
     const alerts = [
       ...expiringPackages.map((pkg) => ({
@@ -610,7 +634,7 @@ export class ReportService {
           if (available === 0) {
             return {
               id: `zone-full-${zone.id}`,
-              severity: 'danger',
+              severity: settings.zoneFullSeverity,
               category: 'parking',
               title: 'Khu vực đã đầy',
               description: `${zone.name} hiện không còn chỗ trống (${total}/${total} chỗ đang sử dụng hoặc bảo trì).`,
@@ -618,10 +642,15 @@ export class ReportService {
               relatedPath: '/parking-spots',
             };
           }
-          if (available <= settings.zoneNearFullAvailable || available / total <= settings.zoneNearFullPercent / 100) {
+          const nearFullPercent = (available / total) * 100;
+          let nearFullSeverity = evalTier('zoneNearFullPercent', nearFullPercent);
+          if (!nearFullSeverity && available <= settings.zoneNearFullAvailable) {
+            nearFullSeverity = loosestZoneNearFullSeverity;
+          }
+          if (nearFullSeverity) {
             return {
               id: `zone-near-full-${zone.id}`,
-              severity: 'warning',
+              severity: nearFullSeverity,
               category: 'parking',
               title: 'Khu vực sắp đầy',
               description: `${zone.name} chỉ còn ${available}/${total} chỗ trống.`,
@@ -632,15 +661,20 @@ export class ReportService {
           return null;
         })
         .filter(Boolean),
-      ...longParkedRecords.map((record) => ({
-        id: `parking-long-${record.id}`,
-        severity: 'warning',
-        category: 'parking',
-        title: 'Xe đỗ quá lâu',
-        description: `${record.licensePlate} (${record.vehicleType.name}) đã ở trong bãi từ ${formatDateTimeVN(record.entryTime)} tại ${record.parkingSpot?.zone?.name || 'khu chưa rõ'} - ${record.parkingSpot?.spotNumber || 'chưa gán chỗ'}.`,
-        occurredAt: record.entryTime,
-        relatedPath: '/parking/history',
-      })),
+      ...longParkedRecords.map((record) => {
+        const hoursParked = (now.getTime() - new Date(record.entryTime).getTime()) / 3600000;
+        const severity = evalTier('longParkingHours', hoursParked);
+        if (!severity) return null;
+        return {
+          id: `parking-long-${record.id}`,
+          severity,
+          category: 'parking',
+          title: 'Xe đỗ quá lâu',
+          description: `${record.licensePlate} (${record.vehicleType.name}) đã ở trong bãi từ ${formatDateTimeVN(record.entryTime)} tại ${record.parkingSpot?.zone?.name || 'khu chưa rõ'} - ${record.parkingSpot?.spotNumber || 'chưa gán chỗ'}.`,
+          occurredAt: record.entryTime,
+          relatedPath: '/parking/history',
+        };
+      }),
       ...inconsistentOccupiedSpots.map((spot) => ({
         id: `spot-inconsistent-${spot.id}`,
         severity: 'danger',
@@ -650,15 +684,28 @@ export class ReportService {
         occurredAt: now,
         relatedPath: '/parking-spots',
       })),
-      ...suspiciousPayments.map((payment) => ({
-        id: `payment-suspicious-${payment.id}`,
-        severity: Number(payment.amount) <= 0 ? 'danger' : 'warning',
-        category: 'payment',
-        title: 'Thanh toán bất thường',
-        description: `Giao dịch #${payment.id} có số tiền ${Number(payment.amount).toLocaleString('vi-VN')}đ cho xe ${payment.parkingRecord?.licensePlate || payment.customerPackage?.vehicle?.licensePlate || 'không rõ'} .`,
-        occurredAt: payment.paidAt,
-        relatedPath: '/payments',
-      })),
+      ...suspiciousPayments.map((payment) => {
+        const amount = Number(payment.amount);
+        let severity: string | null;
+        if (amount <= 0) {
+          severity = 'danger';
+        } else {
+          severity = evalTier('suspiciousPaymentAmount', amount);
+          if (!severity && payment.paymentType === 'parking' && amount >= Number(settings.suspiciousPaymentParkingAmount)) {
+            severity = loosestSuspiciousPaymentSeverity;
+          }
+        }
+        if (!severity) return null;
+        return {
+          id: `payment-suspicious-${payment.id}`,
+          severity,
+          category: 'payment',
+          title: 'Thanh toán bất thường',
+          description: `Giao dịch #${payment.id} có số tiền ${amount.toLocaleString('vi-VN')}đ cho xe ${payment.parkingRecord?.licensePlate || payment.customerPackage?.vehicle?.licensePlate || 'không rõ'} .`,
+          occurredAt: payment.paidAt,
+          relatedPath: '/payments',
+        };
+      }),
       ...parkingAnomalyAlerts,
       ...revenueChangeAlerts,
       ...renewalOpportunityAlerts,

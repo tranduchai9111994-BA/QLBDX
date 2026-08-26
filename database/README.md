@@ -93,6 +93,16 @@ Dữ liệu trải dài từ 01/2024 đến hiện tại, có **xu hướng tăn
 — cần thiết để Dashboard (so sánh tuần, xu hướng 7 ngày), Báo cáo (nhóm theo năm) và Phân tích & Gợi ý
 (kỳ quý/năm) hiển thị số liệu thực tế thay vì gần như trống.
 
+### Nếu app đã chạy demo lâu ngày — xe "đang đỗ" hiện đỗ hàng trăm giờ
+
+Dữ liệu demo "xe đang đỗ" được ghi với giờ vào tương đối lúc seed chạy — nếu instance demo đã
+chạy sẵn nhiều tuần mà không có ai "cho xe ra" thật, các xe này sẽ trông như đỗ cả tháng trời.
+Chạy lệnh sau để tự động "cho xe ra" phần lớn và chỉ giữ lại vài xe với giờ vào hợp lý:
+
+```bash
+npm run prisma:fix-stale-parked
+```
+
 ---
 
 ## File scripts
@@ -103,6 +113,7 @@ Dữ liệu trải dài từ 01/2024 đến hiện tại, có **xu hướng tăn
 | `demo_business_patch.sql` | Bổ sung/sync dữ liệu demo rule nghiệp vụ |
 | `backend/prisma/seed.ts` | Seed tài khoản + danh mục + dữ liệu demo cơ bản (chạy qua `npm run prisma:seed`) |
 | `backend/prisma/seedHistoricalData.ts` | Bồi đắp dữ liệu nhiều năm cho Dashboard/Báo cáo thực tế (`npm run prisma:seed-history`) |
+| `backend/prisma/fixStaleParkedDemo.ts` | Dọn xe "đang đỗ" demo bị coi là đỗ quá lâu do instance chạy nhiều tuần (`npm run prisma:fix-stale-parked`) |
 
 ---
 

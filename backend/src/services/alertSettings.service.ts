@@ -1,17 +1,13 @@
 import prisma from '../config/prisma';
 
+const VALID_SEVERITIES = ['danger', 'warning', 'info'];
+
 export type AlertSettingsInput = Partial<{
   zoneNearFullAvailable: number;
-  zoneNearFullPercent: number;
-  zoneImbalanceMaxPercent: number;
   zoneImbalanceMinPercent: number;
-  longParkingHours: number;
-  parkingAnomalyMultiplier: number;
   parkingAnomalyMinMinutes: number;
-  suspiciousPaymentHighAmount: number;
   suspiciousPaymentParkingAmount: number;
-  revenueDropPercent: number;
-  renewalFrequencyThreshold: number;
+  zoneFullSeverity: string;
 }>;
 
 class AlertSettingsService {
@@ -23,6 +19,11 @@ class AlertSettingsService {
   }
 
   async update(data: AlertSettingsInput, updatedBy?: number) {
+    if (data.zoneFullSeverity !== undefined && !VALID_SEVERITIES.includes(data.zoneFullSeverity)) {
+      const err: any = new Error(`Mức độ không hợp lệ: ${data.zoneFullSeverity}`);
+      err.status = 400;
+      throw err;
+    }
     await this.get(); // đảm bảo bản ghi đã tồn tại trước khi update
     return prisma.alertSettings.update({
       where: { id: 1 },

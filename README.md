@@ -1,5 +1,7 @@
 # Hệ thống Quản lý Bãi Đỗ Xe (QLBDX)
 
+> Cập nhật gần nhất — xem **[CAP_NHAT_2026-08-26.md](CAP_NHAT_2026-08-26.md)** để biết thay đổi mới nhất, cách cập nhật code/database cho máy đã cài trước đó.
+
 ## Công nghệ sử dụng
 
 | Phần | Công nghệ |
@@ -23,7 +25,7 @@
 **Lần sau (đã có node_modules):**
 - Double-click **`start-fast.bat`** → khởi động nhanh, không kiểm tra dependency
 
-> `start.bat`/`start-fast.bat` chạy **hoàn toàn ẩn** (không mở cửa sổ CMD) — Backend + Frontend chạy ngầm, log ghi vào `logs/`. Trình duyệt tự mở khi hệ thống sẵn sàng (~10-90 giây tuỳ lần đầu hay không). Muốn dừng: chạy `stop.bat`.
+> `start.bat`/`start-fast.bat` chạy **hoàn toàn ẩn** (không mở cửa sổ CMD) — Backend + Frontend chạy ngầm, log ghi vào `logs/`. Nếu hệ thống **đã chạy sẵn** (VD: bấm icon lần 2), trình duyệt mở lại gần như ngay lập tức; nếu khởi động lần đầu/mới tắt hẳn thì mất ~10-90 giây tuỳ máy. Muốn dừng: chạy `stop.bat`.
 
 ---
 
@@ -69,6 +71,7 @@ npm start            # http://localhost:3000
 cd backend
 npm run prisma:seed          # Seed tài khoản + danh mục + dữ liệu demo cơ bản
 npm run prisma:seed-history  # Bồi đắp dữ liệu lịch sử nhiều năm (2024 → nay) cho Dashboard/Báo cáo thực tế
+npm run prisma:fix-stale-parked  # Nếu app đã chạy demo lâu ngày, xe "đang đỗ" bị coi là đỗ quá lâu — chạy lệnh này để làm mới
 ```
 
 ---
@@ -86,7 +89,7 @@ npm run prisma:seed-history  # Bồi đắp dữ liệu lịch sử nhiều năm
 | **Lịch sử biển số** | Tra cứu toàn bộ lịch sử + checkout ngoại lệ theo biển số |
 | **Thanh toán** | Tự sinh khi xe ra/mua gói, xuất Excel/CSV/in PDF |
 | **Báo cáo** | Doanh thu theo ngày/tháng/năm, phân loại xe, PTTT, xuất Excel |
-| **Cảnh báo** | Gói sắp hết hạn, bãi sắp đầy, xe đỗ quá lâu, dữ liệu lệch |
+| **Cảnh báo** | Gói sắp hết hạn, bãi sắp đầy, xe đỗ quá lâu, dữ liệu lệch — **ngưỡng và mức độ (Nguy hiểm/Cảnh báo/Thông tin) tự cấu hình được**, mỗi loại có thể đặt nhiều mốc (VD: >=48h = Nguy hiểm, >=24h = Cảnh báo) |
 | **Phân quyền** | Admin: toàn quyền; Staff: vận hành (xe vào/ra, khách, gói) |
 | **Nhật ký** | Ghi log mọi thao tác: ai làm gì, lúc nào, kết quả gì |
 
@@ -123,19 +126,24 @@ QLBDX/
 │   ├── prisma/
 │   │   ├── schema.prisma          # Data model
 │   │   ├── seed.ts                # Dữ liệu demo cơ bản
-│   │   └── seedHistoricalData.ts  # Bồi đắp dữ liệu nhiều năm (2024 → nay)
+│   │   ├── seedHistoricalData.ts  # Bồi đắp dữ liệu nhiều năm (2024 → nay)
+│   │   └── fixStaleParkedDemo.ts  # Dọn xe "đang đỗ" demo bị đỗ quá lâu do instance chạy lâu ngày
 │   └── .env.example          # Template cấu hình — copy thành .env
 ├── frontend/
 │   └── src/
 │       ├── api/axios.ts     # HTTP client + interceptors
 │       ├── context/         # AuthContext, LanguageContext (song ngữ vi/en)
 │       ├── i18n/            # translations.ts
-│       ├── components/      # Layout, ImportModal (import Excel)
-│       ├── pages/           # 18 trang UI (gồm Analytics.tsx mới)
+│       ├── components/      # Layout, ImportModal, PageHeader, StatusTag, FilterBar,
+│       │                    # PermissionGate, AlertSettingsPanel (bảng ngưỡng cảnh báo)
+│       ├── hooks/            # useDashboardData, useAlertRuleTiers, useUpdateAvailable
+│       ├── pages/           # Trang UI (Dashboard tách OpsDashboard/MgmtDashboard theo vai trò)
 │       ├── types/index.ts   # TypeScript interfaces
 │       └── utils/
-│           ├── reportExport.ts  # Xuất Excel/CSV/PDF báo cáo
-│           └── permConfig.ts    # Cấu hình phân quyền màn hình staff
+│           ├── reportExport.ts     # Xuất Excel/CSV/PDF báo cáo
+│           ├── permConfig.ts       # Cấu hình phân quyền màn hình staff
+│           ├── dateFormat.ts       # Định dạng hh:mm:ss dd/mm/yyyy dùng chung
+│           └── tablePagination.ts  # Phân trang (chọn 10/20/30/50/100 dòng) dùng chung
 ├── database/
 │   ├── setup.sql                # Schema + seed cơ bản
 │   ├── demo_business_patch.sql  # Dữ liệu demo nghiệp vụ

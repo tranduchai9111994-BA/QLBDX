@@ -530,6 +530,7 @@ async function seedActivityLogs() {
 // ──────────────────────────────────────
 async function seedDenseAug2026Demo(vehicles: { id: number; vehicleTypeId: number; licensePlate: string }[]) {
   const demoTag = '[DEMO_AUG2026]';
+  const now = new Date();
   const userIds = (await prisma.user.findMany({
     where: { isActive: true },
     select: { id: true },
@@ -640,21 +641,25 @@ async function seedDenseAug2026Demo(vehicles: { id: number; vehicleTypeId: numbe
     });
   }
 
+  // Xe "đang đỗ" phải luôn tính TƯƠNG ĐỐI so với lúc chạy seed (không phải ngày cố định) — nếu
+  // không, sau vài tuần chạy demo, các xe này sẽ hiện "đã đỗ hàng trăm giờ" dù trông như mới vào
+  // sáng nay. Dùng giờ trước hiện tại thay vì atDate() cố định.
+  const hoursAgoEntry = (hours: number, minutes = 0) => new Date(now.getTime() - (hours * 60 + minutes) * 60_000);
   const parkedVehicleSelections = [
-    { vehicle: vehiclePool[0], spotId: vipSpotIds[0], entryTime: atDate(2026, 8, 1, 8, 15) },
-    { vehicle: vehiclePool[1], spotId: vipSpotIds[1], entryTime: atDate(2026, 8, 1, 8, 40) },
-    { vehicle: vehiclePool[2], spotId: vipSpotIds[2], entryTime: atDate(2026, 8, 1, 9, 5) },
-    { vehicle: vehiclePool[3], spotId: vipSpotIds[3], entryTime: atDate(2026, 8, 1, 9, 30) },
-    { vehicle: vehiclePool[4], spotId: vipSpotIds[4], entryTime: atDate(2026, 8, 1, 10, 10) },
-    { vehicle: vehiclePool[5], spotId: vipSpotIds[5], entryTime: atDate(2026, 8, 1, 11, 20) },
-    { vehicle: vehiclePool[15], spotId: vipSpotIds[6], entryTime: atDate(2026, 8, 1, 12, 0) },
-    { vehicle: vehiclePool[16], spotId: vipSpotIds[7], entryTime: atDate(2026, 8, 1, 13, 45) },
-    { vehicle: vehiclePool[20], spotId: vipSpotIds[8], entryTime: atDate(2026, 8, 1, 14, 25) },
-    { vehicle: vehiclePool[23], spotId: vipSpotIds[9], entryTime: atDate(2026, 8, 1, 15, 5) },
-    { vehicle: vehiclePool[24], spotId: typeToSpotPool[4][0], entryTime: atDate(2026, 8, 1, 16, 10) },
-    { vehicle: vehiclePool[17], spotId: typeToSpotPool[2][0], entryTime: atDate(2026, 8, 1, 17, 20) },
-    { vehicle: vehiclePool[18], spotId: typeToSpotPool[2][1], entryTime: atDate(2026, 8, 1, 18, 0) },
-    { vehicle: vehiclePool[21], spotId: typeToSpotPool[3][0], entryTime: atDate(2026, 8, 1, 19, 30) },
+    { vehicle: vehiclePool[0], spotId: vipSpotIds[0], entryTime: hoursAgoEntry(2, 15) },
+    { vehicle: vehiclePool[1], spotId: vipSpotIds[1], entryTime: hoursAgoEntry(3, 40) },
+    { vehicle: vehiclePool[2], spotId: vipSpotIds[2], entryTime: hoursAgoEntry(4, 5) },
+    { vehicle: vehiclePool[3], spotId: vipSpotIds[3], entryTime: hoursAgoEntry(5, 30) },
+    { vehicle: vehiclePool[4], spotId: vipSpotIds[4], entryTime: hoursAgoEntry(6, 10) },
+    { vehicle: vehiclePool[5], spotId: vipSpotIds[5], entryTime: hoursAgoEntry(7, 20) },
+    { vehicle: vehiclePool[15], spotId: vipSpotIds[6], entryTime: hoursAgoEntry(8, 0) },
+    { vehicle: vehiclePool[16], spotId: vipSpotIds[7], entryTime: hoursAgoEntry(9, 45) },
+    { vehicle: vehiclePool[20], spotId: vipSpotIds[8], entryTime: hoursAgoEntry(10, 25) },
+    { vehicle: vehiclePool[23], spotId: vipSpotIds[9], entryTime: hoursAgoEntry(11, 5) },
+    { vehicle: vehiclePool[24], spotId: typeToSpotPool[4][0], entryTime: hoursAgoEntry(12, 10) },
+    { vehicle: vehiclePool[17], spotId: typeToSpotPool[2][0], entryTime: hoursAgoEntry(14, 20) },
+    { vehicle: vehiclePool[18], spotId: typeToSpotPool[2][1], entryTime: hoursAgoEntry(30, 0) },
+    { vehicle: vehiclePool[21], spotId: typeToSpotPool[3][0], entryTime: hoursAgoEntry(50, 0) },
   ].filter((item) => item.vehicle && item.spotId);
 
   await prisma.parkingRecord.createMany({

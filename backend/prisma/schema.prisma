@@ -268,23 +268,36 @@ model UserActivityLog {
   @@map("UserActivityLogs")
 }
 
-/// Ngưỡng định nghĩa mức độ cảnh báo (nguy hiểm/cảnh báo/thông tin) — mỗi bãi xe có thể tự chỉnh
-/// vì "thế nào là nguy hiểm" khác nhau tuỳ khách hàng. Bảng dạng singleton, luôn dùng id = 1.
+/// Các tham số phụ (gate) không mang tính "nhiều mốc mức độ" — chỉ 1 giá trị duy nhất.
+/// Bảng dạng singleton, luôn dùng id = 1.
 model AlertSettings {
   id                             Int      @id @default(1) @map("Id")
   zoneNearFullAvailable          Int      @default(2) @map("ZoneNearFullAvailable")
-  zoneNearFullPercent            Float    @default(10) @map("ZoneNearFullPercent")
-  zoneImbalanceMaxPercent        Float    @default(90) @map("ZoneImbalanceMaxPercent")
   zoneImbalanceMinPercent        Float    @default(30) @map("ZoneImbalanceMinPercent")
-  longParkingHours               Int      @default(24) @map("LongParkingHours")
-  parkingAnomalyMultiplier       Float    @default(3) @map("ParkingAnomalyMultiplier")
   parkingAnomalyMinMinutes       Int      @default(60) @map("ParkingAnomalyMinMinutes")
-  suspiciousPaymentHighAmount    Decimal  @default(5000000) @map("SuspiciousPaymentHighAmount") @db.Decimal(12, 2)
   suspiciousPaymentParkingAmount Decimal  @default(300000) @map("SuspiciousPaymentParkingAmount") @db.Decimal(12, 2)
-  revenueDropPercent             Float    @default(30) @map("RevenueDropPercent")
-  renewalFrequencyThreshold      Int      @default(5) @map("RenewalFrequencyThreshold")
-  updatedAt                      DateTime @default(now()) @updatedAt @map("UpdatedAt")
-  updatedBy                      Int?     @map("UpdatedBy")
+
+  /// Khu đã đầy (available = 0) là tình huống nhị phân, không có ngưỡng số để phân nhiều mốc.
+  zoneFullSeverity String @default("danger") @map("ZoneFullSeverity") @db.NVarChar(20)
+
+  updatedAt DateTime @default(now()) @updatedAt @map("UpdatedAt")
+  updatedBy Int?     @map("UpdatedBy")
 
   @@map("AlertSettings")
+}
+
+/// Bảng ngưỡng nhiều mốc cho từng loại cảnh báo — VD "Xe đỗ quá lâu": >=48h = Nguy hiểm,
+/// >=24h = Cảnh báo, >=12h = Thông tin. Admin tự thêm/sửa/xoá mốc, hệ thống chỉ so sánh theo
+/// giá trị đo được so với ngưỡng, không suy đoán mức độ.
+model AlertRuleTier {
+  id        Int      @id @default(autoincrement()) @map("Id")
+  ruleType  String   @map("RuleType") @db.NVarChar(50)
+  threshold Float    @map("Threshold")
+  severity  String   @map("Severity") @db.NVarChar(20)
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @default(now()) @updatedAt @map("UpdatedAt")
+  updatedBy Int?     @map("UpdatedBy")
+
+  @@index([ruleType])
+  @@map("AlertRuleTiers")
 }

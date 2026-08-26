@@ -14,6 +14,7 @@ import reportRoutes from './report.routes';
 import activityLogRoutes from './activityLog.routes';
 import analyticsRoutes from './analytics.routes';
 import alertSettingsRoutes from './alertSettings.routes';
+import alertRuleTierRoutes from './alertRuleTier.routes';
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/reports', reportRoutes);
 router.use('/activity-logs', activityLogRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/alert-settings', alertSettingsRoutes);
+router.use('/alert-rule-tiers', alertRuleTierRoutes);
 
 export default router;

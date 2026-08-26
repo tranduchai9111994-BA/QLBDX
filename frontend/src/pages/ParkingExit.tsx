@@ -11,6 +11,7 @@ import { CustomerPackage, ParkingRecord, ParkingZone, VehicleType } from '../typ
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatDateTime, formatDate } from '../utils/dateFormat';
+import { useAlertRuleTiers } from '../hooks/useAlertRuleTiers';
 
 interface PackageRecommendation {
   recommendation: 'yearly' | 'quarterly' | 'monthly' | 'none';
@@ -81,6 +82,7 @@ const ParkingExit: React.FC = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { evaluate: evaluateAlertTier } = useAlertRuleTiers();
   const [packageSuggestion, setPackageSuggestion] = useState<PackageRecommendation | null>(null);
   const [records, setRecords] = useState<ParkingRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -322,9 +324,12 @@ const ParkingExit: React.FC = () => {
         const mins = Math.ceil((Date.now() - new Date(r.entryTime).getTime()) / 60000);
         const hours = Math.floor(mins / 60);
         const label = hours > 0 ? `${hours}h ${mins % 60}p` : `${mins}p`;
-        const isLong = hours >= 8;
-        return isLong
-          ? <span style={{ color: hours >= 24 ? 'var(--error)' : 'var(--warning)', fontWeight: 600 }}>
+        // Tô màu theo đúng ngưỡng "Xe đỗ quá lâu" đã cấu hình ở Cảnh báo → Cấu hình mức độ,
+        // không dùng số cố định riêng ở đây — tránh 1 khái niệm mà 2 định nghĩa khác nhau.
+        const severity = evaluateAlertTier('longParkingHours', mins / 60);
+        const color = severity === 'danger' ? 'var(--error)' : severity === 'warning' ? 'var(--warning)' : severity === 'info' ? 'var(--info)' : null;
+        return color
+          ? <span style={{ color, fontWeight: 600 }}>
               <ClockCircleOutlined style={{ marginRight: 4 }} />{label}
             </span>
           : label;
@@ -347,8 +352,9 @@ const ParkingExit: React.FC = () => {
     try {
       const res = await api.get(`/parking/${record.id}/preview`);
       setPreviewFee(res.data);
-    } catch {
-      message.error('Không tính trước được phí gửi xe');
+    } catch (err) {
+      const error = err as AxiosError<{ message: string }>;
+      message.error(error.response?.data?.message || 'Không tính trước được phí gửi xe — vui lòng thử lại');
     } finally {
       setPreviewLoading(false);
     }
@@ -452,7 +458,7 @@ const ParkingExit: React.FC = () => {
                 showIcon
                 icon={<UserOutlined />}
                 style={{ marginBottom: 14, borderRadius: 8 }}
-                message={<strong>Xe vãn lai</strong>}
+                message={<strong>Xe vãng lai</strong>}
                 description="Không có gói dịch vụ — phí sẽ được tính theo giờ/ngày"
               />
             )}
