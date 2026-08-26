@@ -13,6 +13,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:seed-history": "ts-node prisma/seedHistoricalData.ts",
     "prisma:fix-stale-parked": "ts-node prisma/fixStaleParkedDemo.ts",
+    "prisma:seed-exceptions": "ts-node prisma/seedExceptionCheckouts.ts",
     "test": "ts-node --transpile-only src/utils/feeCalculator.test.ts",
     "test:fee": "ts-node --transpile-only src/utils/feeCalculator.test.ts"
   },

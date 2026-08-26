@@ -114,6 +114,7 @@ npm run prisma:fix-stale-parked
 | `backend/prisma/seed.ts` | Seed tài khoản + danh mục + dữ liệu demo cơ bản (chạy qua `npm run prisma:seed`) |
 | `backend/prisma/seedHistoricalData.ts` | Bồi đắp dữ liệu nhiều năm cho Dashboard/Báo cáo thực tế (`npm run prisma:seed-history`) |
 | `backend/prisma/fixStaleParkedDemo.ts` | Dọn xe "đang đỗ" demo bị coi là đỗ quá lâu do instance chạy nhiều tuần (`npm run prisma:fix-stale-parked`) |
+| `backend/prisma/seedExceptionCheckouts.ts` | Bổ sung dữ liệu mẫu "Checkout ngoại lệ" cho Báo cáo (`npm run prisma:seed-exceptions`) |
 
 ---
 

@@ -254,7 +254,11 @@ export class ReportService {
     const records = await prisma.parkingRecord.findMany({
       where: {
         ...where,
-        notes: { contains: '[NGOAI_LE:' },
+        // SQL Server LIKE coi [ ] là ký tự đại diện character-class, không phải literal —
+        // phải escape thành [[] để tìm đúng chuỗi "[NGOAI_LE:", nếu không sẽ khớp sai hàng loạt
+        // bản ghi bất kỳ chứa 1 trong các ký tự N,G,O,A,I,_,L,E (đã kiểm chứng thực tế: khớp
+        // nhầm hơn 100 bản ghi không liên quan).
+        notes: { contains: '[[]NGOAI_LE:' },
       },
       select: {
         id: true,
