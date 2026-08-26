@@ -40,15 +40,23 @@ cd QLBDX
 
 ## 3. Khởi tạo Database
 
-Chọn **1 trong 2 cách**:
+Chọn **1 trong 3 cách**:
 
-### Cách A — Dùng SSMS (nhanh, có sẵn schema + data mẫu)
+### Cách A — Restore từ backup có sẵn (nhanh nhất, khuyến nghị)
+
+`database/ParkingManagement.bak` đã chứa sẵn **~39.000 bản ghi** dữ liệu nhiều năm (2024 → nay) — restore xong là có ngay Dashboard/Báo cáo đầy đủ, khỏi cần chạy seed script.
+
+Trong SSMS: chuột phải **Databases → Restore Database... → Device → chọn file `.bak`** → OK. Hoặc dùng `sqlcmd` — chi tiết xem [database/README.md](database/README.md).
+
+Xong cách này → bỏ qua các lệnh `prisma:seed`/`prisma:seed-history` ở **Mục 5**.
+
+### Cách B — Dùng SSMS chạy từ script (tự tạo data mới)
 
 1. Mở SQL Server Management Studio, kết nối `localhost` (user `sa` / password `123`, hoặc Windows Authentication).
 2. Mở file `database/setup.sql` → nhấn **F5** để chạy → đợi ~10 giây. Script tự tạo database `ParkingManagement` + toàn bộ bảng + data mẫu.
 3. *(Tuỳ chọn)* Chạy tiếp `database/demo_business_patch.sql` để chuẩn hoá thêm dữ liệu nghiệp vụ demo.
 
-### Cách B — Dùng Prisma (khuyến nghị nếu bạn sẽ code backend nhiều)
+### Cách C — Dùng Prisma (khuyến nghị nếu bạn sẽ code backend nhiều)
 
 Bỏ qua bước này, làm ở **Mục 5** — Prisma sẽ tự tạo schema từ `backend/prisma/schema.prisma` (luôn khớp code mới nhất, không sợ SQL script bị lỗi thời).
 
@@ -80,9 +88,13 @@ cd backend
 npm install
 npm run prisma:generate
 
-# Nếu bạn chọn Cách B ở Mục 3 (chưa tạo DB bằng SSMS):
+# Nếu bạn chọn Cách C ở Mục 3 (chưa tạo DB bằng SSMS/backup):
 npx prisma db push
+```
 
+> **Nếu bạn đã restore từ `ParkingManagement.bak` (Cách A ở Mục 3) — bỏ qua 2 lệnh seed bên dưới**, data đã có sẵn trong backup rồi.
+
+```bash
 # Seed tài khoản + danh mục + dữ liệu demo cơ bản
 npm run prisma:seed
 

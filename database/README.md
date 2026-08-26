@@ -9,6 +9,23 @@
 
 ## Cách chạy lần đầu
 
+### Cách nhanh nhất — Restore từ backup có sẵn (khuyến nghị)
+
+File `database/ParkingManagement.bak` chứa toàn bộ database **kèm sẵn ~39.000 bản ghi** (data nhiều năm 2024 → nay) — restore xong là có ngay dữ liệu thật, không cần chạy seed script (~3 phút) nữa.
+
+Trong SSMS: chuột phải **Databases → Restore Database... → Device → chọn `ParkingManagement.bak`** → OK.
+
+Hoặc bằng lệnh (`sqlcmd`):
+```bash
+sqlcmd -S localhost -U sa -P 123 -Q "RESTORE DATABASE [ParkingManagement] FROM DISK = N'database/ParkingManagement.bak' WITH REPLACE"
+```
+
+Xong bước này → bỏ qua "Bước 2 — Chạy script" bên dưới, chuyển thẳng sang **Bước 3 — Cấu hình backend**.
+
+---
+
+### Cách thủ công — Chạy script từ đầu (nếu muốn tự tạo data hoặc backup bị lỗi)
+
 ### Bước 1 — Kết nối SSMS
 
 | Trường | Giá trị |
