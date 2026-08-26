@@ -4,6 +4,10 @@
 >
 > Cập nhật: 2026-08-26 · Nguồn: `D:\QLBDX_REVIEW\QLBDX\frontend`
 
+> **[GHI CHÚ CẬP NHẬT]** Tài liệu này là ảnh chụp **as-is tại thời điểm viết** — giữ nguyên toàn văn để làm mốc lịch sử. Sau đó một đợt remediation (xem `QLBDX_UIUX_Review_and_Remediation_Plan.md`) đã triển khai và phần lớn các phát hiện dưới đây **đã được sửa trong code hiện tại**. Các phát hiện đã sửa được đánh dấu **[ĐÃ SỬA — xem mã X]** ngay tại vị trí liên quan, tham chiếu theo mã vấn đề (A-xx/B-xx/C-xx) dùng trong tài liệu remediation. Phát hiện không có nhãn = vẫn giữ nguyên hiện trạng như mô tả (đã xác minh lại qua code ngày 2026-08-26).
+>
+> Tóm tắt nhanh theo mã: **Đã sửa** — A-01, A-02, A-04, B-01, B-02, B-04, B-05, B-07, B-08, B-09, B-10, C-01, C-03, C-04, C-09, C-13, D-1, D-3, i18n ImportModal. **Sửa một phần** — B-03 (period label rõ nhưng chưa có 1 bộ chọn kỳ toàn trang), C-02 (StatusTag đã có nhưng ParkingSpots/Payments chưa áp dụng), C-07 (đã gộp nút xuất Excel + hợp nhất UI ngôn ngữ, nhưng ParkingSpots vẫn còn 2 điểm filter khu), C-10 (đã bỏ `<style>` inject ở ActivityLogs, nhưng export logic vẫn chưa dùng chung `reportExport.ts`). **Chưa sửa** — A-03, A-05, B-06, B-11, C-05, C-06, C-08, C-11 (chủ đích theo quyết định D-3, xem T-13), C-12.
+
 ---
 
 ## Mục lục
@@ -138,6 +142,8 @@ theme={{
 
 Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css` override đè bằng gradient** `linear-gradient(135deg, #0e3a6e, #005daa)` qua `!important` — hai nguồn định nghĩa cùng một thuộc tính, nguồn CSS thắng. Dấu hiệu code có 2 lớp theming chồng nhau (AntD token + CSS override) thay vì một nguồn chân lý duy nhất.
 
+> **[ĐÃ SỬA — B-01]** `design-system.css` hiện dùng `background: var(--surface-container-low)` (phẳng, không gradient) cho `.ant-table-thead`; card dùng `--surface-container-lowest` + `--elev-1` để nổi trên nền thay vì "vô hình". Đã bổ sung `--elev-0..3` và `--card-hairline`.
+
 ### 3.5 Pattern trực quan đặc trưng đã định hình
 
 | Pattern | Mô tả | CSS class |
@@ -147,7 +153,7 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 | **Pill tag** | Mọi `Tag` bo tròn hoàn toàn (`border-radius: 9999px`), không viền | `.ant-tag` (override global) |
 | **License plate tag** | Biển số luôn hiện trong khung riêng biệt, nền `--info-container`, chữ đậm | `.plate-tag` |
 | **Stat card accent bar** | Thẻ số liệu có thanh màu 4px dọc cạnh trái theo semantic (info/success/warning/error) | `.stat-card` + modifier |
-| **Dashboard hero banner** | Card gradient tối phủ toàn chiều rộng, có glow tròn mờ góc phải — khác hẳn phần còn lại của trang | `.dashboard-hero` |
+| **Dashboard hero banner** | Card gradient tối phủ toàn chiều rộng, có glow tròn mờ góc phải — khác hẳn phần còn lại của trang | `.dashboard-hero` — **[ĐÃ SỬA — B-02/B-04]** Hero banner đã bỏ khỏi cả 2 dashboard mới; KPI dùng class `dashboard-kpi` trung tính, không còn 4 màu accent theo semantic. |
 | **Gradient primary button** | Nút primary có gradient + nhấc lên (`translateY(-1px)`) + shadow xanh khi hover | `.ant-btn-primary` |
 | **Sidebar tối cố định** | 240px, nền `--inverse-surface` (#283042), menu item bo góc nổi khi active | `.app-sidebar` |
 
@@ -173,6 +179,9 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 - **Header**: logo + tên app bên trái; đồng hồ sống (cập nhật mỗi giây, `setInterval`) + toggle ngôn ngữ (`Segmented` cờ VN/EN) + dropdown user (avatar chữ cái đầu, vai trò, Hồ sơ, Đăng xuất) bên phải.
 - **Menu**: `AntD Menu mode="inline" theme="dark"`, item được build động theo hàm `canSee(key)` đọc từ `localStorage` (cấu hình phân quyền staff) — đồng bộ giữa các tab qua việc **tự bắn `storage` event thủ công** (pattern hơi khác thường, vì event `storage` chuẩn chỉ bắn cross-tab tự nhiên, ở đây được dispatch thủ công trong cùng tab).
 - **Không có breadcrumb** — điều hướng hoàn toàn dựa vào sidebar, các trang con sâu (VD: chi tiết ngoại lệ trong Reports) không có đường quay lại theo path.
+  **[ĐÃ SỬA — B-09]** `components/PageHeader.tsx` (mới) render `Breadcrumb` + tiêu đề trang, map route qua `routeMeta.ts`, dùng ở các trang chính.
+
+> **[ĐÃ SỬA MỘT PHẦN — B-10 / C-11]** Sidebar đã nhóm menu thành `grp-ops` / `grp-catalog` / `grp-admin` (group header, accordion nhớ trạng thái mở) — hết tình trạng 13-15 mục phẳng cùng cấp (B-10). Tuy nhiên **chưa có** nút thu gọn 240px→64px hay Drawer cho màn hình hẹp (C-11) — theo quyết định D-3, phần responsive/collapse bị hạ ưu tiên, thay vào đó có banner cảnh báo dưới 1024px (xem T-13, đã làm — `DesktopOnlyBanner.tsx`).
 
 ---
 
@@ -194,10 +203,13 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 - Tự động làm mới mỗi 90 giây (`setInterval`), có nút refresh thủ công + hiển thị "cập nhật lúc".
 - Trang **dày đặc thông tin nhất** trong app — hero + 4 KPI + 2 insight card + 4 biểu đồ + 2 bảng, tất cả trên 1 trang cuộn dọc, không tab/phân đoạn.
 
+> **[ĐÃ SỬA — D-1/T-05, A-01, B-02/B-04/B-05]** Toàn bộ mô tả trên là as-is cũ. `Dashboard.tsx` nay chỉ là router mỏng theo `role`, render `pages/dashboard/OpsDashboard.tsx` (staff, focal = tỷ lệ lấp đầy) hoặc `MgmtDashboard.tsx` (admin mặc định, có Segmented đổi sang view Vận hành). Hero banner đã bỏ; đồng hồ hợp nhất qua `hooks/useClock.ts` dùng chung (hết 3 đồng hồ lệch nhau — A-01); chart xu hướng đã tách thành 2 LineChart 1 trục riêng thay vì trục kép (B-05). **Còn thiếu**: chưa có 1 bộ chọn kỳ áp dụng toàn trang Mgmt — mỗi khối vẫn ghi kỳ riêng trong tiêu đề (B-03, sửa một phần); điểm "hôm nay" trên chart xu hướng chưa có ký hiệu partial-data (A-05, chưa sửa).
+
 #### Xe vào (`pages/ParkingEntry.tsx`)
 - Layout 2 cột: form nhập (trái, 14/24) — thông tin/gợi ý thông minh + chỗ trống (phải, 10/24). Bảng "xe đang trong bãi" full-width bên dưới.
 - Smart auto-fill: nhập biển số → card khách quen + auto-chọn chỗ đỗ gợi ý (tính năng mới).
 - Validate biển số bằng regex cứng `^\d{2}[A-Z]\d{4,5}$` — đã biết là **không khớp một số định dạng biển số thật** (VD `51H4-23456`) dù logic backend vẫn chấp nhận — lỗi hiển thị validate nhưng không chặn submit thực sự (xem note trong lịch sử làm việc trước).
+  **[ĐÃ SỬA — C-13]** Regex đã nới thành `/^(\d{2}[A-Z]{1,2}\d{4,6}|[A-Z]{2}\d{3,5})$/` kèm `normalizePlate()` bỏ dấu gạch/khoảng trắng trước khi validate — khớp được `51H4-23456`.
 
 #### Xe ra (`pages/ParkingExit.tsx`)
 - Bảng danh sách xe đang đỗ (filter theo khu/loại xe/segment xe tháng-vãng lai) → Modal xác nhận xe ra (preview phí, toggle "Checkout ngoại lệ") → Modal biên nhận (in) → Modal gợi ý gói (mới, sau khi checkout).
@@ -210,8 +222,10 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 
 #### Bãi đỗ xe (`pages/ParkingSpots.tsx`)
 - **Pattern độc đáo nhất app**: grid card khu vực ở đầu trang (`Row/Col xs={24} sm={12} lg={6}` — một trong số ít nơi có breakpoint responsive rõ ràng), click vào card để lọc (toggle chọn/bỏ chọn) — nhưng đồng thời toolbar bên dưới **cũng có Select lọc khu riêng** → 2 điểm điều khiển cho cùng 1 filter, không đồng bộ trực quan.
+  **[CHƯA SỬA — C-07]** Vẫn còn 2 điểm điều khiển filter khu (card click + Select) chưa hợp nhất.
 - 2 Tab (Chỗ đỗ / Khu vực), mỗi tab bảng riêng.
 - Trạng thái chỗ dùng `Badge status+text` (tốt, có cả màu và chữ), nhưng cấp khu vực lại dùng `Tag className="chip-*"` — 2 ngôn ngữ hiển thị khác nhau cho cùng khái niệm available/occupied.
+  **[ĐÃ SỬA MỘT PHẦN — C-02]** `components/StatusTag.tsx` đã được tạo và dùng ở `CustomerPackages.tsx`, nhưng `ParkingSpots.tsx` vẫn còn dùng `Badge`/`Tag chip-*` như mô tả — chưa áp dụng `StatusTag` ở đây.
 
 #### Loại xe (`pages/VehicleTypes.tsx`)
 - Bảng đơn giản + Modal Sửa/Thêm. **Mới bổ sung**: nút "Lịch sử giá" + "Đặt lịch đổi giá" (đặt hiệu lực tương lai) — 2 Modal phụ mới, UI nhất quán với bảng chính.
@@ -236,29 +250,38 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 #### Người dùng (`pages/Users.tsx`)
 - 2 Tab: Danh sách user (CRUD chuẩn) + **Ma trận phân quyền màn hình cho Staff** — bảng HTML thuần tự dựng (không dùng AntD Table), có `Radio.Group` dạng nút (Ẩn/Xem/Đầy đủ) mỗi dòng, nút "set-all" hàng loạt, lưu nháp rồi mới "Lưu".
 - **Đây là nơi tập trung hardcode màu nhiều nhất app**: gradient header riêng `#0e3a6e→#1677ff` (khác `--primary` #005daa!), nhiều hex rời rạc (`#52c41a`, `#d9d9d9`, `#ff4d4f`...) — lệch hẳn khỏi design token.
+  **[ĐÃ SỬA — C-01]** Không còn literal hex trong `Users.tsx` — đã chuyển sang dùng CSS variable.
 - Điểm hay: dòng của chính user đang đăng nhập bị disable nút Sửa/Xoá (tự bảo vệ).
 
 #### Thanh toán (`pages/Payments.tsx`)
 - Trang **chỉ đọc** duy nhất — không Modal, không CRUD, chỉ filter + bảng + xuất Excel. Không có cách sửa/huỷ giao dịch từ UI (có thể chủ đích vì lý do kiểm toán, nhưng đáng nêu ra để xác nhận).
 - Tag phương thức thanh toán dùng **3 cách khác nhau** cho 3 giá trị: tiền mặt → class `.chip-available`, chuyển khoản → `color="purple"` hardcode, thẻ → Tag mặc định xám.
+  **[CHƯA SỬA — C-02]** `Payments.tsx` vẫn dùng `Tag` thô, chưa chuyển sang `StatusTag` dùng chung.
 
 #### Cảnh báo (`pages/Alerts.tsx`)
 - 3 Statistic card (nguy hiểm/cảnh báo/thông tin) → filter đa dạng (khoảng thời gian preset, mức độ, loại) → bảng. Badge "Smart" tím cho cảnh báo rule-based mới, kèm dòng gợi ý hành động + context nhỏ.
 
 #### Báo cáo (`pages/Reports.tsx`, 754 dòng — trang nặng nhất)
 - Toolbar có **nút pill tự chế** cho quick-range (Tháng này/Quý này/Năm nay/2025/2024/Toàn bộ) — tự dựng `<button>` với style inline thay vì dùng `Segmented`/`Radio.Group` sẵn có của chính AntD (mà trang này vẫn dùng `Radio.Group` cho toggle loại biểu đồ vài dòng bên dưới — mâu thuẫn ngay trong cùng file).
+  **[CHƯA SỬA — C-06]** Vẫn là `<button>` tự dựng, chưa chuyển sang `Segmented`.
 - 6 KPI card → biểu đồ doanh thu (Bar/Line/Area chọn được) + Pie loại xe → Pie phương thức thanh toán + Bar giờ cao điểm + RadialBar tỷ lệ → bảng chi tiết doanh thu → khối thống kê ngoại lệ (3 tile + pie + 2 bảng).
 - **Mật độ hardcode màu cao nhất app**: mảng `CHART_COLORS`, map `METHOD_COLORS`, hàng chục hex rời rạc lặp lại thay vì CSS variable.
+  **[ĐÃ SỬA — C-01]** Không còn literal hex trong `Reports.tsx`.
 - Dropdown "Xuất báo cáo" gộp Excel/CSV/Print-PDF, nhưng phần thống kê ngoại lệ lại có **thêm 1 nút "Xuất Excel" riêng** — trùng lặp điểm vào cho cùng nhóm dữ liệu.
+  **[ĐÃ SỬA — C-07]** Đã gộp về 1 `Dropdown` xuất duy nhất.
 - **Chưa có bước xem trước (preview) khi xuất** — tải file trực tiếp, đã ghi nhận là task cần bổ sung.
 
 #### Nhật ký hoạt động (`pages/ActivityLogs.tsx`)
 - Cấu trúc 3 tầng: Statistic card tổng quan (dùng đúng CSS var, hiếm hoi) → Card filter → bảng phân trang server-side.
 - Hàng đăng nhập thất bại tô đỏ nhạt qua **`<style>` tag chèn trực tiếp trong component** (không phải class trong file CSS chung) — pattern khác lạ so với phần còn lại của app.
+  **[ĐÃ SỬA — C-10/§7.10]** Không còn `<style>` inject trong `ActivityLogs.tsx`.
 - Có 2 kiểu export tự viết riêng (CSV thủ công build blob, Excel qua `xlsx`) — không dùng chung `utils/reportExport.ts` như Reports.tsx.
+  **[CHƯA SỬA — C-10/§7.11]** Vẫn tự viết logic export XLSX riêng, chưa dùng chung `reportExport.ts`.
 
 #### Phân tích & Gợi ý (`pages/Analytics.tsx`, mới)
 - Segmented chọn kỳ (tháng/quý/năm) → 5 Statistic card → 2 biểu đồ (Bar theo thứ, Line theo giờ) → bảng hiệu quả khu vực (có `Progress` màu theo ngưỡng) → Collapse các "gợi ý quyết định" (mỗi thẻ: câu hỏi, phân tích, bảng phương án/tác động/rủi ro). UI mới nhất, nhất quán tốt với phần còn lại.
+
+> **[CẬP NHẬT SAU REMEDIATION]** — B-07 **[ĐÃ SỬA]**: hàng 5 KPI card kiểu cũ đã được thiết kế lại (không còn dàn 5 card 1 hàng tràn mép). B-08 **[ĐÃ SỬA]**: cột bảng "Hiệu quả theo khu vực" nay có `width`/`ellipsis`/`align:'right'` rõ ràng. A-04 **[ĐÃ SỬA]**: `Progress` dùng màu theo ngưỡng (đỏ/cam/xanh) và đã bỏ icon ✓ mâu thuẫn màu đỏ. B-06 **[CHƯA SỬA]**: Segmented chọn kỳ vẫn nằm trong `Card` riêng, chưa chuyển vào action của `PageHeader` — vẫn tốn khoảng trắng. A-03 **[CHƯA SỬA]**: trường hợp khu 100% lấp đầy nhưng doanh thu 0đ vẫn chưa có chú thích giải thích trên UI.
 
 #### Hồ sơ cá nhân (`pages/Profile.tsx`)
 - 2 Card cạnh nhau (thông tin + đổi mật khẩu), đơn giản nhất app. Không có upload ảnh đại diện (toàn app chỉ dùng avatar chữ cái đầu).
@@ -269,6 +292,7 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 - 1 component phục vụ import Excel cho Customers/Vehicles/CustomerPackages: tải template có sẵn sheet hướng dẫn + sheet "lựa chọn hợp lệ" → kéo-thả file → preview 10 dòng đầu (đánh dấu đỏ ô thiếu dữ liệu bắt buộc) → import → báo cáo kết quả kèm danh sách lỗi.
 - Modal tự đổi độ rộng theo trạng thái (520px → 900px khi có preview) — chi tiết nhỏ nhưng tinh tế.
 - Nhưng: **100% chuỗi hiển thị hardcode tiếng Việt, không qua `t()`** — nếu đây là component dùng chung nhiều nơi thì đây là điểm hở i18n có tác động rộng nhất.
+  **[ĐÃ SỬA — T-14]** `ImportModal.tsx` nay gọi `t()` (36 lần), không còn hardcode hoàn toàn.
 
 ---
 
@@ -293,6 +317,8 @@ Lưu ý: **`Table.headerBg: '#f1f3ff'` trong theme token bị `design-system.css
 
 Mức độ nghiêm trọng tăng dần: Payments (1 chỗ) → CustomerPackages (vài callout) → ImportModal (toàn bộ palette phụ) → **Reports.tsx và Users.tsx là nặng nhất** — hàng chục hex rời rạc, thậm chí Users.tsx dùng một **cặp gradient xanh khác** (`#0e3a6e→#1677ff`) không trùng `--primary` (#005daa) ở bất kỳ đâu khác trong app. Rủi ro: đổi màu thương hiệu sau này phải sửa tay từng file thay vì 1 chỗ.
 
+> **[ĐÃ SỬA — C-01]** Không còn literal hex trong `Reports.tsx` và `Users.tsx` (2 nơi nặng nhất, đã kiểm tra lại code hiện tại).
+
 ### 7.2 Hiển thị trạng thái không đồng nhất
 
 Cùng một khái niệm "còn trống/đang dùng" hoặc "loại giao dịch" được thể hiện bằng **≥4 cách khác nhau** tuỳ trang:
@@ -302,9 +328,13 @@ Cùng một khái niệm "còn trống/đang dùng" hoặc "loại giao dịch" 
 - `Tag` mặc định không màu (Payments — thẻ; Customers)
 - Emoji trong text option của `Select` (CustomerPackages status filter: ✅⏳🔴⛔) — không nơi nào khác trong app dùng emoji cho filter.
 
+> **[ĐÃ SỬA MỘT PHẦN — C-02]** Component `StatusTag` (`components/StatusTag.tsx`) đã được tạo và áp dụng ở `CustomerPackages.tsx`. Nhưng `ParkingSpots.tsx` vẫn `Badge`/`Tag chip-*`, `Payments.tsx` vẫn `Tag` thô 3 kiểu khác nhau, và emoji trong `Select` của CustomerPackages vẫn còn — chưa thay thế đồng loạt.
+
 ### 7.3 Xác nhận xoá/hành động nguy hiểm không đồng nhất
 
 `Popconfirm` (Customers, Vehicles) vs `Modal.confirm` (Users, ParkingSpots, ParkingPackages) — 2 pattern UX khác nhau cho cùng hành động "xác nhận trước khi xoá", không rõ tiêu chí chọn cái nào.
+
+> **[ĐÃ SỬA — C-03]** Đã thống nhất về `Popconfirm` cho các hành động xoá (Customers/Vehicles/VehicleTypes...); không còn dùng `Modal.confirm` cho xoá.
 
 ### 7.4 Cách xử lý nút bị ẩn theo quyền không đồng nhất
 
@@ -313,6 +343,8 @@ Cùng một khái niệm "còn trống/đang dùng" hoặc "loại giao dịch" 
 
 Cả 2 đều hợp lý riêng lẻ, nhưng không nhất quán giữa các trang cùng loại (đều là bảng CRUD có phân quyền).
 
+> **[ĐÃ SỬA — C-04]** Đã có component `PermissionGate` dùng chung, áp dụng ở Customers/Vehicles/CustomerPackages.
+
 ### 7.5 Kiến trúc filter không đồng nhất
 
 - Đa số trang (Customers, Vehicles, ParkingHistory, CustomerPackages...): filter qua **query param gửi server**, `useEffect` khi filter đổi.
@@ -320,9 +352,13 @@ Cả 2 đều hợp lý riêng lẻ, nhưng không nhất quán giữa các tran
 
 Không nhất quán về nơi xử lý dữ liệu, ảnh hưởng hiệu năng nếu bảng Users lớn dần.
 
+> **[CHƯA SỬA]** `Users.tsx` vẫn filter client-side bằng `.filter()` trên dữ liệu đã tải hết.
+
 ### 7.6 Control tự chế thay vì dùng component AntD sẵn có
 
 Reports.tsx tự dựng nút pill quick-range bằng `<button>` + inline style, trong khi cùng file vẫn dùng `Radio.Group` chuẩn cho việc khác — không có lý do kỹ thuật rõ ràng để không dùng `Segmented`/`Radio.Group` cho cả hai.
+
+> **[CHƯA SỬA — C-06]** Vẫn là `<button>` tự dựng, chưa chuyển sang `Segmented`.
 
 ### 7.7 Trùng lặp điểm vào cho cùng 1 hành động
 
@@ -330,21 +366,31 @@ Reports.tsx tự dựng nút pill quick-range bằng `<button>` + inline style, 
 - Reports: nút "Xuất báo cáo" tổng + nút "Xuất Excel" riêng cho phần ngoại lệ.
 - Login + MainLayout: 2 UI chuyển ngôn ngữ độc lập, markup khác nhau.
 
+> **[ĐÃ SỬA MỘT PHẦN — C-07]** Reports: 2 nút xuất đã gộp về 1 `Dropdown` (đã sửa). Ngôn ngữ: chỉ còn 1 UI chuyển ngôn ngữ ở `MainLayout.tsx` (đã sửa). ParkingSpots: **vẫn còn** 2 điểm điều khiển filter khu vực (chưa sửa).
+
 ### 7.8 Branding không nhất quán
 
 "ParkManager" (Login, tiếng Anh) vs "Quản lý bãi đỗ xe" (title, header) vs "**PSM**" (logo text sidebar, viết tắt không giải thích ở đâu — có thể là "Parking System Management"?) — 3 tên gọi khác nhau cho cùng 1 sản phẩm.
+
+> **[CHƯA SỬA — C-08]** `translations.ts`, `index.html`, `manifest.json`, `Login.tsx` vẫn còn lẫn "Quản lý bãi đỗ xe" và "PSM"/"Parking Management System" — chưa chốt 1 tên (xem Q8 trong remediation plan).
 
 ### 7.9 Thiếu branding assets
 
 Không có `favicon.ico`, không có `manifest.json`, không có logo file nào trong `public/` — tab trình duyệt hiện icon mặc định/trống. (Ghi chú: người dùng đã gửi 1 ảnh icon đề xuất, đang chờ file để áp dụng.)
 
+> **[ĐÃ SỬA — C-09]** `favicon.ico` và `manifest.json` đã có trong `frontend/public/`.
+
 ### 7.10 Style injection không chuẩn
 
 ActivityLogs.tsx chèn `<style>` trực tiếp trong component React để style hàng đăng nhập thất bại — nên là 1 class trong `design-system.css` như mọi nơi khác.
 
+> **[ĐÃ SỬA]** Không còn `<style>` inject trong `ActivityLogs.tsx`.
+
 ### 7.11 Export logic trùng lặp
 
 `utils/reportExport.ts` được Reports.tsx dùng tốt (tập trung hoá), nhưng ActivityLogs.tsx tự viết lại logic export CSV/Excel riêng thay vì tái sử dụng/mở rộng module chung.
+
+> **[CHƯA SỬA]** `ActivityLogs.tsx` vẫn tự viết logic export XLSX riêng, chưa dùng chung `reportExport.ts`.
 
 ---
 
@@ -372,6 +418,8 @@ ActivityLogs.tsx chèn `<style>` trực tiếp trong component React để style
 - Đa số trang tự chống chịu bằng `Space wrap` (toolbar tự xuống dòng) hoặc `Row/Col` breakpoint (`xs/sm/lg/xl`) rải rác — không nhất quán, không phải chiến lược responsive chủ đích.
 - Ngoại lệ có breakpoint rõ ràng: ParkingSpots (grid khu vực), Reports (Row/Col cho KPI/chart), Profile (flexWrap 2 card).
 - **Kết luận**: app hiện được thiết kế **desktop-only trên thực tế**, dù có viewport meta tag chuẩn. Nếu nhân viên cần dùng tablet ở quầy, trải nghiệm sẽ không tốt.
+
+> **[ĐÃ CHỐT HƯỚNG — D-3/T-13, C-11]** Theo quyết định D-3 trong remediation plan, app **chính thức chấp nhận desktop-only** thay vì đầu tư responsive đầy đủ. Đã thêm `DesktopOnlyBanner.tsx` cảnh báo khi viewport < 1024px (đã sửa). Sidebar vẫn fixed-width, chưa có nút thu gọn/Drawer (phần responsive/collapse của C-11 vẫn chưa làm — nhưng nay là chủ đích, không còn là gap ngoài ý muốn).
 
 ### 9.2 Dark mode
 

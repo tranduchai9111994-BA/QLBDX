@@ -13,6 +13,8 @@
 
 Stack: **React + Ant Design** (frontend) — **Node.js + Express + Prisma** (backend) — **SQL Server** (database).
 
+> Giao diện hỗ trợ **Sáng/Tối (dark mode)** — nút chuyển ở header, hệ thống tự nhớ lựa chọn cho lần sau. Ứng dụng tối ưu cho màn hình desktop; nếu thu nhỏ dưới 1024px sẽ hiện banner cảnh báo nên dùng màn hình lớn hơn.
+
 ---
 
 ## 1. Yêu cầu môi trường
@@ -102,6 +104,9 @@ npm run prisma:seed
 # hiển thị đúng xu hướng thực tế thay vì chỉ vài bản ghi rời rạc.
 # Idempotent — chạy lại vô tư, không sợ trùng dữ liệu.
 npm run prisma:seed-history
+
+# (Tuỳ chọn) Seed thêm 16 bản ghi "checkout ngoại lệ" mẫu để test màn hình Báo cáo
+npm run prisma:seed-exceptions
 ```
 
 ```bash
@@ -192,7 +197,7 @@ CRUD đầy đủ, validate trùng số điện thoại/CCCD/biển số. Có **
 
 | Chức năng | Mô tả |
 |---|---|
-| **Thanh toán** | Danh sách mọi giao dịch thu tiền (gửi lẻ + gói dịch vụ). |
+| **Thanh toán** | Danh sách mọi giao dịch thu tiền (gửi lẻ + gói dịch vụ), sửa được thông tin giao dịch. |
 | **Báo cáo** | Doanh thu theo ngày/tháng/năm, phân loại xe, phương thức thanh toán, thống kê checkout ngoại lệ — đều xuất được Excel/CSV/PDF. |
 | **Cảnh báo** | Gói sắp hết hạn, khu vực sắp đầy, xe đỗ quá lâu, dữ liệu bị lệch trạng thái, thanh toán bất thường. |
 | **Người dùng** | CRUD tài khoản, khoá/mở khoá, và **phân quyền màn hình cho staff** (bật/tắt từng menu staff nhìn thấy). |

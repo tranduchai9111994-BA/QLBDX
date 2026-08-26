@@ -93,6 +93,17 @@ Dữ liệu trải dài từ 01/2024 đến hiện tại, có **xu hướng tăn
 — cần thiết để Dashboard (so sánh tuần, xu hướng 7 ngày), Báo cáo (nhóm theo năm) và Phân tích & Gợi ý
 (kỳ quý/năm) hiển thị số liệu thực tế thay vì gần như trống.
 
+### Muốn có dữ liệu mẫu cho Báo cáo → Thống kê Checkout ngoại lệ
+
+Mặc định seed cơ bản/lịch sử ít sinh checkout ngoại lệ (mất vé, vé hỏng, giải phóng chỗ bắt buộc,
+miễn giảm phí...). Chạy thêm lệnh sau để có **16 bản ghi mẫu** minh hoạ đầy đủ các lý do:
+
+```bash
+npm run prisma:seed-exceptions
+```
+
+Idempotent — đánh dấu bằng note riêng, chạy lại không tạo trùng.
+
 ### Nếu app đã chạy demo lâu ngày — xe "đang đỗ" hiện đỗ hàng trăm giờ
 
 Dữ liệu demo "xe đang đỗ" được ghi với giờ vào tương đối lúc seed chạy — nếu instance demo đã

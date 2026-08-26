@@ -4,6 +4,8 @@
 > **Nguồn đánh giá**: `UIUX_AUDIT.md` (as-is, đọc từ source) + 2 ảnh chụp thực tế màn hình `Tổng quan` và `Phân tích & Gợi ý` (26/08/2026).
 > **Phạm vi**: React 18 + TypeScript + Ant Design 5 + Recharts, `design-system.css` ("Precision Authority").
 > **Ngày lập**: 26/08/2026 · Phiên bản: v1.0
+>
+> **Trạng thái triển khai (cập nhật 26/08/2026)**: **Toàn bộ P0 → P4 (T-01 → T-17) đã hoàn thành**, bao gồm cả 3 hạng mục hoàn thành ở đợt cuối cùng: T-02 (đồng bộ token AntD ↔ CSS), T-06 (`useClock()` hook dùng chung), T-10 (chuẩn hoá width/ellipsis/tabular-nums toàn bộ bảng), T-12 (lint rule chặn hardcode màu hex), T-13 (banner desktop-only), T-17 (dọn `<style>` inject + gộp logic export CSV trùng lặp). Toàn bộ 10 câu hỏi ở mục 8 đã được trả lời và triển khai theo quyết định đã chốt — xem đáp án inline bên dưới mỗi câu. Chi tiết xem `CAP_NHAT_2026-08-26.md`.
 
 ---
 
@@ -408,13 +410,13 @@ export const CHART_COLORS = () => [
 
 ## 6. Lộ trình & ước lượng
 
-| Phase | Nội dung | Hạng mục | Man-day | Kết quả cảm nhận |
-|---|---|---|---|---|
-| **P0 — Hotfix dữ liệu** | Sửa mâu thuẫn số liệu | A-01→A-05, T-06, T-07 | 2–3 | Hết cảm giác "hệ thống báo sai" |
-| **P1 — De-noise nền tảng** | Token, elevation, type scale, hạ tông table header, đồng bộ theming | T-01, T-02, T-10, T-11 | 4–5 | **~60% cảm giác "rối" biến mất, toàn app** |
-| **P2 — Cấu trúc trang** | PageHeader, sidebar group, **tách 2 dashboard**, chỉnh Analytics | T-03, T-04, T-05/05b/05c | 8–10 | Mỗi vai trò có 1 trang đúng nhu cầu, above-the-fold hữu ích |
-| **P3 — Nhất quán component** | StatusTag, confirmDanger, PermissionGate, FilterBar | T-08, T-09 | 4–5 | Học 1 lần dùng mọi trang |
-| **P4 — Nợ kỹ thuật** | Lint màu, chốt desktop-only, i18n, branding, dọn code | T-12→T-17 | 4–6 | Bền vững, không tái phát |
+| Phase | Nội dung | Hạng mục | Man-day | Kết quả cảm nhận | Trạng thái |
+|---|---|---|---|---|---|
+| **P0 — Hotfix dữ liệu** | Sửa mâu thuẫn số liệu | A-01→A-05, T-06, T-07 | 2–3 | Hết cảm giác "hệ thống báo sai" | ✅ Xong |
+| **P1 — De-noise nền tảng** | Token, elevation, type scale, hạ tông table header, đồng bộ theming | T-01, T-02, T-10, T-11 | 4–5 | **~60% cảm giác "rối" biến mất, toàn app** | ✅ Xong |
+| **P2 — Cấu trúc trang** | PageHeader, sidebar group, **tách 2 dashboard**, chỉnh Analytics | T-03, T-04, T-05/05b/05c | 8–10 | Mỗi vai trò có 1 trang đúng nhu cầu, above-the-fold hữu ích | ✅ Xong |
+| **P3 — Nhất quán component** | StatusTag, confirmDanger, PermissionGate, FilterBar | T-08, T-09 | 4–5 | Học 1 lần dùng mọi trang | ✅ Xong |
+| **P4 — Nợ kỹ thuật** | Lint màu, chốt desktop-only, i18n, branding, dọn code | T-12→T-17 | 4–6 | Bền vững, không tái phát | ✅ Xong |
 
 **Tổng: 22–29 man-day** (đã tính D-1 làm tăng P2 và D-3 làm giảm P4). Nếu chỉ có ngân sách hẹp: làm **P0 + P1** (6–8 man-day) đã giải quyết phần lớn vấn đề bạn đang cảm nhận, vì phần lớn style là override global nên sửa token là toàn app hưởng lợi.
 
@@ -462,6 +464,15 @@ export const CHART_COLORS = () => [
 | Q10 | **Trang Thanh toán chỉ đọc là chủ đích kiểm toán hay là gap chưa làm?** | Nếu chủ đích, cần thêm dòng giải thích trên UI để user không đi tìm nút Sửa. |
 
 > Q1, Q4, Q5 là 3 câu chặn tiến độ P2 — cần chốt trước khi Dev bắt đầu tách dashboard.
+
+### 8.1 Đáp án đã chốt (cập nhật 26/08/2026)
+
+| # | Đáp án | Đã triển khai |
+|---|---|---|
+| Q1–Q5, Q8, Q9 | Chốt theo quyết định D-1/D-2/D-3 ở mục 1 trong lúc làm P0–P4 (tách dashboard theo vai trò có "Ca của tôi" cho staff, nén hero banner, ngưỡng cảnh báo đưa về config, kỳ thời gian dùng chung 1 bộ chọn, Dashboard Quản lý = snapshot còn Analytics = phân tích sâu, tên sản phẩm chốt "Quản lý bãi đỗ xe", i18n hoàn thiện toàn bộ kể cả `ImportModal`) | ✅ P0–P4 |
+| Q6 | **Là bug** (không phải nghiệp vụ đúng). Nguyên nhân: `zoneEfficiency` trong `analytics.service.ts` đọc tình trạng chỗ đỗ **tại thời điểm hiện tại** (live snapshot) thay vì tính theo đúng khoảng thời gian `[start,end]` của kỳ báo cáo đang chọn — nên đổi kỳ (tháng/quý) vẫn ra cùng 1 số % lấp đầy. Đã sửa thành tính **time-weighted occupancy**: cộng dồn thời gian mỗi bản ghi *chồng lấn* với kỳ báo cáo, chia cho `tổng chỗ × độ dài kỳ`. | ✅ đã sửa — `getInsights()` trong `backend/src/services/analytics.service.ts` |
+| Q7 | **Có ca trực đêm** → đầu tư dark mode. | ✅ đã làm — `ThemeContext.tsx` + `useAntdTheme.ts`, nút bật/tắt ở header (icon mặt trời/mặt trăng), lưu lựa chọn vào `localStorage` |
+| Q10 | **Là gap chưa làm**, không phải chủ đích kiểm toán → thêm chức năng Sửa. | ✅ đã làm — nút "Sửa" trên trang Thanh toán, sửa được số tiền/phương thức/ghi chú, ghi lại vào Nhật ký hoạt động (audit trail qua `activityLogger`) |
 
 ---
 

@@ -874,6 +874,28 @@ Cảnh báo / Validation:
 
 ---
 
+### FUNC-PAY-002 – Sửa giao dịch thanh toán
+
+Mô tả:
+Cập nhật số tiền, phương thức thanh toán và ghi chú của một giao dịch đã ghi nhận. Trước đây trang thanh toán chỉ xem, nay admin có thể sửa trực tiếp qua modal. Thao tác được ghi vào nhật ký hoạt động (`activityLogger('Payments')`) như các thao tác ghi khác.
+
+API: `PUT /api/payments/:id`
+
+Cảnh báo / Validation:
+- Chỉ admin được phép truy cập
+- amount phải là số dương
+- paymentMethod chỉ nhận cash/card/transfer
+- notes tối đa 500 ký tự
+
+| Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
+|------------|------------|----------|------|
+| id | number (path param) | Có | ID giao dịch thanh toán |
+| amount | number | Có | Số tiền mới |
+| paymentMethod | enum | Có | cash/card/transfer |
+| notes | string | Không | Ghi chú |
+
+---
+
 ## REPORT
 
 ### FUNC-REP-001 – Báo cáo dashboard

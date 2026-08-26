@@ -1,5 +1,14 @@
 # QLBDX — Nâng cấp thông minh (KHÔNG dùng Machine Learning)
 
+> **Trạng thái: đã triển khai đầy đủ.** Đã xác minh lại trên code hiện tại (2026-08-26): Phần 1 (dọn ML) đã xong — không còn `ml-service/`, không còn route/controller `ml.*`. Cả 5 tính năng ở Phần 2 đều đã có trong code:
+> - Task 1 (Dashboard insights — so sánh tuần, giờ cao điểm, xu hướng 7 ngày, gợi ý): `backend/src/services/report.service.ts` (`weekComparison`, `peakHours`, `dailyTrend`, `suggestions`).
+> - Task 2 (Gợi ý gói rule-based): `GET /api/customer-packages/recommend/:customerId` — `customerPackage.controller.ts` / `.service.ts`.
+> - Task 3 (Cảnh báo thông minh nâng cao): `backend/src/services/alertRuleTier.service.ts` với các `RULE_TYPES` (`zoneNearFullPercent`, `zoneImbalanceMaxPercent`, `longParkingHours`, `parkingAnomalyMultiplier`, `suspiciousPaymentAmount`, `revenueDropPercent`, `renewalFrequency`) — ngưỡng đã đưa về cấu hình thay vì hardcode, còn nâng cấp hơn cả mô tả gốc.
+> - Task 4 (Smart auto-fill biển số): `GET /api/parking/smart-lookup/:plate` — `parking.controller.ts` / `.service.ts`.
+> - Task 5 (Trang Phân tích & Gợi ý DSS): `backend/src/services/analytics.service.ts` + `frontend/src/pages/Analytics.tsx`, route `/analytics`, admin only.
+>
+> Nội dung gốc bên dưới được giữ nguyên làm tài liệu tham chiếu yêu cầu/thiết kế ban đầu.
+
 > **Bối cảnh**: Đã code dở phần ML (ml-service Python Flask + scikit-learn).
 > Quyết định: **BỎ toàn bộ ML**, thay bằng tính năng thông minh dựa trên **rule-based + phân tích dữ liệu + DSS**.
 > Theo giáo trình C1: "Nếu không yêu cầu cao về thông minh thì độ chính xác ở mức thấp đã có thể thành công" — rule-based hoàn toàn đủ.

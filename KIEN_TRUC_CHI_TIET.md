@@ -43,13 +43,13 @@
 
 | Thành phần | Số file | Ghi chú |
 |---|---|---|
-| Backend services | 13 | ~2,681 dòng |
-| Backend controllers | 13 | mỏng, chỉ điều phối |
-| Backend routes | 13 + index | khai báo URL + middleware chain |
-| Backend validators | 10 | Zod schema |
-| Frontend pages | 17 | ~5,900 dòng |
+| Backend services | 17 | ~3,980 dòng (gồm `analytics.service.ts`, `alertSettings.service.ts`, `alertRuleTier.service.ts`) |
+| Backend controllers | 16 | mỏng, chỉ điều phối |
+| Backend routes | 16 + index | khai báo URL + middleware chain |
+| Backend validators | 11 | Zod schema |
+| Frontend pages | 18 | ~6,300 dòng (gồm `Analytics.tsx`) |
 | Prisma models | 11 | SQL Server |
-| Seed data | 1 | 799 dòng, dữ liệu nhiều năm |
+| Seed data | 1 | ~800 dòng, dữ liệu nhiều năm |
 
 ---
 
@@ -156,16 +156,19 @@ QLBDX/
 │   └── package.json
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx                # ConfigProvider theme + Routes + guard
+│   │   ├── App.tsx                # ConfigProvider theme (đọc từ useAntdTheme) + Routes + guard
 │   │   ├── api/axios.ts           # baseURL + interceptor token / 401
 │   │   ├── context/
 │   │   │   ├── AuthContext.tsx        # user, login, logout, loading
-│   │   │   └── LanguageContext.tsx    # vi / en
+│   │   │   ├── LanguageContext.tsx    # vi / en
+│   │   │   └── ThemeContext.tsx       # theme sáng/tối, lưu localStorage, set data-theme trên <html>
+│   │   ├── theme/useAntdTheme.ts  # derive AntD ConfigProvider theme từ CSS custom properties
 │   │   ├── i18n/translations.ts
 │   │   ├── components/
-│   │   │   ├── Layout/MainLayout.tsx  # menu động theo quyền
+│   │   │   ├── Layout/MainLayout.tsx        # menu động theo quyền, nút toggle theme
+│   │   │   ├── Layout/DesktopOnlyBanner.tsx # cảnh báo khi viewport < 1024px
 │   │   │   └── ImportModal.tsx        # import Excel (xlsx / exceljs)
-│   │   ├── pages/                 # 17 màn hình
+│   │   ├── pages/                 # 18 màn hình
 │   │   ├── utils/
 │   │   │   ├── permConfig.ts      # cấu hình quyền staff (localStorage)
 │   │   │   └── reportExport.ts    # xuất Excel báo cáo
@@ -366,6 +369,8 @@ Prefix: `http://localhost:5000/api`. Cột **Quyền**: `–` = public, `auth` =
 |---|---|---|---|
 | GET/POST/PUT/DELETE | `/users`, `/users/:id` | admin | CRUD tài khoản |
 | GET | `/payments` | admin | Danh sách giao dịch |
+| GET | `/payments/my-shift` | auth | Giao dịch trong ca của user hiện tại |
+| PUT | `/payments/:id` | admin | **Sửa giao dịch** (amount, paymentMethod, notes) — có `activityLogger('Payments')` |
 | GET | `/activity-logs` | admin | Nhật ký hoạt động |
 | GET | `/reports/dashboard` | admin | KPI tổng quan |
 | GET | `/reports/alerts` | admin | Cảnh báo tổng hợp |
@@ -374,6 +379,11 @@ Prefix: `http://localhost:5000/api`. Cột **Quyền**: `–` = public, `auth` =
 | GET | `/reports/hourly-stats` | admin | Lưu lượng 24 giờ |
 | GET | `/reports/payment-methods` | admin | Theo phương thức & loại thu |
 | GET | `/reports/exception-stats` | admin | Thống kê checkout ngoại lệ |
+| GET | `/analytics/insights` | admin | Phân tích occupancy/doanh thu theo khu vực + gợi ý vận hành (trang `Analytics.tsx`) |
+| GET | `/alert-settings` | auth | Đọc ngưỡng cấu hình cảnh báo (mọi user đã đăng nhập, để tô màu thời gian đỗ ở trang Xe ra) |
+| PUT | `/alert-settings` | admin | Cập nhật ngưỡng cảnh báo |
+| GET | `/alert-rule-tiers`, `/alert-rule-tiers/rule-types` | auth | Đọc cấu hình mức độ cảnh báo theo bậc |
+| POST/PUT/DELETE | `/alert-rule-tiers` | admin | CRUD cấu hình mức độ cảnh báo |
 
 ---
 
@@ -533,14 +543,17 @@ Notes được **nối thêm** vào notes cũ (`\n`) và cắt còn 500 ký tự
 ### 8.1 Bootstrap
 
 ```
-LanguageProvider              (vi / en)
-  └─ ConfigProvider           (Ant Design theme + locale viVN/enUS)
-      └─ AuthProvider         (user, login, logout, loading)
-          └─ BrowserRouter
-              └─ Routes
+ThemeProvider                 (sáng / tối, data-theme trên <html>)
+  └─ LanguageProvider         (vi / en)
+      └─ ConfigProvider       (Ant Design theme từ useAntdTheme + locale viVN/enUS)
+          └─ AuthProvider     (user, login, logout, loading)
+              └─ BrowserRouter
+                  └─ Routes
 ```
 
-**Theme tokens** đặt tại `App.tsx`: `colorPrimary #005daa`, `colorBgBase #f9f9ff`, font Inter, `borderRadius 8`, `controlHeight 40`, cùng override cho Card / Table / Button / Input / Select / Modal / Menu.
+**Theme tokens**: `App.tsx` gọi `useAntdTheme(mode)` (`frontend/src/theme/useAntdTheme.ts`) để dựng `ThemeConfig` cho `ConfigProvider` — token màu (`colorPrimary`, `colorBgBase`, `colorText`...) không còn hardcode mà đọc trực tiếp từ CSS custom properties của `design-system.css` qua `getComputedStyle`, nên khi `ThemeContext` đổi `data-theme` (sáng/tối), theme AntD tự đồng bộ theo. Ngoài màu, còn có font Inter, `borderRadius 8`, `controlHeight 40`, cùng override cho Card / Table / Button / Input / Select / Modal / Menu.
+
+> Trước đây `ConfigProvider` khai báo một bộ hex cứng riêng, tách biệt với CSS — dễ bị lệch màu khi design-system.css đổi token (ví dụ `colorBgBase` từng giữ `#f9f9ff` dù CSS đã đổi `--surface` sang giá trị khác). `useAntdTheme` xoá bỏ nguồn trùng lặp đó.
 
 ### 8.2 Định tuyến & bảo vệ route
 
@@ -593,6 +606,7 @@ Lưu tại `localStorage['qlbdx_staff_perms_v1']`. `MainLayout` đọc và dựn
 |---|---|---|
 | `Dashboard.tsx` | 611 | KPI, biểu đồ nhanh, tình trạng bãi |
 | `Reports.tsx` | 754 | 6 nhóm báo cáo + xuất Excel |
+| `Analytics.tsx` | 146 | Phân tích occupancy/doanh thu theo khu vực theo kỳ (tháng/quý/năm) + gợi ý vận hành, gọi `GET /analytics/insights` |
 | `CustomerPackages.tsx` | 571 | Đăng ký gói, lọc đa tiêu chí |
 | `ParkingExit.tsx` | 552 | Preview phí, xác nhận ra, checkout ngoại lệ, in phiếu |
 | `ActivityLogs.tsx` | 439 | Tra cứu nhật ký |
@@ -605,11 +619,20 @@ Lưu tại `localStorage['qlbdx_staff_perms_v1']`. `MainLayout` đọc và dựn
 | `ParkingHistory.tsx` | 262 | Lịch sử lượt gửi |
 | `Customers.tsx` | 232 | CRUD khách hàng |
 | `VehicleTypes.tsx` | 176 | Bảng giá |
-| `Payments.tsx` | 173 | Danh sách giao dịch |
+| `Payments.tsx` | 173+ | Danh sách giao dịch + **sửa giao dịch** (amount, phương thức, ghi chú) qua modal, gọi `PUT /payments/:id` |
 | `Profile.tsx` | 133 | Hồ sơ cá nhân, đổi mật khẩu |
 | `Login.tsx` | 89 | Đăng nhập |
 
-**Tiện ích dùng chung:** `ImportModal.tsx` (import Excel qua `xlsx`/`exceljs`), `reportExport.ts` (xuất báo cáo), `i18n/translations.ts` (song ngữ vi/en).
+**Tiện ích dùng chung:** `ImportModal.tsx` (import Excel qua `xlsx`/`exceljs`), `reportExport.ts` (xuất báo cáo), `i18n/translations.ts` (song ngữ vi/en), `DesktopOnlyBanner.tsx` (cảnh báo khi viewport < 1024px, ứng dụng chưa responsive đầy đủ).
+
+### 8.7 Dark mode
+
+- `ThemeContext.tsx` cung cấp `{ mode, toggleMode }`; `mode` mặc định `light`, đọc/ghi `localStorage['qlbdx_theme_mode']`.
+- Áp dụng bằng `useLayoutEffect` (không phải `useEffect`) để set `data-theme` lên `<html>` **đồng bộ** trước khi trình duyệt paint — tránh nháy theme cũ ở lần render đầu và tránh việc `ConfigProvider` đọc `getComputedStyle` bị lệch một nhịp so với theme vừa đổi.
+- `design-system.css` định nghĩa toàn bộ token màu dạng CSS custom property, override lại dưới `:root[data-theme='dark']`.
+- `useAntdTheme.ts` đọc các custom property đó bằng `getComputedStyle` để dựng `ThemeConfig` cho Ant Design — một nguồn màu duy nhất cho cả CSS thuần và component AntD.
+- Nút chuyển đổi theme (icon mặt trăng/mặt trời) nằm trên header `MainLayout.tsx`.
+- ESLint có rule cảnh báo (`warn`) khi hardcode mã màu hex trong `frontend/src/**/*.tsx` (khai báo trong `eslintConfig.overrides` của `frontend/package.json`) — khuyến khích dùng CSS custom property thay vì hex cứng, để không phá dark mode.
 
 ---
 
@@ -681,6 +704,12 @@ Chạy song song 6 truy vấn:
 | 6 | Thanh toán bất thường | `amount <= 0`, hoặc `>= 5.000.000`, hoặc `paymentType=parking && amount >= 300.000` | 20 |
 
 Kết quả gộp thành mảng alert thống nhất: `{ id, severity, category, title, description, occurredAt, relatedPath }` — `relatedPath` cho phép click thẳng sang màn hình xử lý.
+
+### 10.5 `/analytics/insights` — Phân tích & gợi ý (trang `Analytics.tsx`)
+
+`analytics.service.ts` → `getInsights(period)` (`month` \| `quarter` \| `year`) trả về phân tích theo ngày trong tuần, theo khung giờ, và **hiệu quả theo khu vực** (`zoneEfficiency`): số chỗ, doanh thu, tỷ lệ lấp đầy, doanh thu/chỗ — kèm danh sách gợi ý vận hành dạng text (ví dụ đề xuất tăng occupancy khu vực dùng ít).
+
+> **Đã sửa lỗi tính occupancy theo khu vực:** trước đây tỷ lệ lấp đầy tính từ trạng thái **hiện tại** của `ParkingSpot` (`status = occupied`), nên không phản ánh đúng kỳ báo cáo đã chọn — ví dụ xem báo cáo tháng trước vẫn ra "100% occupied, 0đ doanh thu" nếu đúng lúc gọi API các chỗ đang trống. Cách tính hiện tại là **time-weighted overlap**: với mỗi `ParkingRecord`, lấy phần giao giữa `[entryTime, exitTime]` và khoảng `[start, end]` của kỳ báo cáo, cộng dồn theo khu vực, rồi chia cho `tổng số chỗ × độ dài kỳ` để ra tỷ lệ lấp đầy đúng nghĩa cho đúng khoảng thời gian được lọc.
 
 ---
 
@@ -822,6 +851,9 @@ cd frontend && npm install && npm start
 | Quyền truy cập endpoint | `backend/src/routes/*.routes.ts` |
 | Cấu trúc dữ liệu | `backend/prisma/schema.prisma` |
 | Menu & quyền màn hình | `frontend/src/utils/permConfig.ts` + `components/Layout/MainLayout.tsx` |
-| Theme giao diện | `frontend/src/App.tsx` (ConfigProvider) + `design-system.css` |
+| Theme giao diện (màu sắc, token) | `frontend/src/design-system.css` (nguồn duy nhất) + `frontend/src/theme/useAntdTheme.ts` (đọc vào AntD) |
+| Dark mode / toggle sáng-tối | `frontend/src/context/ThemeContext.tsx` + `components/Layout/MainLayout.tsx` |
+| Sửa giao dịch thanh toán | `backend/src/services/payment.service.ts` (`update`) + `frontend/src/pages/Payments.tsx` |
+| Tính occupancy theo khu vực (báo cáo phân tích) | `backend/src/services/analytics.service.ts` (`getInsights`) |
 | Gọi API / xử lý 401 | `frontend/src/api/axios.ts` |
 | Song ngữ | `frontend/src/i18n/translations.ts` |

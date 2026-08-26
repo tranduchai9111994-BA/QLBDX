@@ -121,13 +121,16 @@ Các thư mục/file đáng chú ý:
 
 - `frontend/src/api/axios.ts`: cấu hình `axios`, tự gắn JWT vào header `Authorization`.
 - `frontend/src/context/AuthContext.tsx`: lưu trạng thái đăng nhập, login/logout, gọi `/auth/me`.
-- `frontend/src/components/Layout/MainLayout.tsx`: layout chính và menu (ẩn/hiện theo role).
+- `frontend/src/context/ThemeContext.tsx`: quản lý theme sáng/tối (`mode`), lưu lựa chọn vào `localStorage` (`qlbdx_theme_mode`), gắn thuộc tính `data-theme` lên `<html>`.
+- `frontend/src/theme/useAntdTheme.ts`: đọc token màu từ CSS custom properties (`getComputedStyle`) để dựng theme cho Ant Design `ConfigProvider`, đảm bảo giao diện AntD và CSS tự viết luôn đồng bộ dù đang ở theme sáng hay tối.
+- `frontend/src/components/Layout/MainLayout.tsx`: layout chính, menu (ẩn/hiện theo role), có nút chuyển đổi theme sáng/tối (icon mặt trăng/mặt trời) trên header.
+- `frontend/src/components/Layout/DesktopOnlyBanner.tsx`: banner cảnh báo có thể đóng, hiện khi màn hình nhỏ hơn 1024px — ứng dụng là công cụ nội bộ, chưa đầu tư responsive đầy đủ.
 - `frontend/src/pages/`: các màn hình nghiệp vụ.
 - `frontend/src/types/index.ts`: TypeScript interfaces toàn cục.
 - `frontend/src/utils/reportExport.ts`: xuất Excel (multi-sheet), CSV, in PDF báo cáo.
-- `frontend/src/design-system.css`: CSS bổ sung cho dashboard, hero section, occupancy bars.
+- `frontend/src/design-system.css`: CSS bổ sung cho dashboard, hero section, occupancy bars; có bảng màu riêng cho dark mode dưới `:root[data-theme='dark']`.
 
-Danh sách trang hiện có (17 trang):
+Danh sách trang hiện có (18 trang):
 
 | Trang | Staff | Admin |
 |-------|-------|-------|
@@ -143,8 +146,9 @@ Danh sách trang hiện có (17 trang):
 | `CustomerPackages.tsx` | ✓ | ✓ |
 | `ParkingZones.tsx` | xem | ✓ |
 | `ParkingSpots.tsx` | xem | ✓ |
-| `Payments.tsx` | — | ✓ |
+| `Payments.tsx` | — | ✓ (xem + sửa) |
 | `Reports.tsx` | — | ✓ |
+| `Analytics.tsx` | — | ✓ (phân tích & gợi ý) |
 | `Alerts.tsx` | — | ✓ |
 | `Users.tsx` | — | ✓ |
 | `ActivityLogs.tsx` | — | ✓ |
@@ -562,6 +566,14 @@ Từ trang Reports (admin only), có thể:
 - **Xuất Excel** (multi-sheet): sheet Tổng quan, sheet Doanh thu theo kỳ, sheet Phân loại xe, sheet Phương thức thanh toán.
 - **Xuất CSV**: riêng từng bộ dữ liệu (doanh thu / xe / thanh toán).
 - **In PDF**: mở cửa sổ in với layout chuẩn gồm KPI box, bảng doanh thu, bảng loại xe, chữ ký.
+
+### 16. Hệ thống có dark mode không?
+
+Có. `ThemeContext` lưu `mode` (`light`/`dark`) vào `localStorage`, gắn `data-theme` lên thẻ `<html>`; `design-system.css` định nghĩa bảng màu riêng cho `:root[data-theme='dark']`. `useAntdTheme.ts` đọc lại các CSS custom property đó qua `getComputedStyle` để dựng theme cho Ant Design, nên giao diện AntD và CSS tự viết không bao giờ lệch màu nhau khi đổi theme. Nút chuyển theme (icon mặt trăng/mặt trời) nằm trên header của `MainLayout`.
+
+### 17. Thanh toán (`Payments`) có sửa được không?
+
+Có, admin sửa được số tiền, phương thức thanh toán và ghi chú của một giao dịch qua `PUT /api/payments/:id` (trước đây trang này chỉ xem, không sửa). Thao tác sửa vẫn đi qua middleware `activityLogger('Payments')` nên vẫn có audit trail như các thao tác ghi khác.
 
 ---
 

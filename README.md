@@ -72,6 +72,7 @@ cd backend
 npm run prisma:seed          # Seed tài khoản + danh mục + dữ liệu demo cơ bản
 npm run prisma:seed-history  # Bồi đắp dữ liệu lịch sử nhiều năm (2024 → nay) cho Dashboard/Báo cáo thực tế
 npm run prisma:fix-stale-parked  # Nếu app đã chạy demo lâu ngày, xe "đang đỗ" bị coi là đỗ quá lâu — chạy lệnh này để làm mới
+npm run prisma:seed-exceptions   # Seed 16 bản ghi "checkout ngoại lệ" mẫu cho Báo cáo
 ```
 
 ---
@@ -87,7 +88,8 @@ npm run prisma:fix-stale-parked  # Nếu app đã chạy demo lâu ngày, xe "đ
 | **Khách hàng & Phương tiện** | CRUD đầy đủ, validate trùng biển số/SĐT/CCCD |
 | **Gói dịch vụ** | Vé tháng/quý/năm, kiểm tra chồng gói, deactivate/reactivate |
 | **Lịch sử biển số** | Tra cứu toàn bộ lịch sử + checkout ngoại lệ theo biển số |
-| **Thanh toán** | Tự sinh khi xe ra/mua gói, xuất Excel/CSV/in PDF |
+| **Thanh toán** | Tự sinh khi xe ra/mua gói, sửa được thông tin giao dịch, xuất Excel/CSV/in PDF |
+| **Giao diện** | Sáng/Tối (dark mode) — nút chuyển ở header, tự nhớ lựa chọn lần sau |
 | **Báo cáo** | Doanh thu theo ngày/tháng/năm, phân loại xe, PTTT, xuất Excel |
 | **Cảnh báo** | Gói sắp hết hạn, bãi sắp đầy, xe đỗ quá lâu, dữ liệu lệch — **ngưỡng và mức độ (Nguy hiểm/Cảnh báo/Thông tin) tự cấu hình được**, mỗi loại có thể đặt nhiều mốc (VD: >=48h = Nguy hiểm, >=24h = Cảnh báo) |
 | **Phân quyền** | Admin: toàn quyền; Staff: vận hành (xe vào/ra, khách, gói) |
@@ -132,10 +134,12 @@ QLBDX/
 ├── frontend/
 │   └── src/
 │       ├── api/axios.ts     # HTTP client + interceptors
-│       ├── context/         # AuthContext, LanguageContext (song ngữ vi/en)
+│       ├── context/         # AuthContext, LanguageContext (song ngữ vi/en), ThemeContext (dark mode)
+│       ├── theme/            # useAntdTheme.ts — theme token AntD theo sáng/tối
 │       ├── i18n/            # translations.ts
 │       ├── components/      # Layout, ImportModal, PageHeader, StatusTag, FilterBar,
-│       │                    # PermissionGate, AlertSettingsPanel (bảng ngưỡng cảnh báo)
+│       │                    # PermissionGate, AlertSettingsPanel (bảng ngưỡng cảnh báo),
+│       │                    # DesktopOnlyBanner (cảnh báo màn hình < 1024px)
 │       ├── hooks/            # useDashboardData, useAlertRuleTiers, useUpdateAvailable
 │       ├── pages/           # Trang UI (Dashboard tách OpsDashboard/MgmtDashboard theo vai trò)
 │       ├── types/index.ts   # TypeScript interfaces
