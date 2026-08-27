@@ -544,6 +544,10 @@ async function seedActivityLogs() {
 // ──────────────────────────────────────
 async function seedDenseAug2026Demo(vehicles: { id: number; vehicleTypeId: number; licensePlate: string }[]) {
   const demoTag = '[DEMO_AUG2026]';
+  // SQL Server hiểu [...] trong LIKE là CHARACTER CLASS, nên contains: '[DEMO_AUG2026]' sẽ khớp
+  // MỌI note chứa bất kỳ ký tự nào trong tập {D,E,M,O,_,A,U,G,2,0,6} — từng xoá oan toàn bộ bản
+  // ghi checkout ngoại lệ ([NGOAI_LE:...]). Phải escape '[' thành '[[]' để khớp đúng chuỗi literal.
+  const demoTagLike = '[[]DEMO_AUG2026]';
   const now = new Date();
   const userIds = (await prisma.user.findMany({
     where: { isActive: true },
@@ -570,14 +574,14 @@ async function seedDenseAug2026Demo(vehicles: { id: number; vehicleTypeId: numbe
   const methods = ['cash', 'transfer', 'card'];
 
   const oldDemoRecords = await prisma.parkingRecord.findMany({
-    where: { notes: { contains: demoTag } },
+    where: { notes: { contains: demoTagLike } },
     select: { id: true },
   });
   if (oldDemoRecords.length > 0) {
     await prisma.payment.deleteMany({
       where: {
         OR: [
-          { notes: { contains: demoTag } },
+          { notes: { contains: demoTagLike } },
           { parkingRecordId: { in: oldDemoRecords.map((record) => record.id) } },
         ],
       },
@@ -633,7 +637,7 @@ async function seedDenseAug2026Demo(vehicles: { id: number; vehicleTypeId: numbe
 
   const createdCompletedRecords = await prisma.parkingRecord.findMany({
     where: {
-      notes: { contains: demoTag },
+      notes: { contains: demoTagLike },
       status: 'completed',
     },
     select: { id: true, fee: true, exitTime: true },

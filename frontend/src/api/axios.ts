@@ -1,7 +1,9 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
+// Cho phép override qua REACT_APP_API_URL để không phải sửa code khi backend đổi port/host.
+// Mặc định 5001 (không dùng 5000 vì port này hay bị app khác trên máy dev chiếm).
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api',
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {

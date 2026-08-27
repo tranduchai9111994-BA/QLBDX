@@ -241,24 +241,25 @@ const Users: React.FC = () => {
                         <Tag color="red" style={{ fontSize: 12 }}>Đầy đủ</Tag>
                       </td>
                       <td style={{ textAlign: 'center', padding: '8px 14px' }}>
-                        {s.configurable ? (
+                        {/* Chỉ render Radio khi đang ở chế độ sửa. Trước đây luôn render Radio và
+                            dùng disabled={!permEditing} để khoá — nhưng AntD làm mờ hẳn radio bị
+                            disabled nên ở chế độ xem gần như không đọc được đang set quyền gì. */}
+                        {s.configurable && permEditing ? (
                           <Radio.Group
                             value={effectiveLevel}
                             onChange={(e) => {
-                              if (!permEditing) return;
                               setDraftPerms((prev) => ({ ...prev, [s.key]: e.target.value as AccessLevel }));
                             }}
                             optionType="button"
                             buttonStyle="solid"
                             size="small"
-                            disabled={!permEditing}
                           >
-                            <Radio.Button value="hidden" style={effectiveLevel === 'hidden' ? { background: 'var(--error)', borderColor: 'var(--error)' } : {}}>Ẩn</Radio.Button>
-                            <Radio.Button value="view" style={effectiveLevel === 'view' ? { background: 'var(--info)', borderColor: 'var(--info)' } : {}}>Chỉ xem</Radio.Button>
-                            <Radio.Button value="full" style={effectiveLevel === 'full' ? { background: 'var(--success)', borderColor: 'var(--success)' } : {}}>Đầy đủ</Radio.Button>
+                            <Radio.Button value="hidden" style={effectiveLevel === 'hidden' ? { background: 'var(--error)', borderColor: 'var(--error)', color: '#fff' } : {}}>Ẩn</Radio.Button>
+                            <Radio.Button value="view" style={effectiveLevel === 'view' ? { background: 'var(--info)', borderColor: 'var(--info)', color: '#fff' } : {}}>Chỉ xem</Radio.Button>
+                            <Radio.Button value="full" style={effectiveLevel === 'full' ? { background: 'var(--success)', borderColor: 'var(--success)', color: '#fff' } : {}}>Đầy đủ</Radio.Button>
                           </Radio.Group>
                         ) : (
-                          <Tag color={effectiveLevel === 'full' ? 'green' : effectiveLevel === 'view' ? 'blue' : 'default'}>
+                          <Tag color={effectiveLevel === 'full' ? 'green' : effectiveLevel === 'view' ? 'blue' : 'red'}>
                             {ACCESS_LABEL[effectiveLevel].text}
                           </Tag>
                         )}

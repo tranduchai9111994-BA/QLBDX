@@ -38,6 +38,9 @@
   --warning-container: #ffdcbe;
   --error: #ba1a1a;
   --error-container: #ffdad6;
+  /* Nền đặc cho nút nguy hiểm (nền đỏ + chữ trắng). Tách khỏi --error vì --error ở dark mode là
+     đỏ NHẠT (dùng cho chữ/viền trên nền tối) — lấy làm nền kèm chữ trắng sẽ tương phản rất kém. */
+  --error-solid: #ba1a1a;
   --info: #005daa;
   --info-container: #d4e3ff;
 
@@ -127,6 +130,7 @@
   --warning-container: #4a300e;
   --error: #ff7a7a;
   --error-container: #4a1a1a;
+  --error-solid: #c62828;
   --info: #6db8ff;
   --info-container: #1864ab;
 
@@ -257,7 +261,9 @@ body {
 }
 
 /* Buttons */
-.ant-btn-primary {
+/* :not(.ant-btn-dangerous) — nút primary dùng cho hành động nguy hiểm/ngoại lệ (VD: "Xác nhận
+   ngoại lệ" khi checkout) phải giữ màu đỏ cảnh báo, không bị rule gradient xanh này đè lên. */
+.ant-btn-primary:not(.ant-btn-dangerous) {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%) !important;
   border: none !important;
   border-radius: var(--radius-default) !important;
@@ -265,9 +271,24 @@ body {
   box-shadow: none !important;
   transition: all 0.2s ease !important;
 }
-.ant-btn-primary:hover {
+.ant-btn-primary:not(.ant-btn-dangerous):hover {
   background: linear-gradient(135deg, var(--primary-container) 0%, var(--primary) 100%) !important;
   box-shadow: 0 4px 12px rgba(0, 93, 170, 0.3) !important;
+  transform: translateY(-1px);
+}
+.ant-btn-primary.ant-btn-dangerous {
+  background: var(--error-solid) !important;
+  border: none !important;
+  border-radius: var(--radius-default) !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease !important;
+}
+.ant-btn-primary.ant-btn-dangerous:hover {
+  background: var(--error-solid) !important;
+  color: #ffffff !important;
+  opacity: 0.88;
   transform: translateY(-1px);
 }
 /* Nút "ghost" (viền màu, nền trong suốt) — nếu không loại trừ khỏi rule gradient ở trên,
