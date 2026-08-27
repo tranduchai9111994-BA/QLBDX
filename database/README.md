@@ -6,66 +6,100 @@
 - SQL Server Management Studio (SSMS)
 
 ---
+## Cách nhanh nhất — dùng script tự động
 
-## Cách chạy lần đầu
+Mở **PowerShell** tại thư mục gốc dự án:
 
-### Cách nhanh nhất — Restore từ backup có sẵn (khuyến nghị)
+```powershell
+# Dựng lại DB từ đầu: migrate + seed đầy đủ (khuyến nghị)
+.\scripts\setup-database.ps1
 
-File `database/ParkingManagement.bak` chứa toàn bộ database **kèm sẵn ~39.000 bản ghi** (data nhiều năm 2024 → nay) — restore xong là có ngay dữ liệu thật, không cần chạy seed script (~3 phút) nữa.
+# Hoặc restore nhanh từ file .bak có sẵn (~39.000 bản ghi, không cần seed)
+.\scripts\setup-database.ps1 -FromBackup
 
-Trong SSMS: chuột phải **Databases → Restore Database... → Device → chọn `ParkingManagement.bak`** → OK.
-
-Hoặc bằng lệnh (`sqlcmd`):
-```bash
-sqlcmd -S localhost -U sa -P 123 -Q "RESTORE DATABASE [ParkingManagement] FROM DISK = N'database/ParkingManagement.bak' WITH REPLACE"
+# Bỏ qua seed lịch sử nhiều năm (nhanh hơn ~2-3 phút)
+.\scripts\setup-database.ps1 -SkipHistory
 ```
 
-Xong bước này → bỏ qua "Bước 2 — Chạy script" bên dưới, chuyển thẳng sang **Bước 3 — Cấu hình backend**.
+SQL Server khác cấu hình mặc định? Truyền tham số:
+```powershell
+.\scripts\setup-database.ps1 -SqlServer "localhost\SQLEXPRESS" -SqlUser sa -SqlPass matkhau
+```
+
+Script tự kiểm tra môi trường (`sqlcmd`, `node`, kết nối SQL Server), tạo `.env` nếu thiếu, áp dụng
+migrations, chạy toàn bộ seed theo đúng thứ tự, rồi in ra số bản ghi để bạn xác nhận.
 
 ---
 
-### Cách thủ công — Chạy script từ đầu (nếu muốn tự tạo data hoặc backup bị lỗi)
+## ⚠️ Không dùng `database/legacy/`
 
-### Bước 1 — Kết nối SSMS
+`legacy/setup.sql`, `legacy/schema.sql`, `legacy/demo_business_patch.sql` là các bản dump **CŨ**
+(07/2026), giữ lại chỉ để tham khảo lịch sử. Chúng **thiếu toàn bộ bảng/cột thêm về sau**:
 
-| Trường | Giá trị |
+| Thiếu gì | Thuộc tính năng |
+|---|---|
+| `AlertSettings`, `AlertRuleTiers` | Cấu hình ngưỡng cảnh báo |
+| `PermissionGroups`, `GroupPermissions`, `Users.PermissionGroupId` | Nhóm quyền (phân quyền Thêm/Sửa/Xóa) |
+| `ParkingPackages.ValidFrom` / `ValidTo` | Khoảng thời gian bán gói dịch vụ |
+| `ParkingRecords.HourlyRateApplied` / `DailyRateApplied` | Chốt giá tại thời điểm xe vào |
+| `VehicleTypeRateHistory`, `PackagePriceHistory` | Lịch sử giá / đặt lịch đổi giá |
+
+Chạy các file đó sẽ ra **schema sai** và app không hoạt động đúng.
+**Nguồn sự thật duy nhất của schema là Prisma migrations** trong `backend/prisma/migrations/`.
+
+---
+
+## Cách thủ công (Mac/Linux, hoặc muốn hiểu từng bước)
+
+### Bước 1 — Tạo database rỗng
+
+```bash
+sqlcmd -S localhost -U sa -P 123 -Q "IF DB_ID('ParkingManagement') IS NULL CREATE DATABASE [ParkingManagement]"
+```
+
+Hoặc trong SSMS: chuột phải **Databases → New Database...** → tên `ParkingManagement`.
+
+| Trường kết nối | Giá trị mặc định |
 |--------|---------|
 | Server | `localhost` hoặc `localhost\SQLEXPRESS` |
 | Authentication | SQL Server Authentication |
 | Login | `sa` |
 | Password | `123` |
 
-> Windows Authentication: bỏ qua user/password, sửa `DATABASE_URL` trong `backend/.env` tương ứng.
+> Dùng Windows Authentication: bỏ user/password, sửa `DATABASE_URL` trong `backend/.env` tương ứng.
 
-### Bước 2 — Chạy script
-
-1. Mở `database/setup.sql` trong SSMS (`File → Open → File...`)
-2. Nhấn **F5** hoặc nút **Execute** → chờ ~10 giây
-3. _(Tuỳ chọn)_ Chạy tiếp `database/demo_business_patch.sql` để bổ sung dữ liệu demo nghiệp vụ
-4. _(Khuyên dùng)_ Chạy Prisma seed để có data demo cơ bản + tài khoản:
+### Bước 2 — Áp dụng schema bằng Prisma migrations
 
 ```bash
 cd backend
+cp .env.example .env          # Windows: copy .env.example .env
 npm install
-npm run prisma:generate
-npm run prisma:seed
+npx prisma migrate deploy     # tạo toàn bộ bảng, đúng phiên bản mới nhất
+npx prisma generate
 ```
 
-5. _(Khuyên dùng — để Dashboard/Báo cáo/Phân tích hiển thị đúng xu hướng thực tế)_ Bồi đắp dữ liệu
-   nhiều năm (2024 → nay), mất khoảng 2-3 phút, idempotent nên chạy lại vô tư:
+### Bước 3 — Seed dữ liệu demo (thứ tự này quan trọng)
 
 ```bash
-npm run prisma:seed-history
+npm run prisma:seed                      # tài khoản + danh mục + dữ liệu cơ bản
+npm run prisma:seed-permission-groups    # BẮT BUỘC — không có thì staff trắng quyền
+npm run prisma:seed-vehicle-expansion    # xe/khách mẫu cho 5 loại phương tiện mở rộng
+npm run prisma:seed-exceptions           # dữ liệu checkout ngoại lệ (cho trang Báo cáo)
+npm run prisma:seed-fresh-packages       # gói active/sắp hết hạn/vừa hết hạn quanh hôm nay
+npm run prisma:seed-history              # (~2-3 phút) dữ liệu nhiều năm cho Dashboard/Báo cáo
 ```
 
-### Bước 3 — Cấu hình backend
+Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn, không tạo trùng.
 
-Kiểm tra `backend/.env`:
-```env
-DATABASE_URL="sqlserver://localhost:1433;database=ParkingManagement;user=sa;password=123;encrypt=false;trustServerCertificate=true"
+### Bước 4 — Restore từ backup (thay cho Bước 2+3)
+
+```bash
+sqlcmd -S localhost -U sa -P 123 -Q "RESTORE DATABASE [ParkingManagement] FROM DISK = N'D:\duong\dan\den\database\ParkingManagement.bak' WITH REPLACE"
 ```
 
-Chỉnh `user`, `password` hoặc tên server nếu khác.
+Trong SSMS: chuột phải **Databases → Restore Database... → Device → chọn `ParkingManagement.bak`** → OK.
+Backup đã chứa sẵn ~39.000 bản ghi + nhóm quyền mặc định → xong là dùng được ngay, chỉ cần
+`npm install` và `npx prisma generate` ở `backend/`.
 
 ---
 
@@ -73,15 +107,17 @@ Chỉnh `user`, `password` hoặc tên server nếu khác.
 
 | Bảng | Số lượng |
 |------|---------|
-| Loại xe | 4 (Xe máy, Ô tô con, Ô tô lớn, Xe đạp) |
-| Khu đỗ / Chỗ đỗ | ~5 khu, ~100 chỗ |
-| Khách hàng | ~25 người |
-| Phương tiện | ~30 xe đa dạng loại |
-| Gói dịch vụ | 10 gói (tháng/quý/năm theo từng loại xe) |
-| Đăng ký gói | ~20 bản ghi (active, sắp hết hạn, expired, pending) |
-| Lịch sử đỗ xe | ~1.500+ lượt sau `prisma:seed`, **~39.000+** sau `prisma:seed-history` |
+| Loại xe | 9 (Xe máy, Ô tô con, Ô tô lớn, Xe đạp + 5 loại mở rộng: Xe đạp điện, Xe máy điện, Ô tô điện, Xe bán tải, Xe khách) |
+| Khu đỗ / Chỗ đỗ | ~4 khu, ~110 chỗ |
+| Khách hàng | ~30 người |
+| Phương tiện | ~40 xe đa dạng loại |
+| Gói dịch vụ | 16 gói (tháng/quý/năm theo từng loại xe) |
+| Đăng ký gói | ~40+ bản ghi (active, sắp hết hạn, expired, pending) — làm mới quanh ngày hiện tại qua `prisma:seed-fresh-packages` |
+| Lịch sử đỗ xe | ~1.500+ lượt sau `prisma:seed`, **~40.000+** sau `prisma:seed-history` |
+| Checkout ngoại lệ | 16 bản ghi sau `prisma:seed-exceptions` |
 | Thanh toán | tương ứng số lượt đỗ xe có phí |
 | Người dùng | 5 (2 admin, 3 staff — 1 tài khoản bị khoá để demo deactivate) |
+| Nhóm quyền | 1 mặc định ("Nhân viên tiêu chuẩn") sau `prisma:seed-permission-groups` |
 
 ### Sau khi chạy `npm run prisma:seed`
 - ~14 xe đang trong bãi (occupied spots)
@@ -159,8 +195,8 @@ Idempotent — chạy lại không tạo trùng nhóm, chỉ cập nhật lại 
 
 | File | Mô tả |
 |------|-------|
-| `setup.sql` | Tạo database + schema + seed cơ bản |
-| `demo_business_patch.sql` | Bổ sung/sync dữ liệu demo rule nghiệp vụ |
+| `scripts/setup-database.ps1` | Script tự động: migrate + seed đầy đủ, hoặc restore từ backup |
+| `legacy/setup.sql`, `legacy/schema.sql`, `legacy/demo_business_patch.sql` | ⚠ **Đã lỗi thời** — chỉ giữ tham khảo lịch sử, không dùng nữa (xem cảnh báo ở đầu file) |
 | `backend/prisma/seed.ts` | Seed tài khoản + danh mục + dữ liệu demo cơ bản (chạy qua `npm run prisma:seed`) |
 | `backend/prisma/seedHistoricalData.ts` | Bồi đắp dữ liệu nhiều năm cho Dashboard/Báo cáo thực tế, đọc loại xe/chỗ đỗ/giá động từ DB (`npm run prisma:seed-history`) |
 | `backend/prisma/fixStaleParkedDemo.ts` | Dọn xe "đang đỗ" demo bị coi là đỗ quá lâu do instance chạy nhiều tuần (`npm run prisma:fix-stale-parked`) |

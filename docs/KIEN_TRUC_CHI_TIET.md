@@ -65,7 +65,7 @@ flowchart TB
         UI <--> LS
     end
 
-    subgraph Server["Backend :5000 — Express + TypeScript"]
+    subgraph Server["Backend :5001 — Express + TypeScript"]
         MW["Middlewares<br/>cors → json → auth → adminOnly<br/>→ activityLogger → validate(Zod)"]
         RT["Routes /api/*"]
         CT["Controllers"]
@@ -336,7 +336,7 @@ khoảng bán để admin quản lý/sửa (chỉ ẩn khỏi dropdown chọn l�
 
 ## 6. Danh mục API đầy đủ
 
-Prefix: `http://localhost:5000/api`. Cột **Quyền**: `–` = public, `auth` = mọi user đã đăng nhập, `admin` = chỉ admin.
+Prefix: `http://localhost:5001/api` (đọc từ `REACT_APP_API_URL`, xem mục 8.4/9.1). Cột **Quyền**: `–` = public, `auth` = mọi user đã đăng nhập, `admin` = chỉ admin.
 
 ### 6.1 Auth — `/auth`
 | Method | Path | Quyền | Mô tả |
@@ -576,7 +576,7 @@ ThemeProvider                 (sáng / tối, data-theme trên <html>)
 
 ### 8.3 Lớp gọi API — `api/axios.ts`
 
-- `baseURL: 'http://localhost:5000/api'` — **hardcode**, không đọc env.
+- `baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api'` — đọc env, có fallback.
 - Request interceptor: tự gắn `Authorization: Bearer <localStorage.token>`.
 - Response interceptor: `401` **không phải** request `/auth/login` → xoá `token` + `user`, `window.location.href = '/login'`.
   *(Loại trừ login để form đăng nhập hiển thị được lỗi sai mật khẩu thay vì bị reload.)*
@@ -776,7 +776,7 @@ cd frontend && npm install && npm start
 | Backend | 5000 |
 | SQL Server | 1433 |
 
-`database/` chứa `schema.sql`, `setup.sql`, `demo_business_patch.sql`, `update-admin-password.sql` cho ai muốn dựng DB bằng SQL thuần thay vì Prisma.
+`database/legacy/` chứa `schema.sql`, `setup.sql`, `demo_business_patch.sql`, `update-admin-password.sql` — **bản dump SQL cũ, đã lỗi thời**, chỉ giữ tham khảo lịch sử. Đừng dùng để dựng DB — nguồn sự thật của schema là Prisma migrations (`backend/prisma/migrations/`), chạy qua `scripts/setup-database.ps1` hoặc `npx prisma migrate deploy`.
 
 ---
 

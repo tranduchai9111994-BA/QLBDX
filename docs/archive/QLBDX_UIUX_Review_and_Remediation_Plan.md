@@ -1,7 +1,7 @@
 # QLBDX — Đánh giá UI/UX & Phương án khắc phục "giao diện rối"
 
 > **Đối tượng đọc**: Frontend Dev, Tech Lead, BA, QA.
-> **Nguồn đánh giá**: `UIUX_AUDIT.md` (as-is, đọc từ source) + 2 ảnh chụp thực tế màn hình `Tổng quan` và `Phân tích & Gợi ý` (26/08/2026).
+> **Nguồn đánh giá**: `docs/archive/UIUX_AUDIT.md` (as-is, đọc từ source) + 2 ảnh chụp thực tế màn hình `Tổng quan` và `Phân tích & Gợi ý` (26/08/2026).
 > **Phạm vi**: React 18 + TypeScript + Ant Design 5 + Recharts, `design-system.css` ("Precision Authority").
 > **Ngày lập**: 26/08/2026 · Phiên bản: v1.0
 >
@@ -36,7 +36,7 @@ Nền tảng design system của app **tốt hơn mức trung bình** của mộ
 | 4 | **Hero banner tiêu tốn ~22% chiều cao viewport cho ~1 chỉ số thật** — phần còn lại là lời chào, glow trang trí và 4 nút đã có sẵn trong sidebar. Trong ops tool, above-the-fold là tài nguyên đắt nhất. | High |
 | 5 | **IA sidebar phẳng 13 mục top-level, 2 nhóm tự bung** → tổng 15 dòng cùng cấp thị giác, không có group header phân tách Vận hành / Danh mục / Quản trị. | High |
 
-Ngoài ra, các vấn đề đã ghi nhận trong `UIUX_AUDIT.md` (hardcode màu, StatusTag không đồng nhất, i18n nửa vời, responsive gap) vẫn giữ nguyên giá trị và được tích hợp vào roadmap bên dưới.
+Ngoài ra, các vấn đề đã ghi nhận trong `docs/archive/UIUX_AUDIT.md` (hardcode màu, StatusTag không đồng nhất, i18n nửa vời, responsive gap) vẫn giữ nguyên giá trị và được tích hợp vào roadmap bên dưới.
 
 **Khuyến nghị định hướng**: không redesign. Làm 1 đợt **"visual de-noise"** (giảm số lớp nhấn mạnh, chuẩn hoá elevation & type scale) + **tái cấu trúc nội dung Dashboard theo kỳ thời gian**, giữ nguyên toàn bộ nghiệp vụ và component. Ước lượng 12–16 man-day cho Phase 1+2 (phần tạo ra ~80% cảm nhận cải thiện).
 
@@ -72,9 +72,9 @@ Cảm giác "rối" hầu như không bao giờ đến từ "nhiều dữ liệu
 | Mã | Nguyên nhân | Bằng chứng |
 |---|---|---|
 | RC-1 | Không có **elevation scale** — chỉ có 2 shadow (`ambient` cực nhẹ, `float`). Card, section, page cùng một mức ⇒ không phân biệt được "nhóm" và "phần tử". | `design-system.css` §3.2 |
-| RC-2 | Không có **type scale** hệ thống hoá (`0.72rem / 0.875rem / 1.5rem / 1.75rem` rải rác). Không có quy ước "cỡ nào = cấp nào" ⇒ mỗi trang tự quyết định. | `UIUX_AUDIT.md` §3.3 |
+| RC-2 | Không có **type scale** hệ thống hoá (`0.72rem / 0.875rem / 1.5rem / 1.75rem` rải rác). Không có quy ước "cỡ nào = cấp nào" ⇒ mỗi trang tự quyết định. | `docs/archive/UIUX_AUDIT.md` §3.3 |
 | RC-3 | **Màu semantic bị dùng để định danh** thay vì báo trạng thái (4 accent bar cho 4 KPI trung tính). Khi màu đỏ/cam xuất hiện ở nơi không có vấn đề gì, người dùng mất khả năng "quét cảnh báo". | Ảnh 1, hàng stat card |
-| RC-4 | **2 lớp theming chồng nhau** (AntD token + CSS `!important`) ⇒ mỗi lần muốn hạ tông một thành phần phải sửa 2 nơi, nên Dev có xu hướng… thêm inline style. Đây chính là nguồn của 7.1/7.6/7.10. | `UIUX_AUDIT.md` §3.4 |
+| RC-4 | **2 lớp theming chồng nhau** (AntD token + CSS `!important`) ⇒ mỗi lần muốn hạ tông một thành phần phải sửa 2 nơi, nên Dev có xu hướng… thêm inline style. Đây chính là nguồn của 7.1/7.6/7.10. | `docs/archive/UIUX_AUDIT.md` §3.4 |
 | RC-5 | **Không có tầng layout primitive** (`PageHeader`, `Section`, `StatGrid`, `FilterBar`). Mỗi trang tự bố cục ⇒ padding/khoảng cách/tiêu đề khác nhau giữa các trang. | So sánh ảnh 1 vs ảnh 2: ảnh 2 có `<h1>` trong content, ảnh 1 không có |
 
 ---
@@ -476,4 +476,4 @@ export const CHART_COLORS = () => [
 
 ---
 
-*Tài liệu này đề xuất giải pháp cho trạng thái as-is mô tả trong `UIUX_AUDIT.md`. Các hạng mục đánh dấu **Cần BE** hoặc **Need Confirm** chưa được đưa vào ước lượng cứng cho tới khi có xác nhận.*
+*Tài liệu này đề xuất giải pháp cho trạng thái as-is mô tả trong `docs/archive/UIUX_AUDIT.md`. Các hạng mục đánh dấu **Cần BE** hoặc **Need Confirm** chưa được đưa vào ước lượng cứng cho tới khi có xác nhận.*

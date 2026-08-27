@@ -55,7 +55,7 @@ cd frontend && npm start
 
 ## 2. Tổng quan các cải tiến
 
-### A. Nâng cấp giao diện (UIUX) — theo đề xuất trong `QLBDX_UIUX_Review_and_Remediation_Plan.md`
+### A. Nâng cấp giao diện (UIUX) — theo đề xuất trong `docs/archive/QLBDX_UIUX_Review_and_Remediation_Plan.md`
 
 - **Tách Dashboard theo vai trò**: Nhân viên thấy màn hình vận hành (xe đỗ, khu bãi, **"Ca của tôi"** — đối soát tiền mặt riêng của mình); Quản trị thấy snapshot nhanh + có nút chuyển qua lại 2 view. Bỏ hero banner rườm rà, bỏ đồng hồ giây trùng lặp ở header.
 - **Sửa mâu thuẫn số liệu**: trước đây có chỗ ghi "đỗ >8 giờ", chỗ khác ghi "đỗ >24 giờ" cho cùng 1 khái niệm — nay thống nhất 1 ngưỡng.
@@ -110,7 +110,7 @@ Xem chi tiết đầy đủ về cấu trúc dữ liệu, tài khoản đăng nh
 
 ## 5. Đợt cập nhật bổ sung (cùng ngày) — hoàn tất toàn bộ hạng mục còn lại trong kế hoạch UIUX
 
-Sau đợt cập nhật ở mục 1–4, đã xử lý nốt 3 câu hỏi "Need Confirm" còn treo và 6 hạng mục kỹ thuật cuối cùng trong `QLBDX_UIUX_Review_and_Remediation_Plan.md` (mục 8, Q6/Q7/Q10 và mục 5.2, T-02/T-06/T-10/T-12/T-13/T-17). Không cần thêm bước cập nhật nào (không đổi schema, không thêm package) — chỉ cần `git pull` lại code mới nhất.
+Sau đợt cập nhật ở mục 1–4, đã xử lý nốt 3 câu hỏi "Need Confirm" còn treo và 6 hạng mục kỹ thuật cuối cùng trong `docs/archive/QLBDX_UIUX_Review_and_Remediation_Plan.md` (mục 8, Q6/Q7/Q10 và mục 5.2, T-02/T-06/T-10/T-12/T-13/T-17). Không cần thêm bước cập nhật nào (không đổi schema, không thêm package) — chỉ cần `git pull` lại code mới nhất.
 
 ### A. Sửa bug "Khu D 100% lấp đầy nhưng doanh thu 0đ" (Q6)
 

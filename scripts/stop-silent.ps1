@@ -1,6 +1,6 @@
-# stop-silent.ps1 — Dung Backend + Frontend cua QLBDX (dang chay an tren cong 5000/3000).
+# stop-silent.ps1 — Dung Backend + Frontend cua QLBDX (dang chay an tren cong 5001/3000).
 
-foreach ($port in 3000, 5000) {
+foreach ($port in 3000, 5001) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     foreach ($c in $conns) {
         Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue

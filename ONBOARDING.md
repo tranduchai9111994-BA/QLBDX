@@ -40,113 +40,129 @@ cd QLBDX
 
 ---
 
-## 3. Khởi tạo Database
+## 3. Setup tự động — 1 lệnh duy nhất (khuyến nghị)
 
-Chọn **1 trong 3 cách**:
+Mở **PowerShell** tại thư mục gốc dự án và chạy:
 
-### Cách A — Restore từ backup có sẵn (nhanh nhất, khuyến nghị)
+```powershell
+.\scripts\setup-all.ps1
+```
 
-`database/ParkingManagement.bak` đã chứa sẵn **~39.000 bản ghi** dữ liệu nhiều năm (2024 → nay) — restore xong là có ngay Dashboard/Báo cáo đầy đủ, khỏi cần chạy seed script.
+Script tự làm hết: kiểm tra môi trường → tạo `.env` → tạo database → áp dụng toàn bộ Prisma
+migrations → seed đầy đủ dữ liệu demo → cài dependency cả backend lẫn frontend.
 
-Trong SSMS: chuột phải **Databases → Restore Database... → Device → chọn file `.bak`** → OK. Hoặc dùng `sqlcmd` — chi tiết xem [database/README.md](database/README.md).
+Các tuỳ chọn:
 
-Xong cách này → bỏ qua các lệnh `prisma:seed`/`prisma:seed-history` ở **Mục 5**.
+| Lệnh | Khi nào dùng |
+|---|---|
+| `.\scripts\setup-all.ps1` | Máy mới, muốn dữ liệu đầy đủ nhất (mất ~5 phút vì có seed lịch sử nhiều năm) |
+| `.\scripts\setup-all.ps1 -SkipHistory` | Muốn nhanh, chấp nhận Dashboard/Báo cáo ít dữ liệu hơn |
+| `.\scripts\setup-all.ps1 -FromBackup` | **Nhanh nhất** — restore thẳng từ `database/ParkingManagement.bak` (đã có sẵn ~39.000 bản ghi) thay vì migrate + seed |
+| `.\scripts\setup-database.ps1` | Chỉ dựng lại database, không cài lại dependency |
 
-### Cách B — Dùng SSMS chạy từ script (tự tạo data mới)
+SQL Server của bạn khác cấu hình mặc định? Truyền tham số:
 
-1. Mở SQL Server Management Studio, kết nối `localhost` (user `sa` / password `123`, hoặc Windows Authentication).
-2. Mở file `database/setup.sql` → nhấn **F5** để chạy → đợi ~10 giây. Script tự tạo database `ParkingManagement` + toàn bộ bảng + data mẫu.
-3. *(Tuỳ chọn)* Chạy tiếp `database/demo_business_patch.sql` để chuẩn hoá thêm dữ liệu nghiệp vụ demo.
+```powershell
+.\scripts\setup-all.ps1 -SqlServer "localhost\SQLEXPRESS" -SqlUser sa -SqlPass matkhau
+```
 
-### Cách C — Dùng Prisma (khuyến nghị nếu bạn sẽ code backend nhiều)
-
-Bỏ qua bước này, làm ở **Mục 5** — Prisma sẽ tự tạo schema từ `backend/prisma/schema.prisma` (luôn khớp code mới nhất, không sợ SQL script bị lỗi thời).
+> **Không dùng `database/legacy/setup.sql`.** File đó là bản dump cũ (07/2026), thiếu toàn bộ bảng
+> thêm về sau (`AlertSettings`, `AlertRuleTiers`, `PermissionGroups`, `GroupPermissions`, cột
+> `ValidFrom`/`ValidTo` của gói dịch vụ...) — chạy sẽ ra schema sai. Nguồn sự thật duy nhất của
+> schema là **Prisma migrations** trong `backend/prisma/migrations/`.
 
 ---
 
-## 4. Cấu hình kết nối (`.env`)
+## 4. Setup thủ công (Mac/Linux, hoặc muốn hiểu từng bước)
 
 ```bash
+# 1) Cấu hình kết nối DB
 cd backend
-copy .env.example .env      # Windows
-# hoặc: cp .env.example .env   (Mac/Linux)
+cp .env.example .env      # Windows: copy .env.example .env
 ```
 
-Mở `backend/.env`, sửa lại nếu SQL Server của bạn khác cấu hình mặc định:
+Sửa `backend/.env` nếu SQL Server khác mặc định:
 
 ```env
 DATABASE_URL="sqlserver://localhost:1433;database=ParkingManagement;user=sa;password=123;encrypt=false;trustServerCertificate=true"
+PORT=5001
 ```
 
-> File `.env` **không** được commit lên git (đã có trong `.gitignore`) — mỗi máy tự cấu hình riêng.
+> `.env` **không** commit lên git (đã có trong `.gitignore`) — mỗi máy tự cấu hình riêng.
+
+```bash
+# 2) Cài dependency + tạo schema
+npm install
+npx prisma migrate deploy     # tạo/cập nhật toàn bộ bảng theo migrations
+npx prisma generate
+
+# 3) Seed dữ liệu demo (thứ tự này quan trọng)
+npm run prisma:seed                      # tài khoản + danh mục + dữ liệu cơ bản
+npm run prisma:seed-permission-groups    # BẮT BUỘC — không có thì staff trắng quyền
+npm run prisma:seed-vehicle-expansion    # xe/khách mẫu cho 5 loại phương tiện mở rộng
+npm run prisma:seed-exceptions           # dữ liệu checkout ngoại lệ cho trang Báo cáo
+npm run prisma:seed-fresh-packages       # gói active/sắp hết hạn/vừa hết hạn quanh hôm nay
+npm run prisma:seed-history              # (~2-3 phút) dữ liệu nhiều năm cho Dashboard/Báo cáo
+
+# 4) Frontend
+cd ../frontend && npm install
+```
+
+Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn, không tạo trùng.
 
 ---
 
-## 5. Cài đặt & seed dữ liệu
+## 5. Khởi động hệ thống
 
-```bash
-# Backend
-cd backend
-npm install
-npm run prisma:generate
-
-# Nếu bạn chọn Cách C ở Mục 3 (chưa tạo DB bằng SSMS/backup):
-npx prisma db push
-```
-
-> **Nếu bạn đã restore từ `ParkingManagement.bak` (Cách A ở Mục 3) — bỏ qua 2 lệnh seed bên dưới**, data đã có sẵn trong backup rồi.
-
-```bash
-# Seed tài khoản + danh mục + dữ liệu demo cơ bản
-npm run prisma:seed
-
-# (Khuyến nghị) Bồi đắp dữ liệu nhiều năm để Dashboard/Báo cáo/Phân tích
-# hiển thị đúng xu hướng thực tế thay vì chỉ vài bản ghi rời rạc.
-# Idempotent — chạy lại vô tư, không sợ trùng dữ liệu.
-npm run prisma:seed-history
-
-# (Tuỳ chọn) Seed thêm 16 bản ghi "checkout ngoại lệ" mẫu để test màn hình Báo cáo
-npm run prisma:seed-exceptions
-```
-
-```bash
-# Frontend (mở terminal mới)
-cd frontend
-npm install
-```
-
-`prisma:seed-history` mất khoảng **2-3 phút** (bồi đắp ~38.000 bản ghi trải dài từ 01/2024 đến hiện tại, có xu hướng tăng trưởng theo năm + mùa cao điểm). Chạy 1 lần là đủ, không cần chạy lại mỗi ngày.
-
----
-
-## 6. Khởi động hệ thống
-
-### Cách nhanh nhất (Windows) — chạy ngầm, không hiện cửa sổ CMD
+### Windows — chạy ngầm, không hiện cửa sổ CMD
 
 Double-click **`start.bat`** ở thư mục gốc. Script sẽ:
 - Tự kiểm tra & bật SQL Server nếu đang tắt (có thể hiện UAC — bấm **Yes**)
 - Cài dependency nếu thiếu
-- Chạy Backend (`:5000`) + Frontend (`:3000`) **hoàn toàn ẩn** — log ghi vào thư mục `logs/`
+- Chạy Backend (`:5001`) + Frontend (`:3000`) **hoàn toàn ẩn** — log ghi vào `logs/`
 - Tự mở trình duyệt khi sẵn sàng (~10-90 giây)
 
-Lần sau (đã cài xong dependency), dùng **`start-fast.bat`** để khởi động nhanh hơn (bỏ qua bước kiểm tra cài đặt).
+Đã cài xong dependency rồi thì dùng **`scripts\start-fast.bat`** cho nhanh hơn.
+Dừng hệ thống: **`stop.bat`**.
 
-Muốn dừng hệ thống: chạy **`stop.bat`**.
+> Lỗi khi khởi động → xem `logs/launcher.log`, `logs/backend.err.log`, `logs/frontend.err.log`.
 
-> Nếu có lỗi khi khởi động, kiểm tra `logs/launcher.log`, `logs/backend.err.log`, `logs/frontend.err.log`.
-
-### Cách thủ công (mọi hệ điều hành)
+### Mọi hệ điều hành — chạy tay
 
 ```bash
-# Terminal 1
-cd backend && npm run dev
-
-# Terminal 2
-cd frontend && npm start
+cd backend && npm run dev      # Terminal 1
+cd frontend && npm start       # Terminal 2
 ```
 
 Mở trình duyệt: **http://localhost:3000**
 
+---
+
+## 6. Cấu trúc thư mục
+
+```
+QLBDX/
+├── start.bat / stop.bat        # khởi động / dừng (để ở gốc cho tiện shortcut Desktop)
+├── README.md                   # giới thiệu nhanh
+├── ONBOARDING.md               # tài liệu này
+├── backend/                    # Node + Express + Prisma
+│   ├── prisma/
+│   │   ├── schema.prisma       # ĐỊNH NGHĨA SCHEMA (nguồn sự thật)
+│   │   ├── migrations/         # lịch sử thay đổi DB — dùng migrate deploy
+│   │   └── seed*.ts            # các script seed dữ liệu demo
+│   └── src/                    # routes / controllers / services / middlewares
+├── frontend/                   # React + Ant Design
+├── database/
+│   ├── ParkingManagement.bak   # backup đầy đủ dữ liệu (dùng cho -FromBackup)
+│   ├── README.md               # chi tiết về DB & các script seed
+│   └── legacy/                 # ⚠ SQL script CŨ, KHÔNG dùng nữa (giữ để tham khảo)
+├── docs/                       # tài liệu kiến trúc & nghiệp vụ
+│   └── archive/                # tài liệu kế hoạch/audit đã hoàn thành (lịch sử)
+├── scripts/                    # setup-all, setup-database, start-fast, start-silent...
+└── logs/                       # log runtime (không commit)
+```
+
+---
 ---
 
 ## 7. Đăng nhập kiểm tra
@@ -156,13 +172,14 @@ Mở trình duyệt: **http://localhost:3000**
 | Quản trị viên | `admin` | `admin123` |
 | Nhân viên | `nhanvien1` | `staff123` |
 
-*(Chi tiết đầy đủ các tài khoản demo — bao gồm tài khoản bị khoá để test tính năng deactivate — xem [demo_accounts.md](demo_accounts.md))*
+*(Chi tiết đầy đủ các tài khoản demo — bao gồm tài khoản bị khoá để test tính năng deactivate — xem [demo_accounts.md](docs/demo_accounts.md))*
 
 **Checklist xác nhận cài đặt thành công:**
 - [ ] Đăng nhập `admin` → thấy Dashboard hiện số liệu (không phải toàn số 0 / báo lỗi)
 - [ ] Vào **Xe vào** → nhập biển số bất kỳ trong DB (VD: xem ở màn hình Phương tiện) → hệ thống tự hiện thông tin khách quen
 - [ ] Vào **Báo cáo** → chọn "Toàn bộ" → thấy dữ liệu trải nhiều tháng/năm, không phải chỉ 1-2 ngày
-- [ ] Đăng nhập `nhanvien1` → menu bị ẩn bớt (không thấy Báo cáo, Thanh toán, Người dùng...)
+- [ ] Đăng nhập `nhanvien1` → menu bị ẩn bớt (không thấy Báo cáo, Thanh toán, Người dùng...) — nếu thấy **trống trơn cả Khách hàng/Phương tiện** thì bạn chưa chạy `npm run prisma:seed-permission-groups`
+- [ ] Vào **Người dùng → Nhóm quyền** (bằng `admin`) → thấy nhóm "Nhân viên tiêu chuẩn" với 3 nhân viên
 
 ---
 
@@ -203,13 +220,13 @@ CRUD đầy đủ, validate trùng số điện thoại/CCCD/biển số. Có **
 | **Người dùng** | CRUD tài khoản, khoá/mở khoá, gán **Nhóm quyền** cho staff. Tab "Nhóm quyền" cho tạo nhóm và cấu hình ma trận Thêm/Sửa/Xóa theo từng chức năng — lưu trong DB, backend chặn thật (không chỉ ẩn/hiện UI). |
 | **Nhật ký hoạt động** | Log mọi thao tác tạo/sửa/xoá: ai, lúc nào, kết quả gì. |
 
-> Đặc tả chi tiết từng API/field/validation: xem **[Function.md](Function.md)**. Kiến trúc kỹ thuật đầy đủ (luồng nghiệp vụ, ER diagram, rủi ro kỹ thuật): xem **[KIEN_TRUC_CHI_TIET.md](KIEN_TRUC_CHI_TIET.md)**.
+> Đặc tả chi tiết từng API/field/validation: xem **[Function.md](docs/Function.md)**. Kiến trúc kỹ thuật đầy đủ (luồng nghiệp vụ, ER diagram, rủi ro kỹ thuật): xem **[KIEN_TRUC_CHI_TIET.md](docs/KIEN_TRUC_CHI_TIET.md)**.
 
 ---
 
 ## 9. Chức năng thông minh mới bổ sung
 
-Đây là phần **mới nhất**, thêm "trí thông minh" theo hướng **rule-based** (dựa trên phân tích dữ liệu + ngưỡng nghiệp vụ, không dùng machine learning — xem lý do trong [SMART_UPGRADE_PLAN.md](SMART_UPGRADE_PLAN.md)). Hãy thử từng cái để hiểu:
+Đây là phần **mới nhất**, thêm "trí thông minh" theo hướng **rule-based** (dựa trên phân tích dữ liệu + ngưỡng nghiệp vụ, không dùng machine learning — xem lý do trong [SMART_UPGRADE_PLAN.md](docs/archive/SMART_UPGRADE_PLAN.md)). Hãy thử từng cái để hiểu:
 
 ### 9.1 Smart auto-fill khi nhập biển số
 **Ở đâu**: màn hình **Xe vào**, gõ xong biển số rồi bấm ra ngoài ô nhập (blur).
@@ -252,8 +269,10 @@ Mỗi cảnh báo Smart đều kèm dòng "💡 Gợi ý: ..." nói rõ nên là
 | Dashboard hiện toàn số 0 / báo "Không tải được dữ liệu" | Backend chưa chạy, hoặc SQL Server chưa bật | Kiểm tra `logs/backend.err.log`; chạy `sc query MSSQLSERVER` xem service đã Running chưa |
 | `npm run prisma:generate` báo lỗi kết nối DB | `DATABASE_URL` trong `.env` sai, hoặc SQL Server chưa bật | Kiểm tra lại `.env`, thử kết nối bằng SSMS trước |
 | Chạy `start.bat` xong không thấy trình duyệt mở | Frontend compile lâu hơn 90 giây (lần đầu, máy yếu) | Đợi thêm rồi tự mở `http://localhost:3000`; xem `logs/frontend.log` |
-| Port 3000/5000 đã bị chiếm | Có tiến trình cũ chưa tắt hẳn | Chạy `stop.bat`, hoặc `netstat -ano \| findstr :3000` rồi `taskkill /F /PID <pid>` |
-| Dashboard/Báo cáo dữ liệu quá ít, biểu đồ trống | Chưa chạy `npm run prisma:seed-history` | Chạy lại lệnh này (Mục 5), idempotent nên an toàn |
+| Port 3000/5001 đã bị chiếm | Có tiến trình cũ chưa tắt hẳn, hoặc app khác chiếm port | Chạy `stop.bat`, hoặc `netstat -ano \| findstr :5001` rồi `taskkill /F /PID <pid>`. Nếu app khác chiếm cố định → đổi `PORT` trong `backend/.env` **và** `REACT_APP_API_URL` cho frontend |
+| Dashboard/Báo cáo dữ liệu quá ít, biểu đồ trống | Chưa chạy `npm run prisma:seed-history` | Chạy lại lệnh này (Mục 4), idempotent nên an toàn |
+| Nhân viên đăng nhập nhưng không Thêm/Sửa/Xóa được gì | Chưa có nhóm quyền, hoặc tài khoản chưa được gán nhóm | Chạy `npm run prisma:seed-permission-groups`; hoặc vào **Người dùng → Nhóm quyền** tạo nhóm rồi gán ở tab Danh sách người dùng |
+| Gói dịch vụ không hiện trong dropdown Đăng ký gói | Gói đang ngoài khoảng "Bán từ ngày – Bán đến ngày" | Vào **Gói dịch vụ**, xem cột "Thời gian bán" (đỏ = đã ngoài khoảng) rồi sửa lại 2 mốc ngày |
 
 ---
 
@@ -262,11 +281,13 @@ Mỗi cảnh báo Smart đều kèm dòng "💡 Gợi ý: ..." nói rõ nên là
 | File | Nội dung |
 |---|---|
 | [README.md](README.md) | Tóm tắt nhanh (tech stack, lệnh chạy) |
-| [KIEN_TRUC_CHI_TIET.md](KIEN_TRUC_CHI_TIET.md) | Kiến trúc đầy đủ: sơ đồ, luồng nghiệp vụ, danh mục API, rủi ro kỹ thuật |
-| [KIEN_TRUC_TONG_QUAN.md](KIEN_TRUC_TONG_QUAN.md) | Kiến trúc tóm tắt, dễ đọc |
-| [Function.md](Function.md) | Đặc tả chi tiết từng chức năng/API |
-| [SMART_UPGRADE_PLAN.md](SMART_UPGRADE_PLAN.md) | Thiết kế các tính năng thông minh (Mục 9) |
-| [demo_accounts.md](demo_accounts.md) | Đầy đủ tài khoản demo + kịch bản demo gợi ý |
-| [database/README.md](database/README.md) | Chi tiết setup database |
+| [KIEN_TRUC_CHI_TIET.md](docs/KIEN_TRUC_CHI_TIET.md) | Kiến trúc đầy đủ: sơ đồ, luồng nghiệp vụ, danh mục API, rủi ro kỹ thuật |
+| [KIEN_TRUC_TONG_QUAN.md](docs/KIEN_TRUC_TONG_QUAN.md) | Kiến trúc tóm tắt, dễ đọc |
+| [Function.md](docs/Function.md) | Đặc tả chi tiết từng chức năng/API |
+| [SMART_FEATURES_DEEP_DIVE.md](docs/SMART_FEATURES_DEEP_DIVE.md) | Giải thích kỹ thuật chi tiết 5 tính năng thông minh + đường dẫn UI để tự kiểm tra |
+| [demo_accounts.md](docs/demo_accounts.md) | Đầy đủ tài khoản demo + kịch bản demo gợi ý |
+| [database/README.md](database/README.md) | Chi tiết setup database + mô tả từng script seed |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Lịch sử thay đổi hệ thống |
+| `docs/archive/` | Tài liệu kế hoạch & audit đã hoàn thành (giữ làm lịch sử) |
 
 Có vướng mắc gì trong lúc setup — hỏi trong nhóm, đừng tự loay hoay quá 15 phút.

@@ -172,13 +172,13 @@ Các thư mục quan trọng:
 
 ### 3.4 `database/`
 
-- `database/setup.sql`: tạo database + schema + seed cơ bản.
-- `database/demo_business_patch.sql`: sync dữ liệu demo theo rule nghiệp vụ (biển số, trạng thái gói/chỗ đỗ).
+- `database/ParkingManagement.bak`: backup đầy đủ dữ liệu, dùng để restore nhanh.
+- `database/legacy/`: bản dump SQL **cũ, đã lỗi thời** (`setup.sql`, `schema.sql`,
+  `demo_business_patch.sql`) — chỉ giữ tham khảo lịch sử, không dùng để dựng DB nữa.
 
-Nếu giám khảo hỏi "vậy schema thật nằm ở đâu?", có thể trả lời:
-
-- về phía lập trình ứng dụng: xem `backend/prisma/schema.prisma`,
-- về phía triển khai SQL Server thủ công: xem các file trong `database/`.
+Nếu giám khảo hỏi "vậy schema thật nằm ở đâu?": **`backend/prisma/schema.prisma`** — đây là nguồn
+sự thật duy nhất, áp dụng qua Prisma migrations (`backend/prisma/migrations/`), không còn dựng
+bằng SQL thuần nữa. Dựng DB nhanh nhất: `.\scripts\setup-database.ps1`.
 
 ---
 
@@ -458,17 +458,19 @@ Nhưng khi trả lời phản biện nên nhấn mạnh:
 
 Ngoài phân quyền cứng ở backend, hệ thống còn có **ma trận phân quyền mềm** do admin cấu hình qua giao diện:
 
-- Admin vào **Người dùng → tab Phân quyền chức năng**
-- Với mỗi màn hình có thể cấu hình, admin chọn mức độ cho Staff: **Ẩn | Chỉ xem | Đầy đủ**
-- Cấu hình lưu vào `localStorage` và được `MainLayout` đọc để ẩn/hiện menu item
-- Có nút **Chỉnh sửa / Lưu / Hủy / Reset** + bulk-set nhanh "Ẩn hết / Xem hết / Đầy đủ hết"
+- Admin vào **Người dùng → tab Nhóm quyền**: tạo nhóm (VD "Nhân viên trực ca"), gán nhân viên vào nhóm
+- Với mỗi nhóm, admin tick ma trận **Thêm / Sửa / Xóa** (+ nút "Toàn quyền" bật nhanh cả 3) cho 9 màn cấu hình được — Xem thì luôn mở cho mọi user đã đăng nhập, không nằm trong ma trận
+- Cấu hình lưu trong **DB** (`PermissionGroups`/`GroupPermissions`), không phải localStorage
 
-> Lưu ý cho phản biện: đây là lớp phân quyền UI-level, không thay thế `adminOnly` middleware ở backend. Mục đích là giúp admin tùy biến giao diện cho từng bãi đỗ xe khác nhau.
+> Khác bản thiết kế đầu tiên (dùng `localStorage`, chỉ ẩn/hiện UI): hệ hiện tại **enforce thật ở backend** qua middleware `requirePermission(screenKey, action)` — gọi thẳng API cũng bị chặn đúng theo nhóm quyền, không chỉ ẩn nút. Đổi quyền có hiệu lực ngay khi nhân viên đăng nhập lại, không cần deploy lại code.
 
 **File liên quan:**
-- `frontend/src/utils/permConfig.ts` — định nghĩa SCREENS, AccessLevel, load/save localStorage
-- `frontend/src/pages/Users.tsx` — tab Phân quyền với Radio.Group inline
-- `frontend/src/components/Layout/MainLayout.tsx` — đọc permConfig để lọc menu
+- `backend/src/config/screens.ts` — danh mục 9 màn cấu hình được (nguồn dữ liệu duy nhất)
+- `backend/src/middlewares/requirePermission.ts` — chặn API thật theo nhóm quyền
+- `backend/src/services/permissionGroup.service.ts` — CRUD nhóm + ma trận quyền
+- `frontend/src/pages/Users.tsx` — tab Nhóm quyền (tạo/sửa/xoá nhóm, ma trận)
+- `frontend/src/components/PermissionGate.tsx` + `PermissionRoute` (`App.tsx`) — ẩn nút/chặn route phía client
+- Chi tiết đầy đủ: [KIEN_TRUC_CHI_TIET.md](KIEN_TRUC_CHI_TIET.md) mục 8.5
 
 ---
 

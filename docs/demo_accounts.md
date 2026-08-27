@@ -84,10 +84,9 @@ Lệnh trên sẽ:
 - Seed dữ liệu khách, xe, khu/chỗ đỗ, gói, lịch sử demo 01–02/08/2026
 - Idempotent: chạy lại không bị lỗi trùng
 
-Hoặc seed từ SQL:
-```sql
--- SSMS: chạy database/setup.sql rồi database/demo_business_patch.sql
-```
+Hoặc dựng nhanh toàn bộ bằng script tự động (khuyến nghị): `.\scripts\setup-database.ps1`
+— xem [database/README.md](../database/README.md). Không dùng `database/legacy/setup.sql` nữa,
+file đó đã lỗi thời.
 
 ---
 

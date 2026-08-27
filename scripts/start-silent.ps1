@@ -9,7 +9,8 @@ param(
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
-$root = $PSScriptRoot
+# Script nam trong scripts/ nen root cua project la thu muc cha.
+$root = Split-Path $PSScriptRoot -Parent
 $backendDir = Join-Path $root 'backend'
 $frontendDir = Join-Path $root 'frontend'
 $logDir = Join-Path $root 'logs'
@@ -66,8 +67,9 @@ if (-not $Fast) {
     }
 }
 
-# 3) Tat process cu dang chiem cong 3000/5000 (khoi dong lai sach)
-foreach ($port in 3000, 5000) {
+# 3) Tat process cu dang chiem cong 3000 (frontend) / 5001 (backend) de khoi dong lai sach.
+# Backend dung 5001 (khong phai 5000) - xem backend/.env PORT.
+foreach ($port in 3000, 5001) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     foreach ($c in $conns) {
         Write-Log "Dang tat process cu tren cong $port (PID $($c.OwningProcess))"

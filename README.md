@@ -1,6 +1,6 @@
 # Hệ thống Quản lý Bãi Đỗ Xe (QLBDX)
 
-> Cập nhật gần nhất — xem **[CAP_NHAT_2026-08-26.md](CAP_NHAT_2026-08-26.md)** để biết thay đổi mới nhất, cách cập nhật code/database cho máy đã cài trước đó.
+> Cập nhật gần nhất — xem **[docs/CHANGELOG.md](docs/CHANGELOG.md)** để biết thay đổi mới nhất, cách cập nhật code/database cho máy đã cài trước đó.
 
 ## Công nghệ sử dụng
 
@@ -17,15 +17,24 @@
 
 > Hướng dẫn setup từ đầu chi tiết nhất: xem **[ONBOARDING.md](ONBOARDING.md)**.
 
-**Lần đầu cài đặt:**
-1. Chạy `database/setup.sql` trong SSMS để tạo DB và dữ liệu mẫu
-2. Copy `backend/.env.example` → `backend/.env`, chỉnh connection string SQL Server nếu cần
-3. Double-click **`start.bat`** → hệ thống tự cài dependency, khởi động ngầm và mở trình duyệt
+**Lần đầu cài đặt — 1 lệnh duy nhất** (mở PowerShell tại thư mục gốc):
+
+```powershell
+.\scripts\setup-all.ps1
+```
+
+Script tự làm hết: tạo `.env` → tạo database → áp dụng Prisma migrations → seed dữ liệu demo →
+cài dependency backend + frontend. Thêm `-FromBackup` để restore nhanh từ file `.bak` có sẵn,
+hoặc `-SkipHistory` để bỏ qua bước seed lịch sử nhiều năm (bước lâu nhất).
+
+Sau đó double-click **`start.bat`** → hệ thống khởi động ngầm và tự mở trình duyệt.
 
 **Lần sau (đã có node_modules):**
-- Double-click **`start-fast.bat`** → khởi động nhanh, không kiểm tra dependency
+- Double-click **`scripts\start-fast.bat`** → khởi động nhanh, không kiểm tra dependency
 
-> `start.bat`/`start-fast.bat` chạy **hoàn toàn ẩn** (không mở cửa sổ CMD) — Backend + Frontend chạy ngầm, log ghi vào `logs/`. Nếu hệ thống **đã chạy sẵn** (VD: bấm icon lần 2), trình duyệt mở lại gần như ngay lập tức; nếu khởi động lần đầu/mới tắt hẳn thì mất ~10-90 giây tuỳ máy. Muốn dừng: chạy `stop.bat`.
+> `start.bat` / `start-fast.bat` chạy **hoàn toàn ẩn** (không mở cửa sổ CMD) — Backend + Frontend chạy ngầm, log ghi vào `logs/`. Nếu hệ thống **đã chạy sẵn** (VD: bấm icon lần 2), trình duyệt mở lại gần như ngay lập tức; nếu khởi động lần đầu/mới tắt hẳn thì mất ~10-90 giây tuỳ máy. Muốn dừng: chạy `stop.bat`.
+
+> ⚠️ **Không dùng `database/legacy/setup.sql`** — bản dump cũ, thiếu nhiều bảng thêm về sau. Nguồn sự thật của schema là Prisma migrations trong `backend/prisma/migrations/`.
 
 ---
 
@@ -43,37 +52,36 @@
 
 ## Cài đặt thủ công
 
-### 1. Database
-```bash
-# Mở SSMS → kết nối localhost, user sa / 123
-# Chạy: database/setup.sql  (tạo schema + seed cơ bản)
-# Tuỳ chọn: database/demo_business_patch.sql  (dữ liệu demo dày)
-```
-
-### 2. Backend
+### 1. Backend + Database
 ```bash
 cd backend
+cp .env.example .env          # Windows: copy .env.example .env
 npm install
-# Cấu hình backend/.env nếu cần (DATABASE_URL, JWT_SECRET)
-npm run prisma:generate
-npm run dev          # http://localhost:5000
+npx prisma migrate deploy     # tạo/cập nhật toàn bộ bảng theo migrations
+npx prisma generate
+npm run dev                   # http://localhost:5001
 ```
 
-### 3. Frontend
+### 2. Frontend
 ```bash
 cd frontend
 npm install
-npm start            # http://localhost:3000
+npm start                     # http://localhost:3000
 ```
 
-### 4. Seed dữ liệu (tuỳ chọn)
+### 3. Seed dữ liệu demo
 ```bash
 cd backend
-npm run prisma:seed          # Seed tài khoản + danh mục + dữ liệu demo cơ bản
-npm run prisma:seed-history  # Bồi đắp dữ liệu lịch sử nhiều năm (2024 → nay) cho Dashboard/Báo cáo thực tế
-npm run prisma:fix-stale-parked  # Nếu app đã chạy demo lâu ngày, xe "đang đỗ" bị coi là đỗ quá lâu — chạy lệnh này để làm mới
-npm run prisma:seed-exceptions   # Seed 16 bản ghi "checkout ngoại lệ" mẫu cho Báo cáo
+npm run prisma:seed                    # tài khoản + danh mục + dữ liệu cơ bản
+npm run prisma:seed-permission-groups  # BẮT BUỘC — không có thì staff trắng quyền
+npm run prisma:seed-vehicle-expansion  # xe/khách mẫu cho 5 loại phương tiện mở rộng
+npm run prisma:seed-exceptions         # dữ liệu "checkout ngoại lệ" cho Báo cáo
+npm run prisma:seed-fresh-packages     # gói active/sắp hết hạn/vừa hết hạn quanh hôm nay
+npm run prisma:seed-history            # (~2-3 phút) dữ liệu nhiều năm cho Dashboard/Báo cáo
+npm run prisma:fix-stale-parked        # nếu demo chạy lâu ngày, xe "đang đỗ" bị coi là đỗ quá lâu
 ```
+
+Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn.
 
 ---
 
@@ -105,7 +113,7 @@ npm run prisma:seed-exceptions   # Seed 16 bản ghi "checkout ngoại lệ" m�
 | **Dashboard insights** | So sánh tuần này/tuần trước, giờ cao điểm, xu hướng 7 ngày, gợi ý hành động cho admin | Trang Tổng quan |
 | **Phân tích & Gợi ý (DSS)** | Phân tích theo thứ/giờ/khu vực + đề xuất quyết định (mở rộng chỗ, đổi giá cuối tuần, chiến dịch bán gói) kèm tác động & rủi ro | Trang Phân tích & Gợi ý (admin) |
 
-> Xem chi tiết thiết kế tại [SMART_UPGRADE_PLAN.md](SMART_UPGRADE_PLAN.md).
+> Xem chi tiết thiết kế tại [SMART_UPGRADE_PLAN.md](docs/archive/SMART_UPGRADE_PLAN.md).
 
 ---
 
@@ -126,8 +134,13 @@ QLBDX/
 │   │       ├── feeCalculator.test.ts  # Unit tests
 │   │       └── businessRules.ts       # Rule loại xe / biển số
 │   ├── prisma/
-│   │   ├── schema.prisma          # Data model
+│   │   ├── schema.prisma          # Data model — NGUỒN SỰ THẬT của schema
+│   │   ├── migrations/            # Lịch sử thay đổi DB (dùng `prisma migrate deploy`)
 │   │   ├── seed.ts                # Dữ liệu demo cơ bản
+│   │   ├── seedPermissionGroups.ts    # Nhóm quyền mặc định (bắt buộc cho staff)
+│   │   ├── seedVehicleTypeExpansion.ts # Xe/khách mẫu cho 5 loại phương tiện mở rộng
+│   │   ├── seedExceptionCheckouts.ts   # Dữ liệu checkout ngoại lệ cho Báo cáo
+│   │   ├── seedFreshPackages.ts        # Gói dịch vụ quanh ngày hiện tại
 │   │   ├── seedHistoricalData.ts  # Bồi đắp dữ liệu nhiều năm (2024 → nay)
 │   │   └── fixStaleParkedDemo.ts  # Dọn xe "đang đỗ" demo bị đỗ quá lâu do instance chạy lâu ngày
 │   └── .env.example          # Template cấu hình — copy thành .env
@@ -145,22 +158,31 @@ QLBDX/
 │       ├── types/index.ts   # TypeScript interfaces
 │       └── utils/
 │           ├── reportExport.ts     # Xuất Excel/CSV/PDF báo cáo
-│           ├── permConfig.ts       # Cấu hình phân quyền màn hình staff
 │           ├── dateFormat.ts       # Định dạng hh:mm:ss dd/mm/yyyy dùng chung
 │           └── tablePagination.ts  # Phân trang (chọn 10/20/30/50/100 dòng) dùng chung
 ├── database/
-│   ├── setup.sql                # Schema + seed cơ bản
-│   ├── demo_business_patch.sql  # Dữ liệu demo nghiệp vụ
-│   └── README.md
+│   ├── ParkingManagement.bak    # Backup đầy đủ dữ liệu (dùng cho -FromBackup)
+│   ├── README.md                # Chi tiết DB + mô tả từng script seed
+│   └── legacy/                  # ⚠ SQL script CŨ, KHÔNG dùng nữa (giữ tham khảo)
+├── docs/
+│   ├── KIEN_TRUC_TONG_QUAN.md      # Kiến trúc tổng quan
+│   ├── KIEN_TRUC_CHI_TIET.md       # Kiến trúc chi tiết (API, luồng nghiệp vụ, rủi ro)
+│   ├── Function.md                 # Đặc tả chức năng theo endpoint
+│   ├── SMART_FEATURES_DEEP_DIVE.md # Giải thích kỹ thuật 5 tính năng thông minh
+│   ├── demo_accounts.md            # Tài khoản demo chi tiết
+│   ├── CHANGELOG.md                # Lịch sử thay đổi
+│   └── archive/                    # Tài liệu kế hoạch/audit đã hoàn thành
+├── scripts/
+│   ├── setup-all.ps1        # Setup toàn bộ dự án (1 lệnh, cho máy mới)
+│   ├── setup-database.ps1   # Chỉ dựng lại database
+│   ├── start-fast.bat       # Khởi động nhanh (bỏ qua install)
+│   ├── start-silent.ps1     # Logic khởi động thật (chạy ngầm)
+│   ├── stop-silent.ps1      # Logic dừng thật
+│   └── start-sqlserver.bat  # Bật service SQL Server
+├── logs/                    # Log runtime (không commit)
 ├── ONBOARDING.md            # Hướng dẫn setup & làm quen sản phẩm cho thành viên mới
-├── demo_accounts.md         # Tài khoản demo chi tiết
-├── KIEN_TRUC_TONG_QUAN.md   # Kiến trúc tổng quan
-├── KIEN_TRUC_CHI_TIET.md    # Kiến trúc chi tiết (API, luồng nghiệp vụ, rủi ro kỹ thuật)
-├── SMART_UPGRADE_PLAN.md    # Thiết kế 5 tính năng thông minh rule-based
-├── Function.md              # Đặc tả chức năng chi tiết theo endpoint
-├── start.bat                # Khởi động đầy đủ, chạy ngầm (auto install)
-├── start-fast.bat           # Khởi động nhanh, chạy ngầm (bỏ qua install)
-└── stop.bat                 # Dừng Backend + Frontend đang chạy ngầm
+├── start.bat                # Khởi động (giữ ở gốc cho tiện shortcut Desktop)
+└── stop.bat                 # Dừng Backend + Frontend
 ```
 
 ---
@@ -178,8 +200,23 @@ npm run build   # TypeScript build check
 ## Môi trường backend (`backend/.env`)
 
 ```env
-PORT=5000
+PORT=5001
 DATABASE_URL="sqlserver://localhost:1433;database=ParkingManagement;user=sa;password=123;encrypt=false;trustServerCertificate=true"
 JWT_SECRET=your-secret-key
 JWT_EXPIRES_IN=24h
 ```
+
+> ⚠️ Đổi `JWT_SECRET` trước khi dùng thật. Nếu đổi `PORT`, phải set thêm `REACT_APP_API_URL`
+> cho frontend (VD tạo `frontend/.env` với `REACT_APP_API_URL=http://localhost:5002/api`) —
+> mặc định frontend gọi `http://localhost:5001/api`.
+
+---
+
+## Phân quyền
+
+- **Admin**: toàn quyền, không thuộc nhóm quyền nào.
+- **Staff**: gán vào **Nhóm quyền** (tạo ở *Người dùng → Nhóm quyền*). Mỗi nhóm có ma trận
+  **Thêm / Sửa / Xóa** theo từng chức năng; xem dữ liệu tra cứu thì luôn mở.
+- Quyền lưu trong DB (`PermissionGroups` / `GroupPermissions`) và **backend chặn thật** qua
+  middleware `requirePermission` — không phải chỉ ẩn/hiện menu. Chi tiết: [docs/KIEN_TRUC_CHI_TIET.md](docs/KIEN_TRUC_CHI_TIET.md) mục 8.5.
+- Đổi ma trận quyền → nhân viên trong nhóm **đăng nhập lại** là có hiệu lực (không cần deploy).

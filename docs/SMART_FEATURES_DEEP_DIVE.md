@@ -1,7 +1,7 @@
 # QLBDX — 5 tính năng thông minh: giải thích kỹ thuật chi tiết (tài liệu bảo vệ đồ án)
 
 > **Mục đích tài liệu**: giải thích **vì sao** và **bằng cách nào** 5 tính năng "thông minh" trong hệ thống QLBDX được xây dựng mà **không dùng Machine Learning**, để dùng làm căn cứ học và phản biện trước giảng viên.
-> **Nguồn gốc quyết định**: xem `SMART_UPGRADE_PLAN.md` — tài liệu lập kế hoạch gốc, viết trước khi code. Tài liệu này mô tả **những gì thực sự đã được cài đặt**, đối chiếu trực tiếp với source code.
+> **Nguồn gốc quyết định**: xem `docs/archive/SMART_UPGRADE_PLAN.md` — tài liệu lập kế hoạch gốc, viết trước khi code. Tài liệu này mô tả **những gì thực sự đã được cài đặt**, đối chiếu trực tiếp với source code.
 > **Ngày lập**: 26/08/2026
 
 ---
@@ -132,7 +132,7 @@ Khuyến nghị dựa trên **hành vi quá khứ của chính người dùng đ
 
 ### Điểm nâng cấp so với thiết kế ban đầu: ngưỡng KHÔNG hardcode
 
-Bản kế hoạch gốc (`SMART_UPGRADE_PLAN.md`) mô tả ngưỡng cố định trong code (VD: "duration > avg × 3"). Khi triển khai thực tế, hệ thống được nâng lên một mức: toàn bộ ngưỡng (`parkingAnomalyMultiplier`, `revenueDropPercent`, `renewalFrequency`, `zoneImbalanceMaxPercent`, `zoneNearFullPercent`, `longParkingHours`, `suspiciousPaymentAmount`) được lưu trong bảng `AlertRuleTier`, **admin tự chỉnh qua giao diện** (Cảnh báo → tab "Cấu hình mức độ"), không cần sửa code hay deploy lại. Mỗi loại luật còn hỗ trợ **nhiều mốc (tier) với mức độ nghiêm trọng khác nhau** — ví dụ "đỗ quá 24h → warning, quá 48h → danger" — hàm `evaluate()` trong `alertRuleTier.service.ts` chọn mốc khớp nghiêm trọng nhất:
+Bản kế hoạch gốc (`docs/archive/SMART_UPGRADE_PLAN.md`) mô tả ngưỡng cố định trong code (VD: "duration > avg × 3"). Khi triển khai thực tế, hệ thống được nâng lên một mức: toàn bộ ngưỡng (`parkingAnomalyMultiplier`, `revenueDropPercent`, `renewalFrequency`, `zoneImbalanceMaxPercent`, `zoneNearFullPercent`, `longParkingHours`, `suspiciousPaymentAmount`) được lưu trong bảng `AlertRuleTier`, **admin tự chỉnh qua giao diện** (Cảnh báo → tab "Cấu hình mức độ"), không cần sửa code hay deploy lại. Mỗi loại luật còn hỗ trợ **nhiều mốc (tier) với mức độ nghiêm trọng khác nhau** — ví dụ "đỗ quá 24h → warning, quá 48h → danger" — hàm `evaluate()` trong `alertRuleTier.service.ts` chọn mốc khớp nghiêm trọng nhất:
 
 ```ts
 evaluate(ruleType, value, grouped): string | null {
@@ -287,11 +287,11 @@ Mỗi `decision` render thành 1 `Collapse` panel: tiêu đề là câu hỏi ra
 → Bản thân *ngưỡng* (threshold) là cố định cho tới khi admin đổi tay — đây là điểm khác biệt thật với ML (ML tự điều chỉnh tham số qua quá trình huấn luyện, rule-based thì không). Nhưng *dữ liệu đầu vào cho luật* luôn là rolling window (30 ngày gần nhất) — nên các con số trung bình, tần suất, giờ cao điểm luôn tự cập nhật theo dữ liệu mới nhất mỗi lần gọi API, không "đóng băng" theo dữ liệu tại thời điểm code được viết. Đây là lý do khi trả lời câu này nên phân biệt rõ 2 khái niệm: "ngưỡng so sánh" (tĩnh, admin kiểm soát) và "dữ liệu để so sánh" (động, tự cập nhật).
 
 **Q: 5 tính năng này có phụ thuộc lẫn nhau không, hay độc lập?**
-→ Phần lớn độc lập về code (mỗi tính năng có service/endpoint riêng), nhưng **chia sẻ chung 1 nguồn ngưỡng cấu hình** (`AlertRuleTier`) giữa Tính năng 3 và gián tiếp ảnh hưởng tới các "suggestions" trong Tính năng 1 — đây là thiết kế có chủ đích để tránh tình trạng "2 nơi hiển thị 2 ngưỡng khác nhau cho cùng 1 khái niệm" (từng là một lỗi thực tế trong hệ thống, đã ghi nhận và sửa — xem mục A-02 trong `QLBDX_UIUX_Review_and_Remediation_Plan.md`).
+→ Phần lớn độc lập về code (mỗi tính năng có service/endpoint riêng), nhưng **chia sẻ chung 1 nguồn ngưỡng cấu hình** (`AlertRuleTier`) giữa Tính năng 3 và gián tiếp ảnh hưởng tới các "suggestions" trong Tính năng 1 — đây là thiết kế có chủ đích để tránh tình trạng "2 nơi hiển thị 2 ngưỡng khác nhau cho cùng 1 khái niệm" (từng là một lỗi thực tế trong hệ thống, đã ghi nhận và sửa — xem mục A-02 trong `docs/archive/QLBDX_UIUX_Review_and_Remediation_Plan.md`).
 
 **Q: Có thể chứng minh các tính năng này chạy đúng bằng cách nào (không chỉ đọc code)?**
 → Gợi ý demo trực tiếp: (1) Tính năng 4 — gõ 1 biển số khách quen ở màn Xe vào, quan sát ô chọn chỗ tự điền sẵn; (2) Tính năng 2 — checkout 1 xe của khách có tần suất cao, quan sát Alert gợi ý gói hiện lên với đúng tên gói/giá; (3) Tính năng 3 — vào Cảnh báo → Cấu hình mức độ, đổi 1 ngưỡng, quan sát danh sách cảnh báo đổi theo ngay; (4) Tính năng 5 — vào Phân tích & Gợi ý, đổi bộ lọc kỳ (tháng/quý), quan sát `zoneEfficiency` và `decisions` thay đổi theo đúng kỳ đang chọn (điểm này còn chứng minh được cả bug time-weighted occupancy đã sửa, vì trước đây đổi kỳ không làm % lấp đầy thay đổi).
 
 ---
 
-*Tài liệu này mô tả trạng thái triển khai thực tế tại thời điểm 26/08/2026, đối chiếu trực tiếp với source code trong repo. Xem thêm `SMART_UPGRADE_PLAN.md` để biết kế hoạch/lý do thiết kế ban đầu trước khi code, và `QLBDX_UIUX_Review_and_Remediation_Plan.md` mục Q6 để biết chi tiết bug time-weighted occupancy đã sửa liên quan tới Tính năng 5.*
+*Tài liệu này mô tả trạng thái triển khai thực tế tại thời điểm 26/08/2026, đối chiếu trực tiếp với source code trong repo. Xem thêm `docs/archive/SMART_UPGRADE_PLAN.md` để biết kế hoạch/lý do thiết kế ban đầu trước khi code, và `docs/archive/QLBDX_UIUX_Review_and_Remediation_Plan.md` mục Q6 để biết chi tiết bug time-weighted occupancy đã sửa liên quan tới Tính năng 5.*
