@@ -11,11 +11,12 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
+import { DashboardViewProvider, useDashboardView } from '../../context/DashboardViewContext';
 import { loadStaffPerms, getStaffVisibleKeys } from '../../utils/permConfig';
 import { useUpdateAvailable } from '../../hooks/useUpdateAvailable';
 import DesktopOnlyBanner from './DesktopOnlyBanner';
 
-const MainLayout: React.FC = () => {
+const MainLayoutInner: React.FC = () => {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ const MainLayout: React.FC = () => {
   const isAdmin = user?.role === 'admin';
   const { updateAvailable, reload } = useUpdateAvailable();
   const { mode, toggleMode } = useTheme();
+  const { view, setView } = useDashboardView();
+  const showDashboardViewToggle = isAdmin && location.pathname === '/';
 
   // Staff perm config
   const [staffVisible, setStaffVisible] = useState<Set<string>>(() =>
@@ -142,6 +145,17 @@ const MainLayout: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Toggle view Quản lý/Vận hành của trang Tổng quan — chỉ hiện khi admin đang ở trang này */}
+          {showDashboardViewToggle && (
+            <Segmented
+              value={view}
+              onChange={(v) => setView(v as 'mgmt' | 'ops')}
+              options={[
+                { label: 'Quản lý', value: 'mgmt' },
+                { label: 'Vận hành', value: 'ops' },
+              ]}
+            />
+          )}
           {/* Icon báo có bản cập nhật mới */}
           {updateAvailable && (
             <Tooltip title="Có bản cập nhật mới — bấm để tải lại trang">
@@ -204,5 +218,11 @@ const MainLayout: React.FC = () => {
     </div>
   );
 };
+
+const MainLayout: React.FC = () => (
+  <DashboardViewProvider>
+    <MainLayoutInner />
+  </DashboardViewProvider>
+);
 
 export default MainLayout;

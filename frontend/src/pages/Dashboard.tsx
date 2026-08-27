@@ -1,44 +1,19 @@
-import React, { useState } from 'react';
-import { Segmented } from 'antd';
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useDashboardView } from '../context/DashboardViewContext';
 import OpsDashboard from './dashboard/OpsDashboard';
 import MgmtDashboard from './dashboard/MgmtDashboard';
 
-const VIEW_STORAGE_KEY = 'dashboard-admin-view';
-type AdminView = 'mgmt' | 'ops';
-
-/** Router theo vai trò — Quản trị mặc định xem MgmtDashboard, có thể chuyển sang view Vận hành. */
+/** Router theo vai trò — Quản trị mặc định xem MgmtDashboard, có thể chuyển sang view Vận hành qua
+ * toggle đặt ở header (MainLayout), xem DashboardViewContext. */
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-
-  const [view, setView] = useState<AdminView>(() => {
-    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
-    return saved === 'ops' ? 'ops' : 'mgmt';
-  });
+  const { view } = useDashboardView();
 
   if (!isAdmin) return <OpsDashboard />;
 
-  const handleChange = (v: AdminView) => {
-    setView(v);
-    localStorage.setItem(VIEW_STORAGE_KEY, v);
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <Segmented
-          value={view}
-          onChange={(v) => handleChange(v as AdminView)}
-          options={[
-            { label: 'Quản lý', value: 'mgmt' },
-            { label: 'Vận hành', value: 'ops' },
-          ]}
-        />
-      </div>
-      {view === 'mgmt' ? <MgmtDashboard /> : <OpsDashboard />}
-    </div>
-  );
+  return view === 'mgmt' ? <MgmtDashboard /> : <OpsDashboard />;
 };
 
 export default Dashboard;
