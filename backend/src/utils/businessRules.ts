@@ -53,7 +53,9 @@ export function getPackageLifecycleStatus(
   return 'active';
 }
 
-function getSpotCategory(spot: SpotRuleInput) {
+export type VehicleCategory = 'two-wheel' | 'car' | 'large-car' | 'any';
+
+export function getSpotCategory(spot: SpotRuleInput): VehicleCategory {
   const zoneText = `${spot.zone?.name || ''} ${spot.zone?.description || ''} ${spot.spotNumber || ''} ${spot.spotType || ''}`;
   const normalized = normalizeText(zoneText);
 
@@ -93,7 +95,7 @@ function getSpotCategory(spot: SpotRuleInput) {
   return 'any';
 }
 
-function getVehicleCategory(vehicleTypeName: string) {
+export function getVehicleCategory(vehicleTypeName: string): VehicleCategory {
   const normalized = normalizeText(vehicleTypeName);
 
   if (normalized.includes('xe dap') || normalized.includes('bicycle')) {
@@ -107,12 +109,20 @@ function getVehicleCategory(vehicleTypeName: string) {
   if (
     normalized.includes('o to lon') ||
     normalized.includes('xe tai') ||
-    normalized.includes('bus')
+    normalized.includes('xe khach') ||
+    normalized.includes('bus') ||
+    normalized.includes('coach') ||
+    normalized.includes('truck')
   ) {
     return 'large-car';
   }
 
-  if (normalized.includes('o to') || normalized.includes('car')) {
+  if (
+    normalized.includes('o to') ||
+    normalized.includes('car') ||
+    normalized.includes('ban tai') ||
+    normalized.includes('pickup')
+  ) {
     return 'car';
   }
 

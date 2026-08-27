@@ -67,6 +67,13 @@ async function seedMasterData() {
     { name: 'Ô tô con', description: 'Ô tô dưới 9 chỗ', hourlyRate: 20000, dailyRate: 100000, monthlyRate: 1500000 },
     { name: 'Ô tô lớn', description: 'Ô tô từ 9 chỗ trở lên, xe tải', hourlyRate: 30000, dailyRate: 150000, monthlyRate: 2500000 },
     { name: 'Xe đạp', description: 'Xe đạp các loại', hourlyRate: 2000, dailyRate: 10000, monthlyRate: 100000 },
+    // Mở rộng T-VEHTYPE: thêm các loại phương tiện phổ biến còn thiếu để dữ liệu xe vào/ra
+    // không chỉ bó hẹp trong 4 loại gốc — mỗi loại có category riêng (xem businessRules.ts).
+    { name: 'Xe đạp điện', description: 'Xe đạp điện, xe đạp trợ lực', hourlyRate: 3000, dailyRate: 12000, monthlyRate: 120000 },
+    { name: 'Xe máy điện', description: 'Xe máy điện, xe tay ga điện', hourlyRate: 5000, dailyRate: 20000, monthlyRate: 200000 },
+    { name: 'Ô tô điện', description: 'Ô tô điện các loại', hourlyRate: 20000, dailyRate: 100000, monthlyRate: 1500000 },
+    { name: 'Xe bán tải', description: 'Xe bán tải, xe pickup', hourlyRate: 22000, dailyRate: 110000, monthlyRate: 1700000 },
+    { name: 'Xe khách', description: 'Xe khách, xe buýt trên 16 chỗ', hourlyRate: 35000, dailyRate: 180000, monthlyRate: 3000000 },
   ].entries()) {
     await prisma.vehicleType.upsert({ where: { id: i + 1 }, update: {}, create: vt });
   }
@@ -106,6 +113,13 @@ async function seedMasterData() {
     { name: 'Vé năm ô tô con', vehicleTypeId: 2, durationDays: 365, price: 15000000, description: 'Gói gửi ô tô con theo năm' },
     { name: 'Vé tháng ô tô lớn', vehicleTypeId: 3, durationDays: 30, price: 2500000, description: 'Gói gửi ô tô lớn theo tháng' },
     { name: 'Vé tháng xe đạp', vehicleTypeId: 4, durationDays: 30, price: 100000, description: 'Gói gửi xe đạp theo tháng' },
+    { name: 'Vé tháng xe đạp điện', vehicleTypeId: 5, durationDays: 30, price: 120000, description: 'Gói gửi xe đạp điện theo tháng' },
+    { name: 'Vé tháng xe máy điện', vehicleTypeId: 6, durationDays: 30, price: 200000, description: 'Gói gửi xe máy điện theo tháng' },
+    { name: 'Vé quý xe máy điện', vehicleTypeId: 6, durationDays: 90, price: 550000, description: 'Gói gửi xe máy điện theo quý' },
+    { name: 'Vé tháng ô tô điện', vehicleTypeId: 7, durationDays: 30, price: 1500000, description: 'Gói gửi ô tô điện theo tháng' },
+    { name: 'Vé quý ô tô điện', vehicleTypeId: 7, durationDays: 90, price: 4000000, description: 'Gói gửi ô tô điện theo quý' },
+    { name: 'Vé tháng xe bán tải', vehicleTypeId: 8, durationDays: 30, price: 1700000, description: 'Gói gửi xe bán tải theo tháng' },
+    { name: 'Vé tháng xe khách', vehicleTypeId: 9, durationDays: 30, price: 3000000, description: 'Gói gửi xe khách theo tháng' },
   ].entries()) {
     await prisma.parkingPackage.upsert({ where: { id: i + 1 }, update: {}, create: pkg });
   }

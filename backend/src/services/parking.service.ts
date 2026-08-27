@@ -454,47 +454,51 @@ export class ParkingService {
       throw { status: 400, message: 'Vui lòng nhập biển số hợp lệ' };
     }
 
-    const records = await prisma.parkingRecord.findMany({
-      where: {
-        OR: [
-          { licensePlate: { contains: normalizedPlate } },
-          { licensePlate: { contains: licensePlate.trim() } },
-        ],
-      },
-      include: {
-        vehicleType: { select: { name: true } },
-        parkingSpot: {
-          select: {
-            spotNumber: true,
-            zone: { select: { name: true } },
-          },
-        },
-        vehicle: {
-          select: {
-            customer: { select: { fullName: true, phone: true } },
-          },
-        },
-      },
-      orderBy: { entryTime: 'desc' },
-      take: 100,
-    });
+    // Một số bản ghi cũ lưu biển số kèm dấu gạch/khoảng trắng ("51H4-23456"), bản ghi mới lưu đã
+    // chuẩn hoá ("51H423456") — contains() không xử lý được sai khác định dạng này nên tìm bằng
+    // vehicleId (chính xác tuyệt đối) + so khớp text đã bỏ dấu gạch/khoảng trắng ngay tại SQL Server.
+    const vehicle = await this.findVehicleByNormalizedPlate(normalizedPlate);
 
-    const filtered = records.filter((record) => {
-      const plate = normalizeLicensePlate(record.licensePlate);
-      return (
-        areLicensePlatesEqual(record.licensePlate, normalizedPlate)
-        || plate.includes(normalizedPlate)
-        || record.licensePlate.includes(licensePlate.trim())
-      );
-    });
+    const matchedByText = await prisma.$queryRaw<{ Id: number }[]>`
+      SELECT Id FROM ParkingRecords
+      WHERE REPLACE(REPLACE(REPLACE(LicensePlate, '-', ''), '.', ''), ' ', '') = ${normalizedPlate}
+    `;
+    const matchedIds = matchedByText.map((r) => r.Id);
+
+    const records = matchedIds.length === 0 && !vehicle
+      ? []
+      : await prisma.parkingRecord.findMany({
+          where: {
+            OR: [
+              ...(vehicle ? [{ vehicleId: vehicle.id }] : []),
+              ...(matchedIds.length > 0 ? [{ id: { in: matchedIds } }] : []),
+            ],
+          },
+          include: {
+            vehicleType: { select: { name: true } },
+            parkingSpot: {
+              select: {
+                spotNumber: true,
+                zone: { select: { name: true } },
+              },
+            },
+            vehicle: {
+              select: {
+                customer: { select: { fullName: true, phone: true } },
+              },
+            },
+          },
+          orderBy: { entryTime: 'desc' },
+          take: 200,
+        });
 
     return {
       licensePlate: normalizedPlate,
-      total: filtered.length,
-      currentlyParked: filtered.filter((r) => r.status === 'parked').length,
-      completed: filtered.filter((r) => r.status === 'completed').length,
-      exceptionCount: filtered.filter((r) => (r.notes || '').includes('[NGOAI_LE:')).length,
-      records: filtered,
+      total: records.length,
+      currentlyParked: records.filter((r) => r.status === 'parked').length,
+      completed: records.filter((r) => r.status === 'completed').length,
+      exceptionCount: records.filter((r) => (r.notes || '').includes('[NGOAI_LE:')).length,
+      records,
     };
   }
 

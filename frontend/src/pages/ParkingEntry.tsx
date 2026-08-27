@@ -13,26 +13,36 @@ const normalizeText = (value?: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
+// Giữ đồng bộ với getVehicleCategory/getSpotCategory trong backend/src/utils/businessRules.ts —
+// trùng lặp có chủ đích để filter phía client nhanh (không round-trip API), NHƯNG danh sách chỗ đỗ
+// hiển thị chỉ mang tính gợi ý: quyết định cuối cùng luôn do backend enforce lại khi submit.
 const getVehicleCategory = (vehicleTypeName?: string) => {
   const normalized = normalizeText(vehicleTypeName);
-  if (normalized.includes('xe may') || normalized.includes('xe dap') || normalized.includes('motor') || normalized.includes('bicycle')) {
-    return 'two-wheel';
-  }
-  if (normalized.includes('o to lon') || normalized.includes('xe tai') || normalized.includes('bus')) {
-    return 'large-car';
-  }
-  if (normalized.includes('o to') || normalized.includes('car')) {
-    return 'car';
-  }
+  if (normalized.includes('xe dap') || normalized.includes('bicycle')) return 'two-wheel';
+  if (normalized.includes('xe may') || normalized.includes('motor')) return 'two-wheel';
+  if (
+    normalized.includes('o to lon') ||
+    normalized.includes('xe tai') ||
+    normalized.includes('xe khach') ||
+    normalized.includes('bus') ||
+    normalized.includes('coach') ||
+    normalized.includes('truck')
+  ) return 'large-car';
+  if (
+    normalized.includes('o to') ||
+    normalized.includes('car') ||
+    normalized.includes('ban tai') ||
+    normalized.includes('pickup')
+  ) return 'car';
   return 'any';
 };
 
 const getSpotCategory = (spot: ParkingSpot) => {
   const normalized = normalizeText(`${spot.zone?.name || ''} ${spot.spotNumber} ${spot.spotType}`);
-  if (normalized.includes('vip') || normalized.startsWith('d')) return 'any';
-  if (normalized.includes('xe may') || normalized.startsWith('a')) return 'two-wheel';
-  if (normalized.includes('o to lon') || normalized.startsWith('c')) return 'large-car';
-  if (normalized.includes('o to') || normalized.startsWith('b')) return 'car';
+  if (normalized.includes('vip')) return 'any';
+  if (normalized.includes('xe may') || normalized.includes('motor') || normalized.startsWith('khu a') || normalized.startsWith('a')) return 'two-wheel';
+  if (normalized.includes('o to lon') || normalized.includes('xe tai') || normalized.includes('bus') || normalized.startsWith('khu c') || normalized.startsWith('c')) return 'large-car';
+  if (normalized.includes('o to con') || normalized.includes('o to') || normalized.includes('car') || normalized.startsWith('khu b') || normalized.startsWith('b')) return 'car';
   return 'any';
 };
 

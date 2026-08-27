@@ -821,8 +821,6 @@ const Reports: React.FC = () => {
                           nameKey="label"
                           cx="50%" cy="50%"
                           outerRadius={75}
-                          label={({ label, percent }) => `${label.slice(0, 14)} ${(percent * 100).toFixed(0)}%`}
-                          labelLine={false}
                         >
                           {exceptionStats.byReason.map((_, idx) => (
                             <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
@@ -831,6 +829,18 @@ const Reports: React.FC = () => {
                         <Tooltip formatter={(v: number, name: string) => [`${v} ca`, name]} contentStyle={{ borderRadius: 8, border: 'none' }} />
                       </PieChart>
                     </ResponsiveContainer>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                      {exceptionStats.byReason.map((r, idx) => {
+                        const percent = exceptionStats.totalCount ? Math.round((r.count / exceptionStats.totalCount) * 100) : 0;
+                        return (
+                          <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: CHART_COLORS[idx % CHART_COLORS.length], flexShrink: 0 }} />
+                            <span style={{ flex: 1 }}>{r.label}</span>
+                            <span style={{ color: 'var(--on-surface-variant)' }}>{percent}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </Col>
 
                   {/* Summary by reason table */}

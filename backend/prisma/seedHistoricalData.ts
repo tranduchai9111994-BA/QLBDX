@@ -7,9 +7,15 @@
  * thiếu (target - số bản ghi đã có) — không đụng tới ngày đã đủ dày (ví dụ 90 ngày gần nhất đã seed).
  * Chạy lại nhiều lần an toàn.
  *
+ * T-VEHTYPE: mọi tham số về loại xe/chỗ đỗ/giá đều ĐỌC TỪ DATABASE (VehicleType, ParkingZone,
+ * ParkingSpot) ngay khi chạy, thay vì hardcode id 1/2/3 + range chỗ đỗ cố định như bản cũ — nên khi
+ * thêm loại xe mới qua trang Loại xe (hoặc script khác), lần chạy tiếp theo tự động rải dữ liệu cho
+ * cả loại mới mà không cần sửa code ở đây.
+ *
  * Chạy: npx ts-node prisma/seedHistoricalData.ts
  */
 import { PrismaClient } from '@prisma/client';
+import { getSpotCategory, getVehicleCategory, type VehicleCategory } from '../src/utils/businessRules';
 
 const prisma = new PrismaClient();
 
@@ -49,35 +55,81 @@ function sampleEntryHour(): { hour: number; minute: number } {
   return { hour, minute };
 }
 
-const VEHICLE_TYPE_WEIGHTS: Array<{ id: number; weight: number }> = [
-  { id: 1, weight: 0.6 },
-  { id: 2, weight: 0.3 },
-  { id: 3, weight: 0.1 },
-];
-function pickVehicleTypeId(): number {
-  const r = Math.random();
-  let acc = 0;
-  for (const vt of VEHICLE_TYPE_WEIGHTS) {
-    acc += vt.weight;
-    if (r <= acc) return vt.id;
+/**
+ * Đọc VehicleType/ParkingZone/ParkingSpot từ DB để suy ra: trọng số random theo loại xe (chia đều
+ * trong từng category — two-wheel/car/large-car/any), pool chỗ đỗ tương thích theo category, và
+ * đơn giá hiện hành — thay cho id/range/giá hardcode. Nhờ vậy loại xe mới (thêm qua trang Loại xe
+ * hoặc script khác) tự động được rải dữ liệu ở lần chạy tiếp theo, không cần sửa file này.
+ */
+async function loadReferenceData() {
+  const vehicleTypes = await prisma.vehicleType.findMany({
+    select: { id: true, name: true, hourlyRate: true, dailyRate: true },
+  });
+  const zones = await prisma.parkingZone.findMany({
+    include: { parkingSpots: { select: { id: true, spotNumber: true, spotType: true } } },
+  });
+
+  const categoryByType = new Map(vehicleTypes.map((vt) => [vt.id, getVehicleCategory(vt.name)]));
+  const rateByType = new Map(vehicleTypes.map((vt) => [vt.id, { hourly: Number(vt.hourlyRate), daily: Number(vt.dailyRate) }]));
+
+  const typeIdsByCategory = new Map<VehicleCategory, number[]>();
+  for (const vt of vehicleTypes) {
+    const cat = categoryByType.get(vt.id)!;
+    const list = typeIdsByCategory.get(cat);
+    if (list) list.push(vt.id);
+    else typeIdsByCategory.set(cat, [vt.id]);
   }
-  return VEHICLE_TYPE_WEIGHTS[0].id;
-}
-function getSpotId(vehicleTypeId: number): number {
-  if (vehicleTypeId === 1) return randInt(1, 50);
-  if (vehicleTypeId === 2) return randInt(51, 80);
-  if (vehicleTypeId === 3) return randInt(81, 100);
-  return randInt(1, 50);
-}
-const HOURLY_RATE: Record<number, number> = { 1: 5000, 2: 20000, 3: 30000, 4: 2000 };
-const DAILY_RATE: Record<number, number> = { 1: 20000, 2: 100000, 3: 150000, 4: 10000 };
-function calcFee(durationMinutes: number, vehicleTypeId: number): number {
-  const hours = Math.ceil(durationMinutes / 60);
-  const hourly = HOURLY_RATE[vehicleTypeId] || 5000;
-  const daily = DAILY_RATE[vehicleTypeId] || 20000;
-  if (hours <= 0) return 0;
-  if (hours <= 24) return Math.min(hours * hourly, daily);
-  return Math.ceil(hours / 24) * daily;
+
+  const spotIdsByCategory = new Map<VehicleCategory, number[]>();
+  for (const z of zones) {
+    for (const s of z.parkingSpots) {
+      const cat = getSpotCategory({ spotNumber: s.spotNumber, spotType: s.spotType, zone: { name: z.name, description: z.description } });
+      const list = spotIdsByCategory.get(cat);
+      if (list) list.push(s.id);
+      else spotIdsByCategory.set(cat, [s.id]);
+    }
+  }
+  const anySpots = spotIdsByCategory.get('any') ?? [];
+
+  // Giữ tỷ lệ tương tự dữ liệu gốc (2 bánh phổ biến nhất) nhưng chia đều cho MỌI loại xe thuộc
+  // cùng category, thay vì gán cứng theo id — category nào có nhiều loại xe thì mỗi loại ít lượt hơn.
+  const CATEGORY_WEIGHT: Record<VehicleCategory, number> = { 'two-wheel': 0.55, car: 0.30, 'large-car': 0.12, any: 0.03 };
+  const typeWeights: Array<{ id: number; weight: number }> = [];
+  for (const [cat, ids] of typeIdsByCategory) {
+    if (ids.length === 0) continue;
+    const perType = (CATEGORY_WEIGHT[cat] ?? 0.05) / ids.length;
+    for (const id of ids) typeWeights.push({ id, weight: perType });
+  }
+  const totalWeight = typeWeights.reduce((sum, w) => sum + w.weight, 0) || 1;
+  const normalizedWeights = typeWeights.map((w) => ({ id: w.id, weight: w.weight / totalWeight }));
+
+  function pickVehicleTypeId(): number {
+    const r = Math.random();
+    let acc = 0;
+    for (const w of normalizedWeights) {
+      acc += w.weight;
+      if (r <= acc) return w.id;
+    }
+    return normalizedWeights[0]?.id ?? vehicleTypes[0].id;
+  }
+  function getSpotId(vehicleTypeId: number): number | null {
+    const cat = categoryByType.get(vehicleTypeId) ?? 'any';
+    const pool = spotIdsByCategory.get(cat);
+    if (pool && pool.length > 0) return randItem(pool);
+    if (anySpots.length > 0) return randItem(anySpots);
+    return null;
+  }
+  function calcFee(durationMinutes: number, vehicleTypeId: number): number {
+    const hours = Math.ceil(durationMinutes / 60);
+    const rate = rateByType.get(vehicleTypeId);
+    const hourly = rate?.hourly || 5000;
+    const daily = rate?.daily || 20000;
+    if (hours <= 0) return 0;
+    if (hours <= 24) return Math.min(hours * hourly, daily);
+    return Math.ceil(hours / 24) * daily;
+  }
+
+  return { pickVehicleTypeId, getSpotId, calcFee };
 }
 
 /** Mật độ mục tiêu/ngày: tăng trưởng theo năm + mùa cao điểm (T9-T11) + Tết thấp điểm (T1-T2). */
@@ -137,6 +189,8 @@ async function main() {
     await prisma.$disconnect();
     return;
   }
+
+  const { pickVehicleTypeId, getSpotId, calcFee } = await loadReferenceData();
 
   const userIds = [1, 2, 3];
   const methods = ['cash', 'cash', 'cash', 'transfer', 'card'];

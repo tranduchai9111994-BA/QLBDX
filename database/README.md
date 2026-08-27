@@ -114,6 +114,32 @@ Chạy lệnh sau để tự động "cho xe ra" phần lớn và chỉ giữ l�
 npm run prisma:fix-stale-parked
 ```
 
+### Nếu vào trang "Gói dịch vụ của khách hàng" chỉ toàn thấy "Hết hạn"
+
+Cùng nguyên nhân như xe "đang đỗ" ở trên — dữ liệu gói neo theo ngày cố định lúc seed nên dần dần
+toàn bộ chuyển "Hết hạn" khi thời gian thực trôi qua, mất hẳn ví dụ "sắp hết hạn" (badge cảnh báo)
+hay gói còn hiệu lực dài hạn. Chạy lại lệnh sau bất kỳ lúc nào để làm mới quanh ngày hiện tại:
+
+```bash
+npm run prisma:seed-fresh-packages
+```
+
+Idempotent — đánh dấu qua Payment.notes riêng, chạy lại sẽ xoá batch cũ và tạo lại batch mới.
+
+### Thêm loại phương tiện mới (ngoài 4 loại gốc) kèm dữ liệu mẫu
+
+`npm run prisma:seed` đã có sẵn 5 loại xe mở rộng (Xe đạp điện, Xe máy điện, Ô tô điện, Xe bán tải,
+Xe khách) trong danh mục Loại xe, nhưng phần khách hàng/xe/lịch sử ra-vào cho các loại này cần chạy
+thêm bước riêng (vì `seed.ts` bỏ qua toàn bộ phần khách hàng/xe nếu DB đã có dữ liệu):
+
+```bash
+npm run prisma:seed-vehicle-expansion
+```
+
+Sau đó chạy lại `npm run prisma:seed-history` — script này đọc loại xe/chỗ đỗ/giá trực tiếp từ DB
+nên sẽ tự rải thêm dữ liệu lịch sử cho các loại xe mới (và bất kỳ loại xe nào thêm sau này qua trang
+Loại xe) mà không cần sửa code.
+
 ---
 
 ## File scripts
@@ -123,9 +149,11 @@ npm run prisma:fix-stale-parked
 | `setup.sql` | Tạo database + schema + seed cơ bản |
 | `demo_business_patch.sql` | Bổ sung/sync dữ liệu demo rule nghiệp vụ |
 | `backend/prisma/seed.ts` | Seed tài khoản + danh mục + dữ liệu demo cơ bản (chạy qua `npm run prisma:seed`) |
-| `backend/prisma/seedHistoricalData.ts` | Bồi đắp dữ liệu nhiều năm cho Dashboard/Báo cáo thực tế (`npm run prisma:seed-history`) |
+| `backend/prisma/seedHistoricalData.ts` | Bồi đắp dữ liệu nhiều năm cho Dashboard/Báo cáo thực tế, đọc loại xe/chỗ đỗ/giá động từ DB (`npm run prisma:seed-history`) |
 | `backend/prisma/fixStaleParkedDemo.ts` | Dọn xe "đang đỗ" demo bị coi là đỗ quá lâu do instance chạy nhiều tuần (`npm run prisma:fix-stale-parked`) |
 | `backend/prisma/seedExceptionCheckouts.ts` | Bổ sung dữ liệu mẫu "Checkout ngoại lệ" cho Báo cáo (`npm run prisma:seed-exceptions`) |
+| `backend/prisma/seedFreshPackages.ts` | Làm mới demo gói dịch vụ khách hàng quanh ngày hiện tại — luôn có đủ active/sắp hết hạn/vừa hết hạn/chưa hiệu lực (`npm run prisma:seed-fresh-packages`) |
+| `backend/prisma/seedVehicleTypeExpansion.ts` | Thêm khách hàng/xe/lịch sử mẫu cho 5 loại phương tiện mở rộng (`npm run prisma:seed-vehicle-expansion`) |
 
 ---
 

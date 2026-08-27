@@ -14,6 +14,8 @@
     "prisma:seed-history": "ts-node prisma/seedHistoricalData.ts",
     "prisma:fix-stale-parked": "ts-node prisma/fixStaleParkedDemo.ts",
     "prisma:seed-exceptions": "ts-node prisma/seedExceptionCheckouts.ts",
+    "prisma:seed-fresh-packages": "ts-node prisma/seedFreshPackages.ts",
+    "prisma:seed-vehicle-expansion": "ts-node prisma/seedVehicleTypeExpansion.ts",
     "test": "ts-node --transpile-only src/utils/feeCalculator.test.ts",
     "test:fee": "ts-node --transpile-only src/utils/feeCalculator.test.ts"
   },
