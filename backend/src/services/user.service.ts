@@ -14,6 +14,8 @@ export class UserService {
         role: true,
         isActive: true,
         createdAt: true,
+        permissionGroupId: true,
+        permissionGroup: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -31,6 +33,8 @@ export class UserService {
         role: true,
         isActive: true,
         createdAt: true,
+        permissionGroupId: true,
+        permissionGroup: { select: { id: true, name: true } },
       },
     });
 
@@ -62,6 +66,11 @@ export class UserService {
       throw { status: 400, message: 'Email đã được sử dụng' };
     }
 
+    if (data.permissionGroupId) {
+      const group = await prisma.permissionGroup.findUnique({ where: { id: data.permissionGroupId } });
+      if (!group) throw { status: 400, message: 'Nhóm quyền không tồn tại' };
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(data.password, salt);
 
@@ -73,6 +82,8 @@ export class UserService {
         email: data.email ?? null,
         phone: data.phone ?? null,
         role: data.role ?? 'staff',
+        // Admin luôn toàn quyền, không gắn nhóm quyền.
+        permissionGroupId: data.role === 'admin' ? null : (data.permissionGroupId ?? null),
       },
     });
 
@@ -112,12 +123,19 @@ export class UserService {
       throw { status: 400, message: 'Không thể hạ quyền admin cuối cùng trong hệ thống' };
     }
 
+    if (data.permissionGroupId) {
+      const group = await prisma.permissionGroup.findUnique({ where: { id: data.permissionGroupId } });
+      if (!group) throw { status: 400, message: 'Nhóm quyền không tồn tại' };
+    }
+
+    const nextRole = data.role ?? 'staff';
     const updateData: any = {
       fullName: data.fullName,
       email: data.email ?? null,
       phone: data.phone ?? null,
-      role: data.role ?? 'staff',
+      role: nextRole,
       isActive: data.isActive ?? true,
+      permissionGroupId: nextRole === 'admin' ? null : (data.permissionGroupId ?? null),
     };
 
     if (data.password) {

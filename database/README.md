@@ -140,6 +140,19 @@ Sau đó chạy lại `npm run prisma:seed-history` — script này đọc loạ
 nên sẽ tự rải thêm dữ liệu lịch sử cho các loại xe mới (và bất kỳ loại xe nào thêm sau này qua trang
 Loại xe) mà không cần sửa code.
 
+### Sau khi restore/migrate DB mới — tạo Nhóm quyền mặc định cho staff
+
+Hệ phân quyền chuyển từ localStorage sang bảng `PermissionGroups`/`GroupPermissions` — DB mới (chạy
+`prisma migrate deploy` từ đầu) sẽ chưa có nhóm quyền nào, nghĩa là mọi tài khoản staff demo
+(`nhanvien1/2/3`) tạm thời **không thao tác Thêm/Sửa/Xóa được ở màn nào cả** (vẫn xem được — Xem
+không qua nhóm quyền). Chạy lệnh sau để tạo nhóm mặc định và gán cho các tài khoản staff demo:
+
+```bash
+npm run prisma:seed-permission-groups
+```
+
+Idempotent — chạy lại không tạo trùng nhóm, chỉ cập nhật lại quyền của nhóm "Nhân viên tiêu chuẩn".
+
 ---
 
 ## File scripts
@@ -154,6 +167,7 @@ Loại xe) mà không cần sửa code.
 | `backend/prisma/seedExceptionCheckouts.ts` | Bổ sung dữ liệu mẫu "Checkout ngoại lệ" cho Báo cáo (`npm run prisma:seed-exceptions`) |
 | `backend/prisma/seedFreshPackages.ts` | Làm mới demo gói dịch vụ khách hàng quanh ngày hiện tại — luôn có đủ active/sắp hết hạn/vừa hết hạn/chưa hiệu lực (`npm run prisma:seed-fresh-packages`) |
 | `backend/prisma/seedVehicleTypeExpansion.ts` | Thêm khách hàng/xe/lịch sử mẫu cho 5 loại phương tiện mở rộng (`npm run prisma:seed-vehicle-expansion`) |
+| `backend/prisma/seedPermissionGroups.ts` | Tạo nhóm quyền mặc định "Nhân viên tiêu chuẩn" + gán cho staff demo chưa có nhóm (`npm run prisma:seed-permission-groups`) |
 
 ---
 

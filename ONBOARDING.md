@@ -200,7 +200,7 @@ CRUD đầy đủ, validate trùng số điện thoại/CCCD/biển số. Có **
 | **Thanh toán** | Danh sách mọi giao dịch thu tiền (gửi lẻ + gói dịch vụ), sửa được thông tin giao dịch. |
 | **Báo cáo** | Doanh thu theo ngày/tháng/năm, phân loại xe, phương thức thanh toán, thống kê checkout ngoại lệ — đều xuất được Excel/CSV/PDF. |
 | **Cảnh báo** | Gói sắp hết hạn, khu vực sắp đầy, xe đỗ quá lâu, dữ liệu bị lệch trạng thái, thanh toán bất thường. |
-| **Người dùng** | CRUD tài khoản, khoá/mở khoá, và **phân quyền màn hình cho staff** (bật/tắt từng menu staff nhìn thấy). |
+| **Người dùng** | CRUD tài khoản, khoá/mở khoá, gán **Nhóm quyền** cho staff. Tab "Nhóm quyền" cho tạo nhóm và cấu hình ma trận Thêm/Sửa/Xóa theo từng chức năng — lưu trong DB, backend chặn thật (không chỉ ẩn/hiện UI). |
 | **Nhật ký hoạt động** | Log mọi thao tác tạo/sửa/xoá: ai, lúc nào, kết quả gì. |
 
 > Đặc tả chi tiết từng API/field/validation: xem **[Function.md](Function.md)**. Kiến trúc kỹ thuật đầy đủ (luồng nghiệp vụ, ER diagram, rủi ro kỹ thuật): xem **[KIEN_TRUC_CHI_TIET.md](KIEN_TRUC_CHI_TIET.md)**.

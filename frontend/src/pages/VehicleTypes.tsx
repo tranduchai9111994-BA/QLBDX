@@ -149,9 +149,11 @@ const VehicleTypes: React.FC = () => {
       title: 'Thao tác', key: 'action', width: 320, render: (_: any, r: VehicleType) => (
         <Space wrap>
           <Button icon={<HistoryOutlined />} onClick={() => openHistoryModal(r)} size="small">Lịch sử giá</Button>
-          <PermissionGate adminOnly fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
+          <PermissionGate screen="vehicle-types" action="update" fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
             <Button icon={<ClockCircleOutlined />} onClick={() => openScheduleModal(r)} size="small">Đặt lịch đổi giá</Button>
             <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
+          </PermissionGate>
+          <PermissionGate screen="vehicle-types" action="delete">
             <Popconfirm title="Xác nhận xóa loại xe này?" onConfirm={() => handleDelete(r.id)} okText="Xóa" cancelText="Hủy">
               <Button icon={<DeleteOutlined />} danger size="small">Xóa</Button>
             </Popconfirm>
@@ -179,7 +181,7 @@ const VehicleTypes: React.FC = () => {
     <div>
       <h2 className="page-title">{t('pageVehicleTypes')}</h2>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <PermissionGate adminOnly>
+        <PermissionGate screen="vehicle-types" action="create">
           <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
             Thêm loại xe
           </Button>

@@ -49,6 +49,24 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   return <>{children}</>;
 };
 
+interface PermissionRouteProps {
+  children: ReactNode;
+  screenKey: string;
+}
+
+/** Thay AdminRoute cho các màn nằm trong ma trận phân quyền (Thanh toán/Cảnh báo/Báo cáo) — admin
+ * luôn vào được, staff vào được nếu nhóm quyền của họ có dòng cấu hình cho đúng screenKey này
+ * (admin phải chủ động tick ít nhất 1 quyền Thêm/Sửa/Xóa ở trang Nhóm quyền thì mới có dòng đó). */
+const PermissionRoute: React.FC<PermissionRouteProps> = ({ children, screenKey }) => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" />;
+  if (user.role === 'admin') return <>{children}</>;
+  const hasAccess = (user.permissions || []).some((p) => p.screenKey === screenKey);
+  if (!hasAccess) return <Navigate to="/" />;
+  return <>{children}</>;
+};
+
 const AppInner: React.FC = () => {
   const { lang } = useLanguage();
   const { mode } = useTheme();
@@ -70,10 +88,10 @@ const AppInner: React.FC = () => {
               <Route path="parking-spots" element={<ParkingSpots />} />
               <Route path="packages" element={<Packages />} />
               <Route path="customer-packages" element={<CustomerPackages />} />
-              <Route path="payments" element={<AdminRoute><Payments /></AdminRoute>} />
-              <Route path="alerts" element={<AdminRoute><Alerts /></AdminRoute>} />
+              <Route path="payments" element={<PermissionRoute screenKey="payments"><Payments /></PermissionRoute>} />
+              <Route path="alerts" element={<PermissionRoute screenKey="alerts"><Alerts /></PermissionRoute>} />
               <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
-              <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
+              <Route path="reports" element={<PermissionRoute screenKey="reports"><Reports /></PermissionRoute>} />
               <Route path="analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
               <Route path="profile" element={<Profile />} />
               <Route path="activity-logs" element={<AdminRoute><ActivityLogs /></AdminRoute>} />

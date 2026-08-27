@@ -16,6 +16,7 @@
     "prisma:seed-exceptions": "ts-node prisma/seedExceptionCheckouts.ts",
     "prisma:seed-fresh-packages": "ts-node prisma/seedFreshPackages.ts",
     "prisma:seed-vehicle-expansion": "ts-node prisma/seedVehicleTypeExpansion.ts",
+    "prisma:seed-permission-groups": "ts-node prisma/seedPermissionGroups.ts",
     "test": "ts-node --transpile-only src/utils/feeCalculator.test.ts",
     "test:fee": "ts-node --transpile-only src/utils/feeCalculator.test.ts"
   },

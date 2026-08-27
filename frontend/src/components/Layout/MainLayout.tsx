@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Dropdown, MenuProps, Segmented, Tooltip, Button, Badge } from 'antd';
 import {
@@ -12,9 +12,17 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { DashboardViewProvider, useDashboardView } from '../../context/DashboardViewContext';
-import { loadStaffPerms, getStaffVisibleKeys } from '../../utils/permConfig';
 import { useUpdateAvailable } from '../../hooks/useUpdateAvailable';
 import DesktopOnlyBanner from './DesktopOnlyBanner';
+
+// Màn nằm trong ma trận Nhóm quyền (backend) — staff thấy được khi nhóm của họ có ít nhất 1 dòng
+// GroupPermission cho đúng key này (nghĩa là admin đã cấp Thêm/Sửa/Xóa nào đó). Khác các màn dưới
+// (Tổng quan/Xe vào/Xe ra/Lịch sử) vốn luôn full cho staff, không qua nhóm quyền.
+const CONFIGURABLE_KEYS = new Set([
+  'parking-spots', 'customers', 'vehicles', 'vehicle-types',
+  'packages', 'customer-packages', 'payments', 'alerts', 'reports',
+]);
+const ALWAYS_STAFF_KEYS = new Set(['dashboard', 'parking-entry', 'parking-exit', 'parking-history']);
 
 const MainLayoutInner: React.FC = () => {
   const { user, logout } = useAuth();
@@ -27,16 +35,12 @@ const MainLayoutInner: React.FC = () => {
   const { view, setView } = useDashboardView();
   const showDashboardViewToggle = isAdmin && location.pathname === '/';
 
-  // Staff perm config
-  const [staffVisible, setStaffVisible] = useState<Set<string>>(() =>
-    getStaffVisibleKeys(loadStaffPerms())
-  );
-  useEffect(() => {
-    const onStorage = () => setStaffVisible(getStaffVisibleKeys(loadStaffPerms()));
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-  const canSee = (key: string) => isAdmin || staffVisible.has(key);
+  const canSee = (key: string) => {
+    if (isAdmin) return true;
+    if (ALWAYS_STAFF_KEYS.has(key)) return true;
+    if (CONFIGURABLE_KEYS.has(key)) return (user?.permissions || []).some((p) => p.screenKey === key);
+    return false; // users / activity-logs / analytics -> admin only
+  };
 
   const operationsGroup: MenuProps['items'] = [
     {

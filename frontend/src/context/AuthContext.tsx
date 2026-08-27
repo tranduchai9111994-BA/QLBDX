@@ -44,8 +44,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<AuthResponse> => {
     const res = await api.post<AuthResponse>('/auth/login', { username, password });
     localStorage.setItem('token', res.data.token);
-    localStorage.setItem('user', JSON.stringify(res.data.user));
-    setUser(res.data.user);
+    // /auth/login chỉ trả thông tin cơ bản — permissions (nhóm quyền) nằm ở /auth/me. Gọi tiếp
+    // ngay ở đây để user.permissions có sẵn ngay sau khi đăng nhập, không phải chờ reload trang
+    // mới trúng lại effect load-on-mount bên trên.
+    const profileRes = await api.get<User>('/auth/me');
+    localStorage.setItem('user', JSON.stringify(profileRes.data));
+    setUser(profileRes.data);
     return res.data;
   };
 

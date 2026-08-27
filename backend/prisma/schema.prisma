@@ -8,36 +8,74 @@ datasource db {
 }
 
 model User {
-  id           Int       @id @default(autoincrement()) @map("Id")
-  username     String    @unique @map("Username") @db.NVarChar(50)
-  passwordHash String    @map("PasswordHash") @db.NVarChar(255)
-  fullName     String    @map("FullName") @db.NVarChar(100)
-  email        String?   @map("Email") @db.NVarChar(100)
-  phone        String?   @map("Phone") @db.NVarChar(20)
-  role         String    @default("staff") @map("Role") @db.NVarChar(20)
-  isActive     Boolean   @default(true) @map("IsActive")
-  createdAt    DateTime  @default(now()) @map("CreatedAt")
-  updatedAt    DateTime  @default(now()) @updatedAt @map("UpdatedAt")
+  id                Int      @id @default(autoincrement()) @map("Id")
+  username          String   @unique @map("Username") @db.NVarChar(50)
+  passwordHash      String   @map("PasswordHash") @db.NVarChar(255)
+  fullName          String   @map("FullName") @db.NVarChar(100)
+  email             String?  @map("Email") @db.NVarChar(100)
+  phone             String?  @map("Phone") @db.NVarChar(20)
+  role              String   @default("staff") @map("Role") @db.NVarChar(20)
+  /// Nhóm quyền áp dụng khi role='staff'. Admin luôn toàn quyền, bỏ qua field này.
+  permissionGroupId Int?     @map("PermissionGroupId")
+  isActive          Boolean  @default(true) @map("IsActive")
+  createdAt         DateTime @default(now()) @map("CreatedAt")
+  updatedAt         DateTime @default(now()) @updatedAt @map("UpdatedAt")
 
   parkingRecords         ParkingRecord[]          @relation("CreatedByUser")
   payments               Payment[]                @relation("PaymentCreatedBy")
   activityLogs           UserActivityLog[]
   vehicleTypeRateChanges VehicleTypeRateHistory[]
   packagePriceChanges    PackagePriceHistory[]
+  permissionGroup        PermissionGroup?         @relation(fields: [permissionGroupId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([permissionGroupId])
   @@map("Users")
 }
 
+/// Nhóm quyền do admin tự tạo (VD "Nhân viên trực ca", "Kế toán"...). Thay cho localStorage
+/// (config trước đây chỉ áp cho trình duyệt admin đang dùng, backend không biết gì) — bảng này
+/// là nguồn dữ liệu DUY NHẤT, cả frontend (ẩn/hiện menu) lẫn backend (chặn API thật) đều đọc từ đây.
+model PermissionGroup {
+  id          Int      @id @default(autoincrement()) @map("Id")
+  name        String   @unique @map("Name") @db.NVarChar(100)
+  description String?  @map("Description") @db.NVarChar(255)
+  createdAt   DateTime @default(now()) @map("CreatedAt")
+  updatedAt   DateTime @default(now()) @updatedAt @map("UpdatedAt")
+
+  users       User[]
+  permissions GroupPermission[]
+
+  @@map("PermissionGroups")
+}
+
+/// 1 dòng = quyền của 1 nhóm trên 1 màn hình/chức năng (screenKey khớp SCREEN_KEYS ở backend
+/// và permConfig.ts ở frontend). canView/canCreate/canUpdate/canDelete độc lập nhau — "Toàn quyền"
+/// ở UI chỉ là tick nhanh cả 4, không phải 1 field riêng.
+model GroupPermission {
+  id        Int     @id @default(autoincrement()) @map("Id")
+  groupId   Int     @map("GroupId")
+  screenKey String  @map("ScreenKey") @db.NVarChar(50)
+  canView   Boolean @default(false) @map("CanView")
+  canCreate Boolean @default(false) @map("CanCreate")
+  canUpdate Boolean @default(false) @map("CanUpdate")
+  canDelete Boolean @default(false) @map("CanDelete")
+
+  group PermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([groupId, screenKey])
+  @@map("GroupPermissions")
+}
+
 model Customer {
-  id           Int       @id @default(autoincrement()) @map("Id")
-  fullName     String    @map("FullName") @db.NVarChar(100)
-  phone        String    @map("Phone") @db.NVarChar(20)
-  email        String?   @map("Email") @db.NVarChar(100)
-  address      String?   @map("Address") @db.NVarChar(255)
-  identityCard String?   @map("IdentityCard") @db.NVarChar(20)
-  isActive     Boolean   @default(true) @map("IsActive")
-  createdAt    DateTime  @default(now()) @map("CreatedAt")
-  updatedAt    DateTime  @default(now()) @updatedAt @map("UpdatedAt")
+  id           Int      @id @default(autoincrement()) @map("Id")
+  fullName     String   @map("FullName") @db.NVarChar(100)
+  phone        String   @map("Phone") @db.NVarChar(20)
+  email        String?  @map("Email") @db.NVarChar(100)
+  address      String?  @map("Address") @db.NVarChar(255)
+  identityCard String?  @map("IdentityCard") @db.NVarChar(20)
+  isActive     Boolean  @default(true) @map("IsActive")
+  createdAt    DateTime @default(now()) @map("CreatedAt")
+  updatedAt    DateTime @default(now()) @updatedAt @map("UpdatedAt")
 
   vehicles         Vehicle[]
   customerPackages CustomerPackage[]
@@ -46,13 +84,13 @@ model Customer {
 }
 
 model VehicleType {
-  id          Int       @id @default(autoincrement()) @map("Id")
-  name        String    @map("Name") @db.NVarChar(50)
-  description String?   @map("Description") @db.NVarChar(200)
-  hourlyRate  Decimal   @map("HourlyRate") @db.Decimal(10, 2)
-  dailyRate   Decimal   @map("DailyRate") @db.Decimal(10, 2)
-  monthlyRate Decimal   @map("MonthlyRate") @db.Decimal(10, 2)
-  createdAt   DateTime  @default(now()) @map("CreatedAt")
+  id          Int      @id @default(autoincrement()) @map("Id")
+  name        String   @map("Name") @db.NVarChar(50)
+  description String?  @map("Description") @db.NVarChar(200)
+  hourlyRate  Decimal  @map("HourlyRate") @db.Decimal(10, 2)
+  dailyRate   Decimal  @map("DailyRate") @db.Decimal(10, 2)
+  monthlyRate Decimal  @map("MonthlyRate") @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("CreatedAt")
 
   vehicles        Vehicle[]
   parkingPackages ParkingPackage[]
@@ -83,19 +121,19 @@ model VehicleTypeRateHistory {
 }
 
 model Vehicle {
-  id            Int       @id @default(autoincrement()) @map("Id")
-  customerId    Int       @map("CustomerId")
-  vehicleTypeId Int       @map("VehicleTypeId")
-  licensePlate  String    @unique @map("LicensePlate") @db.NVarChar(20)
-  brand         String?   @map("Brand") @db.NVarChar(50)
-  model         String?   @map("Model") @db.NVarChar(50)
-  color         String?   @map("Color") @db.NVarChar(30)
-  createdAt     DateTime  @default(now()) @map("CreatedAt")
-  updatedAt     DateTime  @default(now()) @updatedAt @map("UpdatedAt")
+  id            Int      @id @default(autoincrement()) @map("Id")
+  customerId    Int      @map("CustomerId")
+  vehicleTypeId Int      @map("VehicleTypeId")
+  licensePlate  String   @unique @map("LicensePlate") @db.NVarChar(20)
+  brand         String?  @map("Brand") @db.NVarChar(50)
+  model         String?  @map("Model") @db.NVarChar(50)
+  color         String?  @map("Color") @db.NVarChar(30)
+  createdAt     DateTime @default(now()) @map("CreatedAt")
+  updatedAt     DateTime @default(now()) @updatedAt @map("UpdatedAt")
 
-  customer        Customer          @relation(fields: [customerId], references: [id])
-  vehicleType     VehicleType       @relation(fields: [vehicleTypeId], references: [id])
-  parkingRecords  ParkingRecord[]
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  vehicleType      VehicleType       @relation(fields: [vehicleTypeId], references: [id])
+  parkingRecords   ParkingRecord[]
   customerPackages CustomerPackage[]
 
   @@index([customerId])
@@ -104,11 +142,11 @@ model Vehicle {
 }
 
 model ParkingZone {
-  id          Int       @id @default(autoincrement()) @map("Id")
-  name        String    @map("Name") @db.NVarChar(50)
-  description String?   @map("Description") @db.NVarChar(200)
-  totalSpots  Int       @default(0) @map("TotalSpots")
-  createdAt   DateTime  @default(now()) @map("CreatedAt")
+  id          Int      @id @default(autoincrement()) @map("Id")
+  name        String   @map("Name") @db.NVarChar(50)
+  description String?  @map("Description") @db.NVarChar(200)
+  totalSpots  Int      @default(0) @map("TotalSpots")
+  createdAt   DateTime @default(now()) @map("CreatedAt")
 
   parkingSpots ParkingSpot[]
 
@@ -116,12 +154,12 @@ model ParkingZone {
 }
 
 model ParkingSpot {
-  id         Int       @id @default(autoincrement()) @map("Id")
-  zoneId     Int       @map("ZoneId")
-  spotNumber String    @map("SpotNumber") @db.NVarChar(10)
-  spotType   String    @default("standard") @map("SpotType") @db.NVarChar(20)
-  status     String    @default("available") @map("Status") @db.NVarChar(20)
-  createdAt  DateTime  @default(now()) @map("CreatedAt")
+  id         Int      @id @default(autoincrement()) @map("Id")
+  zoneId     Int      @map("ZoneId")
+  spotNumber String   @map("SpotNumber") @db.NVarChar(10)
+  spotType   String   @default("standard") @map("SpotType") @db.NVarChar(20)
+  status     String   @default("available") @map("Status") @db.NVarChar(20)
+  createdAt  DateTime @default(now()) @map("CreatedAt")
 
   zone           ParkingZone     @relation(fields: [zoneId], references: [id])
   parkingRecords ParkingRecord[]
@@ -132,16 +170,16 @@ model ParkingSpot {
 }
 
 model ParkingPackage {
-  id            Int       @id @default(autoincrement()) @map("Id")
-  name          String    @map("Name") @db.NVarChar(100)
-  vehicleTypeId Int       @map("VehicleTypeId")
-  durationDays  Int       @map("DurationDays")
-  price         Decimal   @map("Price") @db.Decimal(10, 2)
-  description   String?   @map("Description") @db.NVarChar(500)
-  isActive      Boolean   @default(true) @map("IsActive")
-  createdAt     DateTime  @default(now()) @map("CreatedAt")
+  id            Int      @id @default(autoincrement()) @map("Id")
+  name          String   @map("Name") @db.NVarChar(100)
+  vehicleTypeId Int      @map("VehicleTypeId")
+  durationDays  Int      @map("DurationDays")
+  price         Decimal  @map("Price") @db.Decimal(10, 2)
+  description   String?  @map("Description") @db.NVarChar(500)
+  isActive      Boolean  @default(true) @map("IsActive")
+  createdAt     DateTime @default(now()) @map("CreatedAt")
 
-  vehicleType      VehicleType       @relation(fields: [vehicleTypeId], references: [id])
+  vehicleType      VehicleType           @relation(fields: [vehicleTypeId], references: [id])
   customerPackages CustomerPackage[]
   priceHistory     PackagePriceHistory[]
 
@@ -167,14 +205,14 @@ model PackagePriceHistory {
 }
 
 model CustomerPackage {
-  id         Int       @id @default(autoincrement()) @map("Id")
-  customerId Int       @map("CustomerId")
-  packageId  Int       @map("PackageId")
-  vehicleId  Int       @map("VehicleId")
-  startDate  DateTime  @map("StartDate") @db.Date
-  endDate    DateTime  @map("EndDate") @db.Date
-  status     String    @default("active") @map("Status") @db.NVarChar(20)
-  createdAt  DateTime  @default(now()) @map("CreatedAt")
+  id         Int      @id @default(autoincrement()) @map("Id")
+  customerId Int      @map("CustomerId")
+  packageId  Int      @map("PackageId")
+  vehicleId  Int      @map("VehicleId")
+  startDate  DateTime @map("StartDate") @db.Date
+  endDate    DateTime @map("EndDate") @db.Date
+  status     String   @default("active") @map("Status") @db.NVarChar(20)
+  createdAt  DateTime @default(now()) @map("CreatedAt")
 
   customer       Customer       @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   parkingPackage ParkingPackage @relation(fields: [packageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -190,24 +228,24 @@ model CustomerPackage {
 }
 
 model ParkingRecord {
-  id            Int       @id @default(autoincrement()) @map("Id")
-  vehicleId     Int?      @map("VehicleId")
-  licensePlate  String    @map("LicensePlate") @db.NVarChar(20)
-  vehicleTypeId Int       @map("VehicleTypeId")
-  parkingSpotId Int?      @map("ParkingSpotId")
-  entryTime     DateTime  @default(now()) @map("EntryTime")
-  exitTime      DateTime? @map("ExitTime")
-  duration      Int?      @map("Duration")
-  fee           Decimal?  @map("Fee") @db.Decimal(10, 2)
+  id                Int       @id @default(autoincrement()) @map("Id")
+  vehicleId         Int?      @map("VehicleId")
+  licensePlate      String    @map("LicensePlate") @db.NVarChar(20)
+  vehicleTypeId     Int       @map("VehicleTypeId")
+  parkingSpotId     Int?      @map("ParkingSpotId")
+  entryTime         DateTime  @default(now()) @map("EntryTime")
+  exitTime          DateTime? @map("ExitTime")
+  duration          Int?      @map("Duration")
+  fee               Decimal?  @map("Fee") @db.Decimal(10, 2)
   /// Giá/giờ, giá/ngày CHỐT tại thời điểm xe vào bãi — dùng để tính phí lúc xe ra,
   /// không bị ảnh hưởng nếu admin đổi giá VehicleType trong lúc xe đang đỗ.
   /// Null với bản ghi cũ trước khi có tính năng này (fallback về giá VehicleType hiện tại).
-  hourlyRateApplied Decimal? @map("HourlyRateApplied") @db.Decimal(10, 2)
-  dailyRateApplied  Decimal? @map("DailyRateApplied") @db.Decimal(10, 2)
-  status        String    @default("parked") @map("Status") @db.NVarChar(20)
-  notes         String?   @map("Notes") @db.NVarChar(500)
-  createdBy     Int?      @map("CreatedBy")
-  createdAt     DateTime  @default(now()) @map("CreatedAt")
+  hourlyRateApplied Decimal?  @map("HourlyRateApplied") @db.Decimal(10, 2)
+  dailyRateApplied  Decimal?  @map("DailyRateApplied") @db.Decimal(10, 2)
+  status            String    @default("parked") @map("Status") @db.NVarChar(20)
+  notes             String?   @map("Notes") @db.NVarChar(500)
+  createdBy         Int?      @map("CreatedBy")
+  createdAt         DateTime  @default(now()) @map("CreatedAt")
 
   vehicle     Vehicle?     @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   vehicleType VehicleType  @relation(fields: [vehicleTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -227,16 +265,16 @@ model ParkingRecord {
 }
 
 model Payment {
-  id                Int       @id @default(autoincrement()) @map("Id")
-  parkingRecordId   Int?      @map("ParkingRecordId")
-  customerPackageId Int?      @map("CustomerPackageId")
-  amount            Decimal   @map("Amount") @db.Decimal(10, 2)
-  paymentMethod     String    @default("cash") @map("PaymentMethod") @db.NVarChar(30)
-  paymentType       String    @default("parking") @map("PaymentType") @db.NVarChar(30)
-  status            String    @default("completed") @map("Status") @db.NVarChar(20)
-  paidAt            DateTime  @default(now()) @map("PaidAt")
-  createdBy         Int?      @map("CreatedBy")
-  notes             String?   @map("Notes") @db.NVarChar(500)
+  id                Int      @id @default(autoincrement()) @map("Id")
+  parkingRecordId   Int?     @map("ParkingRecordId")
+  customerPackageId Int?     @map("CustomerPackageId")
+  amount            Decimal  @map("Amount") @db.Decimal(10, 2)
+  paymentMethod     String   @default("cash") @map("PaymentMethod") @db.NVarChar(30)
+  paymentType       String   @default("parking") @map("PaymentType") @db.NVarChar(30)
+  status            String   @default("completed") @map("Status") @db.NVarChar(20)
+  paidAt            DateTime @default(now()) @map("PaidAt")
+  createdBy         Int?     @map("CreatedBy")
+  notes             String?  @map("Notes") @db.NVarChar(500)
 
   parkingRecord   ParkingRecord?   @relation("ParkingPayment", fields: [parkingRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   customerPackage CustomerPackage? @relation("PackagePayment", fields: [customerPackageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -271,11 +309,11 @@ model UserActivityLog {
 /// Các tham số phụ (gate) không mang tính "nhiều mốc mức độ" — chỉ 1 giá trị duy nhất.
 /// Bảng dạng singleton, luôn dùng id = 1.
 model AlertSettings {
-  id                             Int      @id @default(1) @map("Id")
-  zoneNearFullAvailable          Int      @default(2) @map("ZoneNearFullAvailable")
-  zoneImbalanceMinPercent        Float    @default(30) @map("ZoneImbalanceMinPercent")
-  parkingAnomalyMinMinutes       Int      @default(60) @map("ParkingAnomalyMinMinutes")
-  suspiciousPaymentParkingAmount Decimal  @default(300000) @map("SuspiciousPaymentParkingAmount") @db.Decimal(12, 2)
+  id                             Int     @id @default(1) @map("Id")
+  zoneNearFullAvailable          Int     @default(2) @map("ZoneNearFullAvailable")
+  zoneImbalanceMinPercent        Float   @default(30) @map("ZoneImbalanceMinPercent")
+  parkingAnomalyMinMinutes       Int     @default(60) @map("ParkingAnomalyMinMinutes")
+  suspiciousPaymentParkingAmount Decimal @default(300000) @map("SuspiciousPaymentParkingAmount") @db.Decimal(12, 2)
 
   /// Khu đã đầy (available = 0) là tình huống nhị phân, không có ngưỡng số để phân nhiều mốc.
   zoneFullSeverity String @default("danger") @map("ZoneFullSeverity") @db.NVarChar(20)

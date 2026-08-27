@@ -266,7 +266,7 @@ const Packages: React.FC = () => {
       title: 'Thao tác', key: 'action', width: 420, render: (_: any, r: ParkingPackage) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button icon={<HistoryOutlined />} onClick={() => openHistoryModal(r)} size="small">Lịch sử giá</Button>
-          <PermissionGate adminOnly fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
+          <PermissionGate screen="packages" action="update" fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
             <Button icon={<ClockCircleOutlined />} onClick={() => openScheduleModal(r)} size="small">Đặt lịch đổi giá</Button>
             <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
             {r.isActive ? (
@@ -274,6 +274,8 @@ const Packages: React.FC = () => {
             ) : (
               <Button icon={<CheckCircleOutlined />} onClick={() => handleToggleActive(r, true)} size="small" type="primary" ghost>Kích hoạt lại</Button>
             )}
+          </PermissionGate>
+          <PermissionGate screen="packages" action="delete">
             <Button icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} size="small" danger>Xóa</Button>
           </PermissionGate>
         </div>
@@ -285,7 +287,7 @@ const Packages: React.FC = () => {
     <div>
       <h2 className="page-title">{t('pagePackages')}</h2>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <PermissionGate adminOnly>
+        <PermissionGate screen="packages" action="create">
           <Space>
             <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>

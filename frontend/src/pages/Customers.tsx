@@ -143,8 +143,10 @@ const Customers: React.FC = () => {
       title: t('fieldAction'), key: 'action', width: 220,
       render: (_: unknown, r: Customer) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
-          <PermissionGate adminOnly>
+          <PermissionGate screen="customers" action="update">
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
+          </PermissionGate>
+          <PermissionGate screen="customers" action="delete">
             <Popconfirm title={t('confirmDelete')} onConfirm={() => handleDelete(r.id)}>
               <Button icon={<DeleteOutlined />} danger size="small" disabled={!r.isActive}>{t('statusInactive')}</Button>
             </Popconfirm>
@@ -158,12 +160,14 @@ const Customers: React.FC = () => {
     <div>
       <h2 className="page-title">{t('pageCustomers')}</h2>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <Space>
-          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-            {t('btnAddCustomer')}
-          </Button>
-        </Space>
+        <PermissionGate screen="customers" action="create">
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+              {t('btnAddCustomer')}
+            </Button>
+          </Space>
+        </PermissionGate>
       </div>
       <FilterBar onReset={resetFilters}>
         <Input.Search

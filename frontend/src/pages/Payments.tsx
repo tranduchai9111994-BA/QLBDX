@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import api from '../api/axios';
 import { Payment } from '../types';
 import FilterBar from '../components/FilterBar';
+import PermissionGate from '../components/PermissionGate';
 import { formatDateTime } from '../utils/dateFormat';
 
 const { RangePicker } = DatePicker;
@@ -172,7 +173,9 @@ const Payments: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', width: 90,
       render: (_: any, r: Payment) => (
-        <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>Sửa</Button>
+        <PermissionGate screen="payments" action="update">
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>Sửa</Button>
+        </PermissionGate>
       ),
     },
   ];

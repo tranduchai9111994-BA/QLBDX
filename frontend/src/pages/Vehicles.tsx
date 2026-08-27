@@ -184,8 +184,10 @@ const Vehicles: React.FC = () => {
       title: t('fieldAction'), key: 'action', width: 220,
       render: (_: unknown, r: Vehicle) => (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
-          <PermissionGate adminOnly>
+          <PermissionGate screen="vehicles" action="update">
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">{t('btnEdit')}</Button>
+          </PermissionGate>
+          <PermissionGate screen="vehicles" action="delete">
             <Popconfirm title={t('confirmDelete')} onConfirm={() => handleDelete(r.id)}>
               <Button icon={<DeleteOutlined />} danger size="small">{t('btnDelete')}</Button>
             </Popconfirm>
@@ -199,12 +201,14 @@ const Vehicles: React.FC = () => {
     <div>
       <h2 className="page-title">{t('pageVehicles')}</h2>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <Space>
-          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
-            {t('btnAddVehicle')}
-          </Button>
-        </Space>
+        <PermissionGate screen="vehicles" action="create">
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>{t('btnImport')}</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModal(true); }}>
+              {t('btnAddVehicle')}
+            </Button>
+          </Space>
+        </PermissionGate>
       </div>
       <FilterBar onReset={resetFilters}>
         <Input.Search

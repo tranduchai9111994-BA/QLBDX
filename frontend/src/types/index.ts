@@ -1,4 +1,24 @@
 // User & Authentication
+export interface GroupPermission {
+  id: number;
+  groupId: number;
+  screenKey: string;
+  canView: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
+export interface PermissionGroup {
+  id: number;
+  name: string;
+  description?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  permissions?: GroupPermission[];
+  _count?: { users: number };
+}
+
 export interface User {
   id: number;
   username: string;
@@ -8,6 +28,10 @@ export interface User {
   role: string;
   isActive?: boolean;
   createdAt?: string;
+  permissionGroupId?: number | null;
+  permissionGroup?: { id: number; name: string } | null;
+  /** Chỉ có khi role='staff' — ma trận quyền của nhóm đang gán, trả về từ /auth/me. */
+  permissions?: GroupPermission[];
 }
 
 export interface LoginCredentials {
@@ -386,6 +410,7 @@ export interface UserForm {
   role: string;
   isActive?: boolean;
   password?: string;
+  permissionGroupId?: number | null;
 }
 
 // Customer Package check result

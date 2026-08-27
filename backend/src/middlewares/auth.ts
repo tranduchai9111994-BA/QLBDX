@@ -8,6 +8,7 @@ export interface JwtPayload {
   username: string;
   role: string;
   fullName: string;
+  permissionGroupId?: number | null;
 }
 
 declare global {
@@ -36,6 +37,7 @@ export const auth = async (req: Request, res: Response, next: NextFunction): Pro
         role: true,
         fullName: true,
         isActive: true,
+        permissionGroupId: true,
       },
     });
 
@@ -49,6 +51,7 @@ export const auth = async (req: Request, res: Response, next: NextFunction): Pro
       username: user.username,
       role: user.role,
       fullName: user.fullName,
+      permissionGroupId: user.permissionGroupId,
     };
     next();
   } catch {

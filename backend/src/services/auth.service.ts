@@ -92,6 +92,8 @@ export class AuthService {
         email: true,
         phone: true,
         role: true,
+        permissionGroupId: true,
+        permissionGroup: { select: { id: true, name: true } },
       },
     });
 
@@ -99,7 +101,14 @@ export class AuthService {
       throw { status: 404, message: 'Không tìm thấy người dùng' };
     }
 
-    return user;
+    // Admin không qua nhóm quyền (luôn toàn quyền — enforce ở requirePermission middleware).
+    // Staff: trả về ma trận quyền thật của nhóm để frontend ẩn/hiện nút Thêm/Sửa/Xóa đúng, không
+    // phải đoán qua "configurable" tĩnh như permConfig.ts cũ.
+    const permissions = user.role !== 'admin' && user.permissionGroupId
+      ? await prisma.groupPermission.findMany({ where: { groupId: user.permissionGroupId } })
+      : [];
+
+    return { ...user, permissions };
   }
 
   async updateProfile(userId: number, data: { fullName?: string; email?: string; phone?: string; password?: string }) {

@@ -331,12 +331,14 @@ const CustomerPackages: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', width: 280,
       render: (_: unknown, r: CustomerPackage) => (
-        <PermissionGate adminOnly fallback={<Tag color="default">Staff chỉ được đăng ký mới</Tag>}>
-          <Space wrap size={4}>
+        <Space wrap size={4}>
+          <PermissionGate screen="customer-packages" action="update" fallback={<Tag color="default">Staff chỉ được đăng ký mới</Tag>}>
             <Tooltip title="Chỉnh sửa thông tin gói">
               <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
             </Tooltip>
-            {(r.status === 'expired') && (
+          </PermissionGate>
+          {(r.status === 'expired') && (
+            <PermissionGate screen="customer-packages" action="create">
               <Tooltip title="Tạo gói mới kế tiếp cho khách/xe này">
                 <Button
                   icon={<SyncOutlined />}
@@ -347,14 +349,16 @@ const CustomerPackages: React.FC = () => {
                   Gia hạn
                 </Button>
               </Tooltip>
-            )}
-            {r.status !== 'cancelled' && r.status !== 'expired' && (
+            </PermissionGate>
+          )}
+          {r.status !== 'cancelled' && r.status !== 'expired' && (
+            <PermissionGate screen="customer-packages" action="update">
               <Tooltip title="Hủy gói (giữ lịch sử)">
                 <Button icon={<StopOutlined />} onClick={() => handleCancelPackage(r)} size="small" danger>Hủy gói</Button>
               </Tooltip>
-            )}
-          </Space>
-        </PermissionGate>
+            </PermissionGate>
+          )}
+        </Space>
       ),
     },
   ];
@@ -428,14 +432,16 @@ const CustomerPackages: React.FC = () => {
           </Space>
           <div className="toolbar-right">
             <Space>
-              <PermissionGate adminOnly>
+              <PermissionGate screen="customer-packages" action="create">
                 <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
                   {t('btnImport')}
                 </Button>
               </PermissionGate>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setEndDateTouched(false); setModal(true); }}>
-                Đăng ký gói dịch vụ
-              </Button>
+              <PermissionGate screen="customer-packages" action="create">
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setEndDateTouched(false); setModal(true); }}>
+                  Đăng ký gói dịch vụ
+                </Button>
+              </PermissionGate>
             </Space>
           </div>
         </div>

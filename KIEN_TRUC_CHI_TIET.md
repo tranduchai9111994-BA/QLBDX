@@ -170,7 +170,6 @@ QLBDX/
 │   │   │   └── ImportModal.tsx        # import Excel (xlsx / exceljs)
 │   │   ├── pages/                 # 18 màn hình
 │   │   ├── utils/
-│   │   │   ├── permConfig.ts      # cấu hình quyền staff (localStorage)
 │   │   │   └── reportExport.ts    # xuất Excel báo cáo
 │   │   ├── types/index.ts
 │   │   └── design-system.css
@@ -583,22 +582,21 @@ ThemeProvider                 (sáng / tối, data-theme trên <html>)
 - `useEffect` khi mount: nếu có token → `GET /auth/me` để xác thực lại; lỗi → dọn localStorage.
 - `loading` chặn render guard cho tới khi xác thực xong.
 
-### 8.5 Phân quyền màn hình phía client — `utils/permConfig.ts`
+### 8.5 Phân quyền theo Nhóm quyền — DB + backend enforce (thay `permConfig.ts` localStorage cũ)
 
-15 màn hình được khai báo với `adminLevel` (luôn `full`), `defaultStaffLevel` (`full` / `view` / `hidden`) và `configurable`.
+Hệ thống phân quyền cũ (`permConfig.ts`, lưu `localStorage`, chỉ ẩn/hiện menu — xem cảnh báo ⚠️ từng ghi ở mục 9.1/12 bản trước) đã được thay hoàn toàn bằng hệ **Nhóm quyền** lưu trong DB, có backend enforce thật:
 
-| Nhóm | Màn hình staff mặc định `full` | `view` | `hidden` |
-|---|---|---|---|
-| Chung / Ra-Vào | Tổng quan, Xe vào, Xe ra, Lịch sử đỗ xe | | |
-| Hạ tầng | | Bãi đỗ xe | |
-| Nghiệp vụ | Khách hàng, Phương tiện, Đăng ký gói | | |
-| Danh mục | | Loại xe, Gói dịch vụ | |
-| Quản trị | | | Thanh toán, Cảnh báo, Báo cáo |
-| Hệ thống | | | Người dùng, Nhật ký *(không cấu hình được)* |
+- **`PermissionGroup`** (`PermissionGroups` table): nhóm do admin tự tạo (VD "Nhân viên tiêu chuẩn"), gán cho `User.permissionGroupId`. Admin không thuộc nhóm nào — luôn toàn quyền.
+- **`GroupPermission`** (`GroupPermissions` table): 1 dòng = quyền của 1 nhóm trên 1 `screenKey`, gồm `canView/canCreate/canUpdate/canDelete`. Ma trận UI (`Users.tsx` tab "Nhóm quyền") chỉ có 3 cột **Thêm/Sửa/Xóa** + nút tick nhanh "Toàn quyền" — không có cột Xem riêng vì Xem (GET danh sách/tra cứu) luôn mở cho mọi user đã đăng nhập (dữ liệu tra cứu như Khách hàng/Phương tiện là phụ thuộc dùng chung của nhiều màn khác, VD dropdown ở Đăng ký gói).
+- **9 màn cấu hình được** (`backend/src/config/screens.ts` — nguồn dữ liệu duy nhất, frontend gọi `GET /permission-groups/screens` để lấy danh sách, không hardcode riêng): Bãi đỗ xe, Khách hàng, Phương tiện, Đăng ký gói, Loại xe, Gói dịch vụ, Thanh toán, Cảnh báo, Báo cáo thống kê.
+- **4 màn luôn full cho mọi staff** (không qua nhóm quyền): Tổng quan, Xe vào, Xe ra, Lịch sử đỗ xe.
+- **3 màn admin-only tuyệt đối** (không nhóm nào cấp được): Người dùng, Nhật ký hoạt động, Phân tích & Gợi ý.
+- Riêng **Thanh toán/Cảnh báo/Báo cáo thống kê** là trang thuần đọc (không có nút Thêm/Sửa/Xóa thật trong UI) — admin tick bất kỳ ô nào trong 3 cột cũng đủ để cấp quyền **vào trang** (điều kiện là "nhóm có ít nhất 1 dòng `GroupPermission` cho đúng screenKey"), cột tick cụ thể không map vào hành động thật nào ở 3 màn này.
+- `GET /auth/me` trả kèm `permissions: GroupPermission[]` của nhóm đang gán — `AuthContext` lưu vào `user.permissions`, gọi lại ngay sau login (không đợi F5) để có hiệu lực tức thì.
+- `MainLayout.canSee()` và `<PermissionGate screen action>` (thay hoàn toàn bản `adminOnly`/`screen` cũ) đọc từ `user.permissions` để ẩn/hiện menu và nút Thêm/Sửa/Xóa từng dòng.
+- `<PermissionRoute screenKey>` (thay `<AdminRoute>` cho 3 route Thanh toán/Cảnh báo/Báo cáo trong `App.tsx`) chặn truy cập trực tiếp bằng URL nếu nhóm không có quyền — trước đây các route này hard-code `<AdminRoute>` nên **matrix cũ chưa từng có tác dụng thật với 3 màn này dù có UI cấu hình**.
 
-Lưu tại `localStorage['qlbdx_staff_perms_v1']`. `MainLayout` đọc và dựng menu động; lắng nghe event `storage` để đồng bộ giữa các tab.
-
-> ⚠️ **Đây chỉ là ẩn/hiện menu ở client.** Quyền thật nằm ở `adminOnly` trên backend. Cấu hình này lưu trong localStorage của **từng trình duyệt**, không đồng bộ server.
+> ✅ **Enforce thật ở backend** — không chỉ ẩn/hiện UI như trước. Middleware `requirePermission(screenKey, action)` (`backend/src/middlewares/requirePermission.ts`) tra `GroupPermission` theo `req.user.permissionGroupId` (lấy từ DB mỗi request qua middleware `auth`, không phải từ JWT tĩnh — đổi quyền có hiệu lực ngay không cần cấp lại token) và **deny-by-default**: thiếu nhóm hoặc thiếu dòng quyền → luôn từ chối. Áp cho route của cả 9 màn: `customer.routes.ts`, `vehicle.routes.ts`, `vehicleType.routes.ts`, `package.routes.ts`, `customerPackage.routes.ts`, `parkingSpot.routes.ts`, `parkingZone.routes.ts` (dùng chung screenKey `parking-spots` với chỗ đỗ), `payment.routes.ts`, `report.routes.ts` (2 screenKey `alerts`/`reports`).
 
 ### 8.6 Danh sách màn hình
 
@@ -611,7 +609,7 @@ Lưu tại `localStorage['qlbdx_staff_perms_v1']`. `MainLayout` đọc và dựn
 | `ParkingExit.tsx` | 552 | Preview phí, xác nhận ra, checkout ngoại lệ, in phiếu |
 | `ActivityLogs.tsx` | 439 | Tra cứu nhật ký |
 | `ParkingSpots.tsx` | 412 | Sơ đồ / quản lý chỗ đỗ |
-| `Users.tsx` | 388 | CRUD user + bảng cấu hình quyền staff |
+| `Users.tsx` | 388 | CRUD user (gán Nhóm quyền cho staff) + tab quản lý Nhóm quyền (tạo nhóm, ma trận Thêm/Sửa/Xóa) |
 | `Alerts.tsx` | 312 | Trung tâm cảnh báo |
 | `Vehicles.tsx` | 304 | CRUD phương tiện |
 | `Packages.tsx` | 289 | Catalog gói |
@@ -642,14 +640,14 @@ Lưu tại `localStorage['qlbdx_staff_perms_v1']`. `MainLayout` đọc và dựn
 
 ```mermaid
 flowchart LR
-    A["Lớp 1<br/>Menu ẩn/hiện<br/>permConfig + localStorage"] --> B["Lớp 2<br/>Route guard<br/>PrivateRoute / AdminRoute"]
+    A["Lớp 1<br/>Menu ẩn/hiện<br/>user.permissions (từ DB)"] --> B["Lớp 2<br/>Route guard<br/>PrivateRoute / AdminRoute / PermissionRoute"]
     B --> C["Lớp 3<br/>auth middleware<br/>JWT + kiểm tra IsActive"]
-    C --> D["Lớp 4<br/>adminOnly<br/>RBAC theo route"]
+    C --> D["Lớp 4<br/>adminOnly / requirePermission<br/>RBAC theo route + Nhóm quyền"]
     D --> E["Lớp 5<br/>Zod validate<br/>kiểm soát dữ liệu"]
     E --> F["Lớp 6<br/>Business rules<br/>trong service"]
 ```
 
-Lớp 1–2 chỉ là **trải nghiệm người dùng**. Lớp 3–6 mới là bảo mật thực sự.
+Lớp 1–2 là trải nghiệm người dùng (ẩn/hiện sớm, đỡ phải gọi API rồi mới báo lỗi). Khác bản cũ, **Lớp 4 (`requirePermission`) nay enforce thật ở backend cho 9 màn cấu hình được** — không chỉ còn `adminOnly` tĩnh — nên Lớp 1–2 không còn là "hàng rào giấy": kể cả bypass được UI (sửa devtools, gọi API trực tiếp), backend vẫn từ chối đúng theo Nhóm quyền. Xem chi tiết mục 8.5.
 
 ### 9.2 Xác thực
 
@@ -800,11 +798,11 @@ cd frontend && npm install && npm start
 | 5 | **Tương thích chỗ đỗ dựa trên heuristic chuỗi** | `businessRules.ts` → `getSpotCategory` khớp cả `startsWith('a')`, `startsWith('b')`… | Đặt tên khu mới hoặc số chỗ bắt đầu bằng chữ khác sẽ rơi về `any`, mất kiểm soát. Nên có cột phân hạng tường minh. |
 | 6 | **Báo cáo gom nhóm trong RAM** | `report.service.ts` — `getRevenue`, `getVehicleStats`… `findMany` rồi `Map` | Khoảng thời gian rộng → tốn bộ nhớ, chậm. Nên dùng `$queryRaw` với `GROUP BY`. |
 | 7 | **Không có phân trang ở API list** | Hầu hết `findAll` trả toàn bộ | Bảng lớn sẽ nặng cả server lẫn trình duyệt. |
-| 8 | **`baseURL` hardcode `http://localhost:5000/api`** | `frontend/src/api/axios.ts` | Không deploy được nếu không sửa code. Nên dùng `REACT_APP_API_URL`. |
+| 8 | ~~`baseURL` hardcode `http://localhost:5000/api`~~ **[ĐÃ SỬA]** | `frontend/src/api/axios.ts` | Đọc `process.env.REACT_APP_API_URL`, mặc định `http://localhost:5001/api` (đổi từ 5000 vì port này hay bị app khác trên máy dev chiếm — xem `backend/.env` `PORT`). |
 | 9 | **Secret mặc định yếu** | `.env` đang là `JWT_SECRET=your-secret-key`; fallback `default-secret-change-me` | Bắt buộc đổi trước khi lên môi trường thật. |
 | 10 | **`cors()` mở toàn bộ origin** | `server.ts` | Cần giới hạn origin ở production. |
 | 11 | **Token lưu trong `localStorage`** | `AuthContext` | Nhạy cảm với XSS. Cân nhắc httpOnly cookie. |
-| 12 | **Cấu hình quyền staff nằm ở localStorage** | `permConfig.ts` | Mỗi trình duyệt một cấu hình, admin đổi ở máy này máy khác không thấy. Nên đưa xuống DB. |
+| 12 | ~~Cấu hình quyền staff nằm ở localStorage~~ **[ĐÃ SỬA]** | `PermissionGroup`/`GroupPermission` (DB) + `requirePermission` middleware | Chuyển hẳn xuống DB, backend enforce thật qua `requirePermission(screenKey, action)` cho 9 màn cấu hình được — xem mục 8.5. |
 | 13 | **Không có global error handler** | `server.ts` | Lỗi ngoài dự kiến trong controller có thể rò stack trace hoặc treo request. |
 | 14 | **Test chỉ phủ `feeCalculator`** | `utils/feeCalculator.test.ts` | Các luồng entry/exit/gói chưa có test tự động. |
 | 15 | **`Decimal` phải `Number()` thủ công khắp nơi** | mọi service | Rủi ro sai số nếu quên; số tiền lớn có thể mất chính xác. |
@@ -850,7 +848,9 @@ cd frontend && npm install && npm start
 | Đăng nhập / JWT | `backend/src/services/auth.service.ts` + `middlewares/auth.ts` |
 | Quyền truy cập endpoint | `backend/src/routes/*.routes.ts` |
 | Cấu trúc dữ liệu | `backend/prisma/schema.prisma` |
-| Menu & quyền màn hình | `frontend/src/utils/permConfig.ts` + `components/Layout/MainLayout.tsx` |
+| Menu & quyền màn hình (client) | `frontend/src/components/Layout/MainLayout.tsx` (`canSee`) + `components/PermissionGate.tsx` |
+| Nhóm quyền / ma trận Thêm-Sửa-Xóa | `backend/src/services/permissionGroup.service.ts` + `frontend/src/pages/Users.tsx` (tab "Nhóm quyền") |
+| Chặn quyền thật ở backend | `backend/src/middlewares/requirePermission.ts` + từng `routes/*.routes.ts` |
 | Theme giao diện (màu sắc, token) | `frontend/src/design-system.css` (nguồn duy nhất) + `frontend/src/theme/useAntdTheme.ts` (đọc vào AntD) |
 | Dark mode / toggle sáng-tối | `frontend/src/context/ThemeContext.tsx` + `components/Layout/MainLayout.tsx` |
 | Sửa giao dịch thanh toán | `backend/src/services/payment.service.ts` (`update`) + `frontend/src/pages/Payments.tsx` |

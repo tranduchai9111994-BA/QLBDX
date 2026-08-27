@@ -7,6 +7,7 @@ export const createUserSchema = z.object({
   email: z.string().email('Email không hợp lệ').optional().nullable(),
   phone: z.string().optional().nullable(),
   role: z.enum(['admin', 'staff']).optional().default('staff'),
+  permissionGroupId: z.number().int().positive().optional().nullable(),
 });
 
 export const updateUserSchema = z.object({
@@ -16,6 +17,7 @@ export const updateUserSchema = z.object({
   role: z.enum(['admin', 'staff']).optional().default('staff'),
   isActive: z.boolean().optional().default(true),
   password: z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự').optional().nullable(),
+  permissionGroupId: z.number().int().positive().optional().nullable(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

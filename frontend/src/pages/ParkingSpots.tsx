@@ -25,7 +25,16 @@ const spotTypeLabels: Record<string, string> = {
 const ParkingSpots: React.FC = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
-  const canManage = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
+  const hasPerm = (action: 'create' | 'update' | 'delete') => {
+    if (isAdmin) return true;
+    const perm = (user?.permissions || []).find((p) => p.screenKey === 'parking-spots');
+    return !!perm && (action === 'create' ? perm.canCreate : action === 'update' ? perm.canUpdate : perm.canDelete);
+  };
+  const canCreate = hasPerm('create');
+  const canUpdate = hasPerm('update');
+  const canDelete = hasPerm('delete');
+  const canManage = canUpdate || canDelete;
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [zones, setZones] = useState<ParkingZone[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -175,14 +184,9 @@ const ParkingSpots: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', width: 160, render: (_: any, r: ParkingSpot) => (
         <div style={{ display: 'flex', gap: 8 }}>
-          {canManage ? (
-            <>
-              <Button icon={<EditOutlined />} onClick={() => handleEditSpot(r)} size="small">Sửa</Button>
-              <Button icon={<DeleteOutlined />} onClick={() => handleDeleteSpot(r.id)} size="small" danger>Xóa</Button>
-            </>
-          ) : (
-            <Tag color="default">Chỉ quản trị được sửa</Tag>
-          )}
+          {canUpdate && <Button icon={<EditOutlined />} onClick={() => handleEditSpot(r)} size="small">Sửa</Button>}
+          {canDelete && <Button icon={<DeleteOutlined />} onClick={() => handleDeleteSpot(r.id)} size="small" danger>Xóa</Button>}
+          {!canManage && <Tag color="default">Chỉ quản trị được sửa</Tag>}
         </div>
       ),
     },
@@ -197,14 +201,9 @@ const ParkingSpots: React.FC = () => {
     {
       title: 'Thao tác', key: 'action', width: 160, render: (_: any, r: ParkingZone) => (
         <div style={{ display: 'flex', gap: 8 }}>
-          {canManage ? (
-            <>
-              <Button icon={<EditOutlined />} onClick={() => handleEditZone(r)} size="small">Sửa</Button>
-              <Button icon={<DeleteOutlined />} onClick={() => handleDeleteZone(r.id)} size="small" danger>Xóa</Button>
-            </>
-          ) : (
-            <Tag color="default">Chỉ quản trị được sửa</Tag>
-          )}
+          {canUpdate && <Button icon={<EditOutlined />} onClick={() => handleEditZone(r)} size="small">Sửa</Button>}
+          {canDelete && <Button icon={<DeleteOutlined />} onClick={() => handleDeleteZone(r.id)} size="small" danger>Xóa</Button>}
+          {!canManage && <Tag color="default">Chỉ quản trị được sửa</Tag>}
         </div>
       ),
     },
@@ -289,7 +288,7 @@ const ParkingSpots: React.FC = () => {
                     </Button>
                   </Space>
                   <div className="toolbar-right">
-                    {canManage && (
+                    {canCreate && (
                       <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingSpot(null); spotForm.resetFields(); if (selectedZone) spotForm.setFieldsValue({ zoneId: selectedZone }); setSpotModal(true); }}>
                         Thêm chỗ đỗ
                       </Button>
@@ -317,7 +316,7 @@ const ParkingSpots: React.FC = () => {
                     <Button icon={<ReloadOutlined />} onClick={() => setZoneSearch('')}>Xóa bộ lọc</Button>
                   </Space>
                   <div className="toolbar-right">
-                    {canManage && (
+                    {canCreate && (
                       <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingZone(null); zoneForm.resetFields(); setZoneModal(true); }}>
                         Thêm khu vực
                       </Button>
