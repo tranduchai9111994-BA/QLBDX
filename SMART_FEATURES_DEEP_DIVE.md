@@ -39,6 +39,8 @@ Dự án ban đầu có một `ml-service` (Python Flask + scikit-learn) làm d�
 
 **Loại thông minh**: DSS — giai đoạn "Thông minh" (Intelligence phase: quét dữ liệu để phát hiện tình huống cần ra quyết định).
 
+> **Đường dẫn kiểm tra**: đăng nhập bằng tài khoản `admin` → trang **Tổng quan** (`/`, menu "Tổng quan" ngoài cùng bên trái) → mặc định hiện view "Quản lý" (đổi qua "Vận hành" bằng toggle ở góc phải header nếu cần). Phần so sánh tuần/xu hướng/gợi ý nằm ngay trong nội dung trang, không cần bấm thêm.
+
 ### File liên quan
 
 | Vai trò | File |
@@ -74,6 +76,8 @@ Một dashboard thông thường chỉ **trình bày** số liệu (doanh thu = 
 
 **Loại thông minh**: Recommender system (hệ thống khuyến nghị) — khuyến nghị dựa trên hành vi (behavior-based), không phải collaborative filtering hay content-based như các hệ khuyến nghị ML kinh điển.
 
+> **Đường dẫn kiểm tra**: menu **Vận hành → Xe ra** (`/parking/exit`) → chọn 1 xe của khách có tần suất đỗ cao (≥5 lần/30 ngày — VD các khách đã có "Vé tháng/quý" trong dữ liệu mẫu) → bấm "Cho xe ra" và xác nhận thanh toán → gợi ý gói hiện lên ngay sau khi checkout thành công (Alert/Notification góc màn hình).
+
 ### File liên quan
 
 | Vai trò | File |
@@ -104,6 +108,8 @@ Khuyến nghị dựa trên **hành vi quá khứ của chính người dùng đ
 ## Tính năng 3 — Cảnh báo thông minh nâng cao
 
 **Loại thông minh**: Alerting/monitoring system — giám sát tiêu chí thành công + phát hiện bất thường theo ngưỡng động (dynamic/configurable thresholding).
+
+> **Đường dẫn kiểm tra**: menu **Quản trị → Cảnh báo** (`/alerts`) → tab đầu xem danh sách cảnh báo (badge, mức độ, `context` + `suggestedAction`). Tab **"Cấu hình mức độ"** (chỉ admin) cho phép chỉnh ngưỡng từng loại luật — đổi thử 1 ngưỡng rồi quay lại tab đầu để thấy danh sách cảnh báo đổi theo ngay, chứng minh ngưỡng không hardcode.
 
 ### File liên quan
 
@@ -156,6 +162,8 @@ Khác với cảnh báo thông thường chỉ có 1 dòng text, mỗi cảnh b�
 
 **Loại thông minh**: Trải nghiệm thích ứng theo ngữ cảnh (context-aware UX) — hệ thống "nhận ra" khách quen và tự động điều chỉnh giao diện/giá trị mặc định thay vì bắt nhân viên tự nhớ/tự chọn.
 
+> **Đường dẫn kiểm tra**: menu **Vận hành → Xe vào** (`/parking/entry`) → gõ biển số của một xe **đã có trong hệ thống và từng ra/vào nhiều lần** (VD lấy 1 biển số bất kỳ trong trang Phương tiện `/vehicles`) → sau khi gõ xong, quan sát card thông tin khách quen hiện ra dưới form và ô "Chỗ đỗ" tự động chọn sẵn.
+
 ### File liên quan
 
 | Vai trò | File |
@@ -198,6 +206,8 @@ if (insights?.suggestedSpotId) {
 ## Tính năng 5 — Trang Phân tích & Gợi ý quyết định (DSS)
 
 **Loại thông minh**: DSS đầy đủ nhất trong 5 tính năng — duy nhất tính năng này đi tới cả giai đoạn "Design" (đưa ra nhiều phương án thay thế kèm phân tích tác động/rủi ro), không dừng ở "Intelligence" (phát hiện vấn đề) như Tính năng 1 và 3.
+
+> **Đường dẫn kiểm tra**: menu **Quản trị → Phân tích & Gợi ý** (`/analytics`, chỉ admin thấy). Đổi bộ lọc kỳ (tháng/quý) ở đầu trang để thấy `zoneEfficiency` và phần "Gợi ý quyết định" (Collapse có icon 💡, badge "DSS") thay đổi theo đúng kỳ đang chọn.
 
 ### File liên quan
 
