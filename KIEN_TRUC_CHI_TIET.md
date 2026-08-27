@@ -294,8 +294,13 @@ Khách `IsActive = false` không được đăng ký gói mới.
 - **Unique `(ZoneId, SpotNumber)`** — không trùng số chỗ trong cùng khu.
 
 #### `ParkingPackages` — gói dịch vụ (catalog)
-`Name`, `VehicleTypeId`, `DurationDays`, `Price`, `Description`, `IsActive`.
+`Name`, `VehicleTypeId`, `DurationDays`, `Price`, `Description`, `IsActive`, `ValidFrom`/`ValidTo` (date, nullable).
 Gói gắn cứng với một loại xe → chỉ xe cùng loại mới đăng ký được.
+`ValidFrom`/`ValidTo` là khoảng thời gian gói **được phép đăng ký** (VD gói khuyến mãi theo mùa) —
+null = bán quanh năm. Chỉ chặn ở bước tạo `CustomerPackage` mới (`ensurePackageCreateValidity` trong
+`customerPackage.service.ts`, kèm chặn cả frontend dropdown ở `CustomerPackages.tsx`); không ảnh
+hưởng các `CustomerPackage` đã đăng ký từ trước, và trang danh mục `Packages.tsx` vẫn hiện gói ngoài
+khoảng bán để admin quản lý/sửa (chỉ ẩn khỏi dropdown chọn lúc đăng ký).
 
 #### `CustomerPackages` — đăng ký gói theo xe
 `CustomerId`, `PackageId`, `VehicleId`, `StartDate` (date), `EndDate` (date), `Status`.

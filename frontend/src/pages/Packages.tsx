@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, InputNumber, Select, DatePicker, message, Tag, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, StopOutlined, CheckCircleOutlined, ClockCircleOutlined, HistoryOutlined, UploadOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/axios';
 import { ParkingPackage, VehicleType, PackageForm, SchedulePriceChangeForm, PriceHistoryEntry } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -72,12 +72,17 @@ const Packages: React.FC = () => {
   const handleSubmit = async (values: PackageForm) => {
     setSubmitting(true);
     try {
+      const payload = {
+        ...values,
+        validFrom: values.validFrom ? (values.validFrom as Dayjs).format('YYYY-MM-DD') : null,
+        validTo: values.validTo ? (values.validTo as Dayjs).format('YYYY-MM-DD') : null,
+      };
       if (editing) {
         // Preserve isActive so editing an inactive package doesn't re-activate it
-        await api.put(`/packages/${editing.id}`, { ...values, isActive: editing.isActive });
+        await api.put(`/packages/${editing.id}`, { ...payload, isActive: editing.isActive });
         message.success('Cập nhật thành công');
       } else {
-        await api.post('/packages', values);
+        await api.post('/packages', payload);
         message.success('Thêm gói thành công');
       }
       setModal(false);
@@ -100,6 +105,8 @@ const Packages: React.FC = () => {
       durationDays: record.durationDays,
       price: record.price,
       description: record.description,
+      validFrom: record.validFrom ? dayjs(record.validFrom) : undefined,
+      validTo: record.validTo ? dayjs(record.validTo) : undefined,
     });
     setModal(true);
   };
@@ -256,6 +263,16 @@ const Packages: React.FC = () => {
     },
     { title: t('fieldNote'), dataIndex: 'description', key: 'description', width: 250, ellipsis: true, render: (v?: string) => v || '-' },
     {
+      title: 'Thời gian bán', key: 'validWindow', width: 190, ellipsis: true,
+      render: (_: any, r: ParkingPackage) => {
+        if (!r.validFrom && !r.validTo) return <span style={{ color: 'var(--outline)' }}>Quanh năm</span>;
+        const from = r.validFrom ? dayjs(r.validFrom).format('DD/MM/YYYY') : '…';
+        const to = r.validTo ? dayjs(r.validTo).format('DD/MM/YYYY') : '…';
+        const outOfWindow = (r.validFrom && dayjs().isBefore(dayjs(r.validFrom), 'day')) || (r.validTo && dayjs().isAfter(dayjs(r.validTo), 'day'));
+        return <span style={{ color: outOfWindow ? 'var(--error)' : undefined }}>{from} – {to}</span>;
+      },
+    },
+    {
       title: 'Trạng thái',
       dataIndex: 'isActive',
       key: 'isActive',
@@ -397,6 +414,14 @@ const Packages: React.FC = () => {
           <Form.Item name="description" label="Mô tả">
             <Input.TextArea rows={2} />
           </Form.Item>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item name="validFrom" label="Bán từ ngày" style={{ flex: 1 }} tooltip="Bỏ trống = bán ngay, không giới hạn ngày bắt đầu">
+              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Không giới hạn" />
+            </Form.Item>
+            <Form.Item name="validTo" label="Bán đến ngày" style={{ flex: 1 }} tooltip="Bỏ trống = bán quanh năm, không giới hạn ngày kết thúc. VD gói khuyến mãi theo mùa.">
+              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Không giới hạn" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 

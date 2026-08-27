@@ -96,6 +96,8 @@ export class PackageService {
         durationDays: data.durationDays,
         price: data.price,
         description: data.description ?? null,
+        validFrom: data.validFrom ? new Date(data.validFrom) : null,
+        validTo: data.validTo ? new Date(data.validTo) : null,
       },
     });
 
@@ -151,6 +153,8 @@ export class PackageService {
         durationDays: data.durationDays,
         description: data.description ?? null,
         isActive: data.isActive ?? true,
+        validFrom: data.validFrom ? new Date(data.validFrom) : null,
+        validTo: data.validTo ? new Date(data.validTo) : null,
       },
     });
 

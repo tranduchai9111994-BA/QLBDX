@@ -170,14 +170,19 @@ model ParkingSpot {
 }
 
 model ParkingPackage {
-  id            Int      @id @default(autoincrement()) @map("Id")
-  name          String   @map("Name") @db.NVarChar(100)
-  vehicleTypeId Int      @map("VehicleTypeId")
-  durationDays  Int      @map("DurationDays")
-  price         Decimal  @map("Price") @db.Decimal(10, 2)
-  description   String?  @map("Description") @db.NVarChar(500)
-  isActive      Boolean  @default(true) @map("IsActive")
-  createdAt     DateTime @default(now()) @map("CreatedAt")
+  id            Int       @id @default(autoincrement()) @map("Id")
+  name          String    @map("Name") @db.NVarChar(100)
+  vehicleTypeId Int       @map("VehicleTypeId")
+  durationDays  Int       @map("DurationDays")
+  price         Decimal   @map("Price") @db.Decimal(10, 2)
+  description   String?   @map("Description") @db.NVarChar(500)
+  isActive      Boolean   @default(true) @map("IsActive")
+  /// Khoảng thời gian gói được PHÉP ĐĂNG KÝ (VD gói khuyến mãi theo mùa) — null = không giới hạn,
+  /// bán quanh năm. Chỉ chặn ở màn "Đăng ký gói dịch vụ"; trang danh mục vẫn thấy để quản lý/sửa dù
+  /// đang ngoài khoảng bán. Không ảnh hưởng các CustomerPackage đã đăng ký trước đó.
+  validFrom     DateTime? @map("ValidFrom") @db.Date
+  validTo       DateTime? @map("ValidTo") @db.Date
+  createdAt     DateTime  @default(now()) @map("CreatedAt")
 
   vehicleType      VehicleType           @relation(fields: [vehicleTypeId], references: [id])
   customerPackages CustomerPackage[]

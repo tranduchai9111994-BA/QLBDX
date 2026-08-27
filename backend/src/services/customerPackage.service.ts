@@ -62,6 +62,17 @@ export class CustomerPackageService {
       throw { status: 400, message: 'Gói dịch vụ này đã ngừng áp dụng' };
     }
 
+    // Ngoài khoảng thời gian bán (nếu gói có đặt validFrom/validTo) -> chặn ở backend, không chỉ ẩn
+    // khỏi dropdown frontend, để không thể bỏ qua bằng cách gọi API trực tiếp.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (pkg.validFrom && today < pkg.validFrom) {
+      throw { status: 400, message: `Gói dịch vụ chưa mở bán (bắt đầu bán từ ${pkg.validFrom.toLocaleDateString('vi-VN')})` };
+    }
+    if (pkg.validTo && today > pkg.validTo) {
+      throw { status: 400, message: `Gói dịch vụ đã hết thời gian bán (kết thúc bán ${pkg.validTo.toLocaleDateString('vi-VN')})` };
+    }
+
     if (vehicle.vehicleTypeId !== pkg.vehicleTypeId) {
       throw { status: 400, message: 'Loại xe không khớp với gói dịch vụ đã chọn' };
     }

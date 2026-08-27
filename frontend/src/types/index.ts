@@ -177,6 +177,9 @@ export interface ParkingPackage {
   isActive: boolean;
   vehicleType?: { name: string };
   createdAt: string;
+  /** Khoảng thời gian được phép đăng ký — null = bán quanh năm, không giới hạn. */
+  validFrom?: string | null;
+  validTo?: string | null;
 }
 
 export interface PackageForm {
@@ -185,6 +188,8 @@ export interface PackageForm {
   durationDays: number;
   price: number;
   description?: string;
+  validFrom?: any;
+  validTo?: any;
 }
 
 export interface SchedulePriceChangeForm {

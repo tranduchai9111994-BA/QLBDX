@@ -18,6 +18,14 @@ import PermissionGate from '../components/PermissionGate';
 import { confirmDanger } from '../utils/confirmDanger';
 import { defaultPagination } from '../utils/tablePagination';
 
+/** Gói còn trong khoảng bán (validFrom/validTo) — bỏ trống 1 hoặc cả 2 mốc = không giới hạn phía đó. */
+const isPackageSellable = (p: ParkingPackage) => {
+  const today = dayjs();
+  if (p.validFrom && today.isBefore(dayjs(p.validFrom), 'day')) return false;
+  if (p.validTo && today.isAfter(dayjs(p.validTo), 'day')) return false;
+  return true;
+};
+
 const { RangePicker } = DatePicker;
 
 const CustomerPackages: React.FC = () => {
@@ -99,7 +107,7 @@ const CustomerPackages: React.FC = () => {
 
   const filteredVehicles = vehicles.filter((v) => !selectedCustomerId || v.customerId === selectedCustomerId);
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
-  const filteredPackages = packages.filter((p) => !selectedVehicle || p.vehicleTypeId === selectedVehicle.vehicleTypeId);
+  const filteredPackages = packages.filter((p) => (!selectedVehicle || p.vehicleTypeId === selectedVehicle.vehicleTypeId) && isPackageSellable(p));
 
   /* ── Ngày kết thúc: tự tính từ Gói + Ngày bắt đầu, nhưng cho phép admin sửa tay ─────
    * Chỉ auto-fill khi người dùng CHƯA từng tự sửa endDate trong lần mở modal này — tránh
@@ -378,7 +386,7 @@ const CustomerPackages: React.FC = () => {
   const renewVehicles = vehicles.filter((v) => !renewCustomerId || v.customerId === renewCustomerId);
   const renewVehicleId = Form.useWatch('vehicleId', renewForm);
   const renewVehicle = vehicles.find((v) => v.id === renewVehicleId);
-  const renewPackages = packages.filter((p) => !renewVehicle || p.vehicleTypeId === renewVehicle.vehicleTypeId);
+  const renewPackages = packages.filter((p) => (!renewVehicle || p.vehicleTypeId === renewVehicle.vehicleTypeId) && isPackageSellable(p));
 
   return (
     <div>
