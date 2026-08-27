@@ -136,9 +136,23 @@ export class CustomerPackageService {
     const startDate = new Date(data.startDate);
     startDate.setHours(0, 0, 0, 0);
     const { pkg } = await this.ensurePackageCreateValidity(data, startDate, startDate);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + pkg.durationDays);
-    endDate.setHours(23, 59, 59, 999);
+
+    // endDate: ưu tiên giá trị người dùng nhập, nếu bỏ trống thì tính từ durationDays của gói.
+    let endDate: Date;
+    if (data.endDate) {
+      endDate = new Date(data.endDate);
+      if (Number.isNaN(endDate.getTime())) {
+        throw { status: 400, message: 'Ngày kết thúc không hợp lệ' };
+      }
+      endDate.setHours(23, 59, 59, 999);
+      if (endDate <= startDate) {
+        throw { status: 400, message: 'Ngày kết thúc phải sau ngày bắt đầu' };
+      }
+    } else {
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + pkg.durationDays);
+      endDate.setHours(23, 59, 59, 999);
+    }
 
     await this.ensurePackageCreateValidity(data, startDate, endDate);
     const status = this.getRuntimeStatus({ status: 'active', startDate, endDate });
@@ -167,7 +181,7 @@ export class CustomerPackageService {
     return { message: 'Đăng ký gói thành công', id: customerPackage.id };
   }
 
-  async update(id: number, data: { customerId?: number; vehicleId?: number; status?: string }) {
+  async update(id: number, data: { customerId?: number; vehicleId?: number; status?: string; startDate?: string; endDate?: string }) {
     await this.syncExpiredStatuses();
 
     const currentPackage = await prisma.customerPackage.findUnique({
@@ -219,12 +233,47 @@ export class CustomerPackageService {
       throw { status: 400, message: 'Gói đang có hiệu lực, không thể chuyển về trạng thái chờ áp dụng' };
     }
 
+    let nextStartDate = currentPackage.startDate;
+    let nextEndDate = currentPackage.endDate;
+    if (data.startDate || data.endDate) {
+      if (data.startDate) {
+        nextStartDate = new Date(data.startDate);
+        nextStartDate.setHours(0, 0, 0, 0);
+      }
+      if (data.endDate) {
+        nextEndDate = new Date(data.endDate);
+        nextEndDate.setHours(23, 59, 59, 999);
+      }
+      if (Number.isNaN(nextStartDate.getTime()) || Number.isNaN(nextEndDate.getTime())) {
+        throw { status: 400, message: 'Ngày bắt đầu/kết thúc không hợp lệ' };
+      }
+      if (nextEndDate <= nextStartDate) {
+        throw { status: 400, message: 'Ngày kết thúc phải sau ngày bắt đầu' };
+      }
+
+      const overlapping = await prisma.customerPackage.findFirst({
+        where: {
+          id: { not: id },
+          vehicleId: nextVehicleId,
+          status: { not: 'cancelled' },
+          startDate: { lte: nextEndDate },
+          endDate: { gte: nextStartDate },
+        },
+        select: { id: true },
+      });
+      if (overlapping) {
+        throw { status: 400, message: 'Xe đã có một gói trùng thời gian hiệu lực, không thể sửa chồng lấn' };
+      }
+    }
+
     await prisma.customerPackage.update({
       where: { id },
       data: {
         customerId: nextCustomerId,
         vehicleId: nextVehicleId,
         status: nextStatus,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
       },
     });
 

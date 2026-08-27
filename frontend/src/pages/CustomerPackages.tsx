@@ -101,6 +101,17 @@ const CustomerPackages: React.FC = () => {
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const filteredPackages = packages.filter((p) => !selectedVehicle || p.vehicleTypeId === selectedVehicle.vehicleTypeId);
 
+  /* ── Ngày kết thúc: tự tính từ Gói + Ngày bắt đầu, nhưng cho phép admin sửa tay ─────
+   * Chỉ auto-fill khi người dùng CHƯA từng tự sửa endDate trong lần mở modal này — tránh
+   * ghi đè giá trị họ vừa chỉnh mỗi khi đổi gói/ngày bắt đầu. */
+  const [endDateTouched, setEndDateTouched] = useState(false);
+  const recomputeEndDate = (packageId?: number, startDate?: Dayjs) => {
+    if (endDateTouched) return;
+    const pkg = packages.find((p) => p.id === packageId);
+    if (!pkg || !startDate) return;
+    form.setFieldValue('endDate', startDate.add(pkg.durationDays, 'day'));
+  };
+
   /* ── Create ───────────────────────────────────────────────────── */
   const handleSubmit = async (values: CustomerPackageForm) => {
     try {
@@ -109,10 +120,12 @@ const CustomerPackages: React.FC = () => {
         packageId: values.packageId,
         vehicleId: values.vehicleId,
         startDate: values.startDate.format('YYYY-MM-DD'),
+        endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : undefined,
       });
       message.success('Đăng ký gói thành công');
       setModal(false);
       form.resetFields();
+      setEndDateTouched(false);
       fetchData();
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
@@ -123,7 +136,13 @@ const CustomerPackages: React.FC = () => {
   /* ── Edit ─────────────────────────────────────────────────────── */
   const handleEdit = (record: CustomerPackage) => {
     setEditingPkg(record);
-    editForm.setFieldsValue({ customerId: record.customerId, vehicleId: record.vehicleId, status: record.status });
+    editForm.setFieldsValue({
+      customerId: record.customerId,
+      vehicleId: record.vehicleId,
+      status: record.status,
+      startDate: dayjs(record.startDate),
+      endDate: dayjs(record.endDate),
+    });
     setEditModal(true);
   };
 
@@ -134,6 +153,8 @@ const CustomerPackages: React.FC = () => {
         customerId: values.customerId,
         vehicleId: values.vehicleId,
         status: values.status,
+        startDate: (values.startDate as Dayjs).format('YYYY-MM-DD'),
+        endDate: (values.endDate as Dayjs).format('YYYY-MM-DD'),
       });
       message.success('Cập nhật thành công');
       setEditModal(false);
@@ -412,7 +433,7 @@ const CustomerPackages: React.FC = () => {
                   {t('btnImport')}
                 </Button>
               </PermissionGate>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setModal(true); }}>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setEndDateTouched(false); setModal(true); }}>
                 Đăng ký gói dịch vụ
               </Button>
             </Space>
@@ -433,7 +454,7 @@ const CustomerPackages: React.FC = () => {
       <Modal
         title="Đăng ký gói dịch vụ"
         open={modal}
-        onCancel={() => { setModal(false); form.resetFields(); }}
+        onCancel={() => { setModal(false); form.resetFields(); setEndDateTouched(false); }}
         onOk={() => form.submit()}
         okText="Đăng ký" cancelText="Hủy"
       >
@@ -452,12 +473,31 @@ const CustomerPackages: React.FC = () => {
             </Select>
           </Form.Item>
           <Form.Item name="packageId" label="Gói dịch vụ" rules={[{ required: true, message: 'Vui lòng chọn gói' }]}>
-            <Select placeholder={selectedVehicle ? 'Chọn gói theo loại xe' : 'Chọn phương tiện trước'}>
-              {filteredPackages.map((p) => <Select.Option key={p.id} value={p.id}>{p.name} — {Number(p.price).toLocaleString()}đ</Select.Option>)}
+            <Select
+              placeholder={selectedVehicle ? 'Chọn gói theo loại xe' : 'Chọn phương tiện trước'}
+              onChange={(v) => recomputeEndDate(v, form.getFieldValue('startDate'))}
+            >
+              {filteredPackages.map((p) => <Select.Option key={p.id} value={p.id}>{p.name} — {Number(p.price).toLocaleString()}đ ({p.durationDays} ngày)</Select.Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="startDate" label="Ngày bắt đầu" rules={[{ required: true }]} initialValue={dayjs()}>
-            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+            <DatePicker
+              format="DD/MM/YYYY"
+              style={{ width: '100%' }}
+              onChange={(d) => recomputeEndDate(form.getFieldValue('packageId'), d ?? undefined)}
+            />
+          </Form.Item>
+          <Form.Item
+            name="endDate"
+            label="Ngày kết thúc"
+            rules={[{ required: true, message: 'Vui lòng chọn ngày kết thúc' }]}
+            tooltip="Tự tính từ Gói + Ngày bắt đầu, có thể chỉnh tay nếu cần (VD: tặng thêm ngày, gia hạn lệch chu kỳ)"
+          >
+            <DatePicker
+              format="DD/MM/YYYY"
+              style={{ width: '100%' }}
+              onChange={() => setEndDateTouched(true)}
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -474,7 +514,6 @@ const CustomerPackages: React.FC = () => {
           <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
             <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--surface-container-low)', borderRadius: 8 }}>
               <div><strong>Gói:</strong> {editingPkg.parkingPackage?.name}</div>
-              <div><strong>Thời hạn:</strong> {dayjs(editingPkg.startDate).format('DD/MM/YYYY')} – {dayjs(editingPkg.endDate).format('DD/MM/YYYY')}</div>
             </div>
             <Form.Item name="customerId" label="Khách hàng" rules={[{ required: true }]}>
               <Select showSearch filterOption={(input, option) => String(option?.children).toLowerCase().includes(input.toLowerCase())}>
@@ -493,6 +532,12 @@ const CustomerPackages: React.FC = () => {
                 <Select.Option value="expired">Hết hạn</Select.Option>
                 <Select.Option value="cancelled">Đã hủy</Select.Option>
               </Select>
+            </Form.Item>
+            <Form.Item name="startDate" label="Ngày bắt đầu" rules={[{ required: true }]}>
+              <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="endDate" label="Ngày kết thúc" rules={[{ required: true }]}>
+              <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
             </Form.Item>
           </Form>
         )}

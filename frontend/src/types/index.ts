@@ -198,6 +198,7 @@ export interface CustomerPackageForm {
   packageId: number;
   vehicleId: number;
   startDate: any;
+  endDate?: any;
 }
 
 // Parking Record
