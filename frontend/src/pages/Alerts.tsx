@@ -4,8 +4,10 @@ import {
   AlertOutlined, CheckCircleOutlined, ExclamationCircleOutlined, FireOutlined,
   ReloadOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined,
   CalendarOutlined, BulbOutlined, SettingOutlined, UnorderedListOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import AlertSettingsPanel from '../components/AlertSettingsPanel';
+import ExpertRulesPanel from '../components/ExpertRulesPanel';
 import { formatDateTime } from '../utils/dateFormat';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -342,6 +344,7 @@ const Alerts: React.FC = () => {
         items={[
           { key: 'list', label: <><UnorderedListOutlined /> Danh sách cảnh báo</>, children: listTab },
           { key: 'settings', label: <><SettingOutlined /> Cấu hình mức độ</>, children: <AlertSettingsPanel /> },
+          { key: 'expert-system', label: <><ExperimentOutlined /> Cấu hình nâng cao</>, children: <ExpertRulesPanel /> },
         ]}
       />
     </div>

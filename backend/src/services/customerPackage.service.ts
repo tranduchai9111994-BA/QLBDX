@@ -2,6 +2,7 @@ import prisma from '../config/prisma';
 import { CreateCustomerPackageInput } from '../validators/customerPackage.validator';
 import { getPackageLifecycleStatus } from '../utils/businessRules';
 import { syncDuePackagePrices } from './pricing.service';
+import { evaluate } from '../expertSystem';
 
 export class CustomerPackageService {
   private async syncExpiredStatuses(now = new Date()) {
@@ -405,23 +406,10 @@ export class CustomerPackageService {
       };
     }
 
-    let recommendation: 'yearly' | 'quarterly' | 'monthly' | 'none' = 'none';
-    let savings: string | null = null;
-    let durationDays: number | null = null;
+    const evalResult = await evaluate({ frequency }, 'package');
+    const fired = evalResult.firedRules[0]; // priority thấp nhất trong các rule khớp = ưu tiên cao nhất
 
-    if (frequency >= 20) {
-      recommendation = 'yearly';
-      savings = '~40%';
-      durationDays = 365;
-    } else if (frequency >= 12) {
-      recommendation = 'quarterly';
-      savings = '~30%';
-      durationDays = 90;
-    } else if (frequency >= 5) {
-      recommendation = 'monthly';
-      savings = '~20%';
-      durationDays = 30;
-    } else {
+    if (!fired) {
       return {
         recommendation: 'none' as const,
         savings: null,
@@ -429,9 +417,14 @@ export class CustomerPackageService {
         totalSpent,
         reason: frequency === 0
           ? 'Chưa có dữ liệu đỗ xe trong 30 ngày qua'
-          : `Tần suất đỗ xe thấp (${frequency} lần/tháng, dưới ngưỡng 5 lần)`,
+          : `Tần suất đỗ xe thấp (${frequency} lần/tháng, dưới ngưỡng cấu hình)`,
       };
     }
+
+    const params = fired.actionOutputs[0].params;
+    const recommendation: 'yearly' | 'quarterly' | 'monthly' | 'none' = params.package;
+    const savings: string | null = params.savings;
+    const durationDays: number | null = params.durationDays;
 
     // Loại xe đỗ nhiều nhất trong 30 ngày qua -> dùng để tìm gói phù hợp
     const typeCounts = new Map<number, number>();
@@ -449,10 +442,11 @@ export class CustomerPackageService {
       where: { vehicleTypeId: dominantTypeId, durationDays: durationDays!, isActive: true },
     });
 
-    const reasonByLevel: Record<'yearly' | 'quarterly' | 'monthly', string> = {
+    const reasonByLevel: Record<'yearly' | 'quarterly' | 'monthly' | 'none', string> = {
       yearly: `Đỗ xe ${frequency} lần/tháng — rất thường xuyên`,
       quarterly: `Đỗ xe ${frequency} lần/tháng — thường xuyên`,
       monthly: `Đỗ xe ${frequency} lần/tháng — khá đều đặn`,
+      none: `Đỗ xe ${frequency} lần/tháng`,
     };
 
     return {
@@ -461,6 +455,7 @@ export class CustomerPackageService {
       frequency,
       totalSpent,
       reason: reasonByLevel[recommendation],
+      explanation: fired.explanation,
       packageId: matchingPackage?.id ?? null,
       packageName: matchingPackage?.name ?? null,
       packagePrice: matchingPackage ? Number(matchingPackage.price) : null,

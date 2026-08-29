@@ -572,6 +572,107 @@ export function exportExceptionExcel(stats: ExceptionStats, dateRange: [Dayjs, D
   XLSX.writeFile(wb, `ngoai-le_${stamp}.xlsx`);
 }
 
+// ─── ALERT TIERS EXPORT (tab "Cấu hình mức độ") ───────────────────────────
+
+interface AlertTierExportRow {
+  ruleType: string;
+  threshold: number;
+  severity: string;
+}
+
+export function exportAlertTiersExcel(
+  tiers: AlertTierExportRow[],
+  ruleTypeLabel: (v: string) => string,
+  ruleTypeUnit: (v: string) => string,
+) {
+  const stamp = dayjs().format('DDMMYYYY-HHmm');
+  const rows = tiers.map((t) => ({
+    'Loại cảnh báo': ruleTypeLabel(t.ruleType),
+    'Ngưỡng': t.threshold,
+    'Đơn vị': ruleTypeUnit(t.ruleType),
+    'Mức độ': SEVERITY_LABEL[t.severity] ?? t.severity,
+  }));
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  sheet['!cols'] = [{ wch: 26 }, { wch: 14 }, { wch: 24 }, { wch: 14 }];
+  styleHeaderRow(sheet, 0, 4);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, 'Nguong canh bao');
+  XLSX.writeFile(wb, `nguong-canh-bao_${stamp}.xlsx`);
+}
+
+export function exportAlertTiersCsv(
+  tiers: AlertTierExportRow[],
+  ruleTypeLabel: (v: string) => string,
+  ruleTypeUnit: (v: string) => string,
+) {
+  exportCsv(
+    tiers,
+    (t) => ({
+      Loai_canh_bao: ruleTypeLabel(t.ruleType),
+      Nguong: t.threshold,
+      Don_vi: ruleTypeUnit(t.ruleType),
+      Muc_do: SEVERITY_LABEL[t.severity] ?? t.severity,
+    }),
+    'nguong-canh-bao',
+    dayjs().format('DDMMYYYY-HHmm'),
+  );
+}
+
+// ─── EXPERT RULES EXPORT (tab "Cấu hình nâng cao") ────────────────────────
+
+interface ExpertRuleExportRow {
+  code: string;
+  name: string;
+  domain: string;
+  priority: number;
+  enabled: boolean;
+  conditions: { fact: string; operator: string; value: number }[];
+  actions: { type: string; params: Record<string, unknown> }[];
+}
+
+function formatConditions(r: ExpertRuleExportRow) {
+  return r.conditions.map((c) => `${c.fact} ${c.operator} ${c.value}`).join(' VÀ ');
+}
+function formatActions(r: ExpertRuleExportRow) {
+  return r.actions.map((a) => `${a.type}: ${JSON.stringify(a.params)}`).join(' | ');
+}
+
+export function exportExpertRulesExcel(rules: ExpertRuleExportRow[]) {
+  const stamp = dayjs().format('DDMMYYYY-HHmm');
+  const rows = rules.map((r) => ({
+    'Mã luật': r.code,
+    'Tên luật': r.name,
+    'Nhóm': r.domain,
+    'Ưu tiên': r.priority,
+    'Điều kiện': formatConditions(r),
+    'Hành động': formatActions(r),
+    'Kích hoạt': r.enabled ? 'Có' : 'Không',
+  }));
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  sheet['!cols'] = [{ wch: 26 }, { wch: 24 }, { wch: 12 }, { wch: 10 }, { wch: 34 }, { wch: 40 }, { wch: 10 }];
+  styleHeaderRow(sheet, 0, 7);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, 'Luat nang cao');
+  XLSX.writeFile(wb, `luat-nang-cao_${stamp}.xlsx`);
+}
+
+export function exportExpertRulesCsv(rules: ExpertRuleExportRow[]) {
+  exportCsv(
+    rules,
+    (r) => ({
+      Ma_luat: r.code,
+      Ten_luat: r.name,
+      Nhom: r.domain,
+      Uu_tien: r.priority,
+      Dieu_kien: formatConditions(r),
+      Hanh_dong: formatActions(r),
+      Kich_hoat: r.enabled ? 'Co' : 'Khong',
+    }),
+    'luat-nang-cao',
+    dayjs().format('DDMMYYYY-HHmm'),
+  );
+}
+
 export function exportAlertsCsv(alerts: AlertItem[]) {
   exportCsv(
     alerts,

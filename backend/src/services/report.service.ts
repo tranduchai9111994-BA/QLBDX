@@ -2,6 +2,7 @@ import prisma from '../config/prisma';
 import { alertSettingsService } from './alertSettings.service';
 import { alertRuleTierService } from './alertRuleTier.service';
 import { formatDateTimeVN, formatDateVN } from '../utils/formatDate';
+import { evaluate } from '../expertSystem';
 
 export class ReportService {
   async getDashboard() {
@@ -876,18 +877,44 @@ export class ReportService {
       .map(([type, count]) => ({ type, count, percent: Math.round((count / totalTyped) * 1000) / 10 }))
       .sort((a, b) => b.count - a.count);
 
-    // Gợi ý cho admin (rule-based)
-    const suggestions: { type: string; message: string }[] = [];
-    if (weekComparison.changePercent.revenue > 10) {
-      suggestions.push({
-        type: 'revenue_up',
-        message: `Doanh thu tuần này tăng ${weekComparison.changePercent.revenue}% so với tuần trước. Giờ cao điểm chiều (${peakHours.afternoon.hour}h) đông nhất — cân nhắc bố trí thêm nhân viên.`,
-      });
-    } else if (weekComparison.changePercent.revenue < -10) {
-      suggestions.push({
-        type: 'revenue_down',
-        message: `Doanh thu tuần này giảm ${Math.abs(weekComparison.changePercent.revenue)}% so với tuần trước, cần xem xét nguyên nhân (lượng xe, giá, cạnh tranh...).`,
-      });
+    // Gợi ý cho admin (rule-based qua expert system)
+    const suggestions: { type: string; message: string; explanation?: string }[] = [];
+
+    const globalEval = await evaluate(
+      {
+        revenueChangePercent: weekComparison.changePercent.revenue,
+        longParkedCount,
+        expiringPackagesCount,
+      },
+      'report',
+    );
+    for (const fired of globalEval.firedRules) {
+      const type = fired.actionOutputs[0]?.params?.type;
+      if (type === 'revenue_up') {
+        suggestions.push({
+          type,
+          message: `Doanh thu tuần này tăng ${weekComparison.changePercent.revenue}% so với tuần trước. Giờ cao điểm chiều (${peakHours.afternoon.hour}h) đông nhất — cân nhắc bố trí thêm nhân viên.`,
+          explanation: fired.explanation,
+        });
+      } else if (type === 'revenue_down') {
+        suggestions.push({
+          type,
+          message: `Doanh thu tuần này giảm ${Math.abs(weekComparison.changePercent.revenue)}% so với tuần trước, cần xem xét nguyên nhân (lượng xe, giá, cạnh tranh...).`,
+          explanation: fired.explanation,
+        });
+      } else if (type === 'long_parking') {
+        suggestions.push({
+          type,
+          message: `Có ${longParkedCount} xe đỗ quá 24 giờ, cần kiểm tra và xử lý.`,
+          explanation: fired.explanation,
+        });
+      } else if (type === 'renewal_campaign') {
+        suggestions.push({
+          type,
+          message: `${expiringPackagesCount} khách hàng sắp hết gói trong 7 ngày tới — cơ hội triển khai chiến dịch gia hạn.`,
+          explanation: fired.explanation,
+        });
+      }
     }
 
     const zoneStats = zones
@@ -898,26 +925,15 @@ export class ReportService {
       })
       .filter((z) => z.total > 0);
     for (const z of zoneStats) {
-      if (z.occupancyRate > 0.8) {
+      const zoneEval = await evaluate({ zoneOccupancyRate: z.occupancyRate }, 'report');
+      const fired = zoneEval.firedRules.find((r) => r.actionOutputs[0]?.params?.type === 'occupancy_warning');
+      if (fired) {
         suggestions.push({
           type: 'occupancy_warning',
           message: `${z.name} đạt ${Math.round(z.occupancyRate * 100)}% công suất. Nên cân nhắc điều phối xe sang khu khác còn trống.`,
+          explanation: fired.explanation,
         });
       }
-    }
-
-    if (longParkedCount > 5) {
-      suggestions.push({
-        type: 'long_parking',
-        message: `Có ${longParkedCount} xe đỗ quá 24 giờ, cần kiểm tra và xử lý.`,
-      });
-    }
-
-    if (expiringPackagesCount > 10) {
-      suggestions.push({
-        type: 'renewal_campaign',
-        message: `${expiringPackagesCount} khách hàng sắp hết gói trong 7 ngày tới — cơ hội triển khai chiến dịch gia hạn.`,
-      });
     }
 
     return { weekComparison, peakHours, dailyTrend, topVehicleTypes, suggestions };

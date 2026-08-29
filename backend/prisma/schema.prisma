@@ -329,18 +329,23 @@ model AlertSettings {
   @@map("AlertSettings")
 }
 
-/// Bảng ngưỡng nhiều mốc cho từng loại cảnh báo — VD "Xe đỗ quá lâu": >=48h = Nguy hiểm,
-/// >=24h = Cảnh báo, >=12h = Thông tin. Admin tự thêm/sửa/xoá mốc, hệ thống chỉ so sánh theo
-/// giá trị đo được so với ngưỡng, không suy đoán mức độ.
-model AlertRuleTier {
-  id        Int      @id @default(autoincrement()) @map("Id")
-  ruleType  String   @map("RuleType") @db.NVarChar(50)
-  threshold Float    @map("Threshold")
-  severity  String   @map("Severity") @db.NVarChar(20)
-  createdAt DateTime @default(now()) @map("CreatedAt")
-  updatedAt DateTime @default(now()) @updatedAt @map("UpdatedAt")
-  updatedBy Int?     @map("UpdatedBy")
+/// Bảng luật hệ chuyên gia — mỗi rule gồm danh sách điều kiện (conditions) và hành động (actions)
+/// dưới dạng JSON. Admin thêm/sửa/xoá qua UI, inference engine đọc và evaluate tự động.
+model ExpertRule {
+  id          Int      @id @default(autoincrement()) @map("Id")
+  code        String   @unique @map("Code") @db.NVarChar(80)
+  domain      String   @map("Domain") @db.NVarChar(40)
+  name        String   @map("Name") @db.NVarChar(200)
+  description String?  @map("Description") @db.NVarChar(500)
+  priority    Int      @default(100) @map("Priority")
+  conditions  String   @map("Conditions") @db.NVarChar(4000)
+  actions     String   @map("Actions") @db.NVarChar(4000)
+  enabled     Boolean  @default(true) @map("Enabled")
+  createdAt   DateTime @default(now()) @map("CreatedAt")
+  updatedAt   DateTime @default(now()) @updatedAt @map("UpdatedAt")
+  updatedBy   Int?     @map("UpdatedBy")
 
-  @@index([ruleType])
-  @@map("AlertRuleTiers")
+  @@index([domain])
+  @@index([enabled, domain])
+  @@map("ExpertRules")
 }

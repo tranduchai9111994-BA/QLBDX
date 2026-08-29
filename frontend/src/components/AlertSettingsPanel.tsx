@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Form, InputNumber, Select, Button, Row, Col, message, Divider, Alert,
-  Table, Tag, Space, Modal,
+  Table, Tag, Space, Modal, Dropdown,
 } from 'antd';
-import { SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined } from '@ant-design/icons';
 import api from '../api/axios';
 import { confirmDanger } from '../utils/confirmDanger';
+import { exportAlertTiersExcel, exportAlertTiersCsv } from '../utils/reportExport';
 
 interface GateSettingsForm {
   zoneNearFullAvailable: number;
@@ -242,7 +243,39 @@ const AlertSettingsPanel: React.FC = () => {
 
       <Card
         title="Bảng ngưỡng theo mức độ"
-        extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAddTier}>Thêm mốc ngưỡng</Button>}
+        extra={
+          <Space>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'excel',
+                    icon: <FileExcelOutlined style={{ color: 'var(--success)' }} />,
+                    label: 'Xuất Excel (.xlsx)',
+                    onClick: () => {
+                      if (tiers.length === 0) { message.warning('Không có dữ liệu để xuất'); return; }
+                      exportAlertTiersExcel(tiers, ruleTypeLabel, ruleTypeUnit);
+                      message.success('Đã xuất bảng ngưỡng ra Excel');
+                    },
+                  },
+                  {
+                    key: 'csv',
+                    icon: <FileTextOutlined style={{ color: 'var(--secondary)' }} />,
+                    label: 'Xuất CSV',
+                    onClick: () => {
+                      if (tiers.length === 0) { message.warning('Không có dữ liệu để xuất'); return; }
+                      exportAlertTiersCsv(tiers, ruleTypeLabel, ruleTypeUnit);
+                      message.success('Đã xuất bảng ngưỡng ra CSV');
+                    },
+                  },
+                ],
+              }}
+            >
+              <Button icon={<DownloadOutlined />}>Xuất báo cáo</Button>
+            </Dropdown>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openAddTier}>Thêm mốc ngưỡng</Button>
+          </Space>
+        }
       >
         <Space style={{ marginBottom: 16 }} wrap>
           <Select

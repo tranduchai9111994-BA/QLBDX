@@ -1,4 +1,5 @@
 import prisma from '../config/prisma';
+import { evaluate } from '../expertSystem';
 
 const WEEKDAY_LABELS = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 // Sắp xếp hiển thị bắt đầu từ Thứ 2 -> CN
@@ -152,17 +153,58 @@ export class AnalyticsService {
       };
     });
 
-    // --- Gợi ý quyết định (rule-based DSS) ---
+    // --- Gợi ý quyết định (rule-based DSS qua expert system) ---
     const decisions: any[] = [];
 
-    const overloadedZones = zoneEfficiency.filter((z) => z.avgOccupancy > 80);
-    if (overloadedZones.length > 0) {
-      const z = overloadedZones.sort((a, b) => b.avgOccupancy - a.avgOccupancy)[0];
+    const maxZoneOccupancy = zoneEfficiency.length > 0
+      ? Math.max(...zoneEfficiency.map((z) => z.avgOccupancy))
+      : 0;
+
+    const weekdayAvg = dayOfWeekAnalysis
+      .filter((d) => d.day !== 'Thứ 7' && d.day !== 'CN')
+      .reduce((sum, d) => sum + d.avgVehicles, 0) / 5;
+    const weekendAvg = (dayOfWeekAnalysis.find((d) => d.day === 'Thứ 7')?.avgVehicles || 0
+      + (dayOfWeekAnalysis.find((d) => d.day === 'CN')?.avgVehicles || 0)) / 2;
+    const weekendDropPercent = weekdayAvg > 0 ? Math.round((1 - weekendAvg / weekdayAvg) * 100) : 0;
+
+    const frequentVehicleIds = new Set<number>();
+    const visitCountByVehicle = new Map<number, number>();
+    for (const r of since30Records) {
+      if (!r.vehicleId) continue;
+      visitCountByVehicle.set(r.vehicleId, (visitCountByVehicle.get(r.vehicleId) || 0) + 1);
+    }
+    for (const [vehicleId, count] of visitCountByVehicle) {
+      if (count >= 5) frequentVehicleIds.add(vehicleId);
+    }
+    let percentWithoutPackage = 0;
+    let withoutPackageCount = 0;
+    let frequentCustomerIds = new Set<number>();
+    if (frequentVehicleIds.size > 0) {
+      const frequentVehicles = await prisma.vehicle.findMany({
+        where: { id: { in: Array.from(frequentVehicleIds) } },
+        select: { customerId: true },
+      });
+      const withPackageCustomerIds = new Set(activePackageCustomerIds.map((p) => p.customerId));
+      frequentCustomerIds = new Set(frequentVehicles.map((v) => v.customerId));
+      withoutPackageCount = Array.from(frequentCustomerIds).filter((id) => !withPackageCustomerIds.has(id)).length;
+      percentWithoutPackage = Math.round((withoutPackageCount / frequentCustomerIds.size) * 100);
+    }
+
+    const dssResult = await evaluate(
+      { maxZoneOccupancy, weekendDropPercent, percentWithoutPackage },
+      'analytics',
+    );
+    const firedIds = new Set(dssResult.firedRules.map((r) => r.actionOutputs[0]?.params?.id));
+    const explanationById = new Map(dssResult.firedRules.map((r) => [r.actionOutputs[0]?.params?.id, r.explanation]));
+
+    if (firedIds.has('d1')) {
+      const z = [...zoneEfficiency].sort((a, b) => b.avgOccupancy - a.avgOccupancy)[0];
       const underusedZone = [...zoneEfficiency].sort((a, b) => a.avgOccupancy - b.avgOccupancy)[0];
       decisions.push({
         id: 'd1',
         question: `Có nên mở thêm chỗ đỗ ở ${z.zone}?`,
         analysis: `${z.zone} có occupancy ${z.avgOccupancy}% — gần đầy. Doanh thu/chỗ hiện tại: ${z.revenuePerSpot.toLocaleString('vi-VN')}đ.`,
+        explanation: explanationById.get('d1'),
         options: [
           {
             action: `Mở thêm chỗ đỗ ở ${z.zone}`,
@@ -182,17 +224,12 @@ export class AnalyticsService {
       });
     }
 
-    const weekdayAvg = dayOfWeekAnalysis
-      .filter((d) => d.day !== 'Thứ 7' && d.day !== 'CN')
-      .reduce((sum, d) => sum + d.avgVehicles, 0) / 5;
-    const weekendAvg = (dayOfWeekAnalysis.find((d) => d.day === 'Thứ 7')?.avgVehicles || 0
-      + (dayOfWeekAnalysis.find((d) => d.day === 'CN')?.avgVehicles || 0)) / 2;
-    if (weekdayAvg > 0 && weekendAvg < weekdayAvg * 0.5) {
-      const dropPercent = Math.round((1 - weekendAvg / weekdayAvg) * 100);
+    if (firedIds.has('d2')) {
       decisions.push({
         id: 'd2',
         question: 'Có nên điều chỉnh giá vào cuối tuần?',
-        analysis: `Cuối tuần chỉ ${Math.round(weekendAvg)} xe/ngày (vs ${Math.round(weekdayAvg)} xe ngày thường) — giảm ${dropPercent}%.`,
+        analysis: `Cuối tuần chỉ ${Math.round(weekendAvg)} xe/ngày (vs ${Math.round(weekdayAvg)} xe ngày thường) — giảm ${weekendDropPercent}%.`,
+        explanation: explanationById.get('d2'),
         options: [
           {
             action: 'Giảm giá 20% cuối tuần',
@@ -208,43 +245,25 @@ export class AnalyticsService {
       });
     }
 
-    const frequentVehicleIds = new Set<number>();
-    const visitCountByVehicle = new Map<number, number>();
-    for (const r of since30Records) {
-      if (!r.vehicleId) continue;
-      visitCountByVehicle.set(r.vehicleId, (visitCountByVehicle.get(r.vehicleId) || 0) + 1);
-    }
-    for (const [vehicleId, count] of visitCountByVehicle) {
-      if (count >= 5) frequentVehicleIds.add(vehicleId);
-    }
-    if (frequentVehicleIds.size > 0) {
-      const frequentVehicles = await prisma.vehicle.findMany({
-        where: { id: { in: Array.from(frequentVehicleIds) } },
-        select: { customerId: true },
+    if (firedIds.has('d3')) {
+      decisions.push({
+        id: 'd3',
+        question: 'Có nên triển khai chiến dịch bán gói dịch vụ?',
+        analysis: `${percentWithoutPackage}% khách hàng đỗ xe thường xuyên (≥5 lần/tháng) chưa đăng ký gói dịch vụ (${withoutPackageCount}/${frequentCustomerIds.size} khách).`,
+        explanation: explanationById.get('d3'),
+        options: [
+          {
+            action: 'Chạy chiến dịch tư vấn gói dịch vụ cho nhóm khách này',
+            estimatedImpact: `Nếu 30% chuyển đổi sang gói tháng, có thể tăng doanh thu ổn định từ ~${Math.round(withoutPackageCount * 0.3)} khách hàng mới.`,
+            risk: 'Cần thời gian và nhân lực tư vấn, có thể không phải khách nào cũng phù hợp với gói.',
+          },
+          {
+            action: 'Không triển khai, giữ mô hình gửi lẻ',
+            estimatedImpact: 'Không phát sinh chi phí marketing/tư vấn.',
+            risk: 'Bỏ lỡ cơ hội tăng doanh thu ổn định và giữ chân khách hàng.',
+          },
+        ],
       });
-      const withPackageCustomerIds = new Set(activePackageCustomerIds.map((p) => p.customerId));
-      const frequentCustomerIds = new Set(frequentVehicles.map((v) => v.customerId));
-      const withoutPackageCount = Array.from(frequentCustomerIds).filter((id) => !withPackageCustomerIds.has(id)).length;
-      const percentWithoutPackage = Math.round((withoutPackageCount / frequentCustomerIds.size) * 100);
-      if (percentWithoutPackage > 20) {
-        decisions.push({
-          id: 'd3',
-          question: 'Có nên triển khai chiến dịch bán gói dịch vụ?',
-          analysis: `${percentWithoutPackage}% khách hàng đỗ xe thường xuyên (≥5 lần/tháng) chưa đăng ký gói dịch vụ (${withoutPackageCount}/${frequentCustomerIds.size} khách).`,
-          options: [
-            {
-              action: 'Chạy chiến dịch tư vấn gói dịch vụ cho nhóm khách này',
-              estimatedImpact: `Nếu 30% chuyển đổi sang gói tháng, có thể tăng doanh thu ổn định từ ~${Math.round(withoutPackageCount * 0.3)} khách hàng mới.`,
-              risk: 'Cần thời gian và nhân lực tư vấn, có thể không phải khách nào cũng phù hợp với gói.',
-            },
-            {
-              action: 'Không triển khai, giữ mô hình gửi lẻ',
-              estimatedImpact: 'Không phát sinh chi phí marketing/tư vấn.',
-              risk: 'Bỏ lỡ cơ hội tăng doanh thu ổn định và giữ chân khách hàng.',
-            },
-          ],
-        });
-      }
     }
 
     return {

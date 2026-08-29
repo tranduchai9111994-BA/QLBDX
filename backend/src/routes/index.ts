@@ -16,6 +16,7 @@ import analyticsRoutes from './analytics.routes';
 import alertSettingsRoutes from './alertSettings.routes';
 import alertRuleTierRoutes from './alertRuleTier.routes';
 import permissionGroupRoutes from './permissionGroup.routes';
+import expertRuleRoutes from './expertRule.routes';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use('/analytics', analyticsRoutes);
 router.use('/alert-settings', alertSettingsRoutes);
 router.use('/alert-rule-tiers', alertRuleTierRoutes);
 router.use('/permission-groups', permissionGroupRoutes);
+router.use('/expert-rules', expertRuleRoutes);
 
 export default router;
