@@ -2,7 +2,7 @@ import prisma from '../config/prisma';
 import { alertSettingsService } from './alertSettings.service';
 import { alertRuleTierService } from './alertRuleTier.service';
 import { formatDateTimeVN, formatDateVN } from '../utils/formatDate';
-import { evaluate } from '../expertSystem';
+import { evaluate, renderMessage } from '../expertSystem';
 
 export class ReportService {
   async getDashboard() {
@@ -888,32 +888,19 @@ export class ReportService {
       },
       'report',
     );
+    // Nội dung gợi ý lấy từ chính luật (action.params.message), số liệu thật điền vào chỗ trống {..}
+    const globalVars = {
+      revenueChangePercent: weekComparison.changePercent.revenue,
+      revenueDropPercent: Math.abs(weekComparison.changePercent.revenue),
+      peakAfternoonHour: peakHours.afternoon.hour,
+      longParkedCount,
+      expiringPackagesCount,
+    };
     for (const fired of globalEval.firedRules) {
-      const type = fired.actionOutputs[0]?.params?.type;
-      if (type === 'revenue_up') {
-        suggestions.push({
-          type,
-          message: `Doanh thu tuần này tăng ${weekComparison.changePercent.revenue}% so với tuần trước. Giờ cao điểm chiều (${peakHours.afternoon.hour}h) đông nhất — cân nhắc bố trí thêm nhân viên.`,
-          explanation: fired.explanation,
-        });
-      } else if (type === 'revenue_down') {
-        suggestions.push({
-          type,
-          message: `Doanh thu tuần này giảm ${Math.abs(weekComparison.changePercent.revenue)}% so với tuần trước, cần xem xét nguyên nhân (lượng xe, giá, cạnh tranh...).`,
-          explanation: fired.explanation,
-        });
-      } else if (type === 'long_parking') {
-        suggestions.push({
-          type,
-          message: `Có ${longParkedCount} xe đỗ quá 24 giờ, cần kiểm tra và xử lý.`,
-          explanation: fired.explanation,
-        });
-      } else if (type === 'renewal_campaign') {
-        suggestions.push({
-          type,
-          message: `${expiringPackagesCount} khách hàng sắp hết gói trong 7 ngày tới — cơ hội triển khai chiến dịch gia hạn.`,
-          explanation: fired.explanation,
-        });
+      for (const action of fired.actionOutputs) {
+        const message = renderMessage(action.params?.message, globalVars);
+        if (!message) continue;
+        suggestions.push({ type: action.params.type, message, explanation: fired.explanation });
       }
     }
 
@@ -926,13 +913,16 @@ export class ReportService {
       .filter((z) => z.total > 0);
     for (const z of zoneStats) {
       const zoneEval = await evaluate({ zoneOccupancyRate: z.occupancyRate }, 'report');
-      const fired = zoneEval.firedRules.find((r) => r.actionOutputs[0]?.params?.type === 'occupancy_warning');
-      if (fired) {
-        suggestions.push({
-          type: 'occupancy_warning',
-          message: `${z.name} đạt ${Math.round(z.occupancyRate * 100)}% công suất. Nên cân nhắc điều phối xe sang khu khác còn trống.`,
-          explanation: fired.explanation,
-        });
+      for (const fired of zoneEval.firedRules) {
+        for (const action of fired.actionOutputs) {
+          if (action.params?.type !== 'occupancy_warning') continue;
+          const message = renderMessage(action.params.message, {
+            zoneName: z.name,
+            zoneOccupancyPercent: Math.round(z.occupancyRate * 100),
+          });
+          if (!message) continue;
+          suggestions.push({ type: 'occupancy_warning', message, explanation: fired.explanation });
+        }
       }
     }
 

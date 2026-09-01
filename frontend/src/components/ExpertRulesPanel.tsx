@@ -323,6 +323,31 @@ const ExpertRulesPanel: React.FC = () => {
                   <li>Điều kiện: fact = <Text code>frequency</Text>, toán tử = <Text code>&gt;=</Text>, giá trị = <Text code>5</Text></li>
                   <li>Hành động: type = <Text code>recommend</Text>, params = <Text code>{'{"package":"monthly","savings":"~20%","durationDays":30}'}</Text></li>
                 </ul>
+                <Paragraph>
+                  <b>Mỗi nhóm yêu cầu params khác nhau</b> (backend validate theo nhóm — thiếu field sẽ không lưu được):
+                </Paragraph>
+                <ul>
+                  <li>
+                    <Text code>package</Text> → type <Text code>recommend</Text>, params cần{' '}
+                    <Text code>package</Text> (yearly/quarterly/monthly), <Text code>durationDays</Text>, <Text code>savings</Text>
+                  </li>
+                  <li>
+                    <Text code>analytics</Text> → type <Text code>decision</Text>, params cần <Text code>id</Text> (d1/d2/d3) và{' '}
+                    <Text code>message</Text> (hoặc <Text code>recommendation</Text>)
+                  </li>
+                  <li>
+                    <Text code>report</Text> → type <Text code>suggestion</Text>, params cần <Text code>type</Text>{' '}
+                    (revenue_up / revenue_down / occupancy_warning / long_parking / renewal_campaign) và <Text code>message</Text>
+                  </li>
+                </ul>
+                <Paragraph type="secondary">
+                  Trong <Text code>message</Text> có thể dùng chỗ trống <Text code>{'{tenBien}'}</Text> để hệ thống điền số liệu thật
+                  lúc chạy, VD <Text code>{'Có {longParkedCount} xe đỗ quá 24 giờ.'}</Text>
+                </Paragraph>
+                <Paragraph type="secondary">
+                  Luật <b>tắt</b> (cột "Bật") sẽ không được nạp vào Inference Engine — không sinh gợi ý/cảnh báo/quyết định nào,
+                  nhưng vẫn nằm trong danh sách để bật lại.
+                </Paragraph>
                 <Paragraph type="secondary">
                   Nghĩa là: nếu giá trị thực tế của <Text code>frequency</Text> ≥ 5, luật này khớp và trả về gợi ý gói tháng.
                   Nếu có nhiều luật cùng nhóm cùng khớp (VD khách đỗ 20 lần/tháng khớp cả luật gói tháng lẫn gói năm),
@@ -516,6 +541,14 @@ const ExpertRulesPanel: React.FC = () => {
               message={<>Đang test luật <b>{testRule.name}</b> — mã <Text code>{testRule.code}</Text>, nhóm <Tag>{testRule.domain}</Tag></>}
             />
           )}
+          {testRule && !testRule.enabled && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Luật này đang tắt"
+              description={'Luật tắt không được nạp vào Inference Engine nên chạy thử sẽ không thấy nó khớp. Bật luật ở cột "Bật" rồi thử lại.'}
+            />
+          )}
           {testRuleFacts.map((fact) => (
             <div key={fact} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Text style={{ width: 160 }}>{fact}</Text>
@@ -529,6 +562,14 @@ const ExpertRulesPanel: React.FC = () => {
           <Button type="primary" onClick={handleTest} loading={testing} icon={<PlayCircleOutlined />}>
             Chạy thử
           </Button>
+          {testResult && !primaryTestResult && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Không có kết quả cho luật này"
+              description="Luật đang tắt nên Inference Engine không đánh giá nó. Bật luật lên rồi chạy thử lại."
+            />
+          )}
           {testResult && primaryTestResult && (
             <Card
               size="small"

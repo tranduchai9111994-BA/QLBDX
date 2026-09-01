@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Form, InputNumber, Select, Button, Row, Col, message, Divider, Alert,
-  Table, Tag, Space, Modal, Dropdown,
+  Table, Tag, Space, Modal, Dropdown, Switch, Tooltip,
 } from 'antd';
 import { SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined } from '@ant-design/icons';
 import api from '../api/axios';
@@ -28,6 +28,7 @@ interface RuleTier {
   ruleType: string;
   threshold: number;
   severity: string;
+  enabled: boolean;
 }
 
 const SEVERITY_OPTIONS = [
@@ -142,6 +143,22 @@ const AlertSettingsPanel: React.FC = () => {
     }
   };
 
+  /** Tắt mốc = luật domain "alert" enabled = false → Inference Engine không dùng nữa, cảnh báo tương ứng ngừng phát. */
+  const handleToggleTier = async (tier: RuleTier, enabled: boolean) => {
+    try {
+      await api.put(`/alert-rule-tiers/${tier.id}`, {
+        ruleType: tier.ruleType,
+        threshold: tier.threshold,
+        severity: tier.severity,
+        enabled,
+      });
+      message.success(enabled ? 'Đã bật mốc ngưỡng' : 'Đã tắt mốc ngưỡng — cảnh báo này sẽ không phát nữa');
+      fetchTiers();
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Không đổi được trạng thái mốc ngưỡng');
+    }
+  };
+
   const handleDeleteTier = (tier: RuleTier) => {
     confirmDanger({
       title: 'Xác nhận xóa mốc ngưỡng',
@@ -161,11 +178,23 @@ const AlertSettingsPanel: React.FC = () => {
     },
     {
       title: 'Ngưỡng', key: 'threshold',
-      render: (_: unknown, r: RuleTier) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{r.threshold.toLocaleString('vi-VN')} {ruleTypeUnit(r.ruleType)}</span>,
+      render: (_: unknown, r: RuleTier) => (
+        <span style={{ fontVariantNumeric: 'tabular-nums', opacity: r.enabled ? 1 : 0.45 }}>
+          {r.threshold.toLocaleString('vi-VN')} {ruleTypeUnit(r.ruleType)}
+        </span>
+      ),
     },
     {
       title: 'Mức độ', dataIndex: 'severity', key: 'severity',
       render: (v: string) => <Tag color={SEVERITY_COLOR[v]}>{SEVERITY_LABEL[v] || v}</Tag>,
+    },
+    {
+      title: 'Đang dùng', key: 'enabled', width: 100,
+      render: (_: unknown, r: RuleTier) => (
+        <Tooltip title={r.enabled ? 'Đang được dùng để phát cảnh báo' : 'Đã tắt — không phát cảnh báo'}>
+          <Switch size="small" checked={r.enabled} onChange={(v) => handleToggleTier(r, v)} />
+        </Tooltip>
+      ),
     },
     {
       title: 'Thao tác', key: 'action', width: 160,

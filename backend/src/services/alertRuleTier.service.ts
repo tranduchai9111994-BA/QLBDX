@@ -1,23 +1,20 @@
 import prisma from '../config/prisma';
-import { knowledgeBase } from '../expertSystem';
+import { knowledgeBase, renderMessage, validateRule, RULE_TYPES, VALID_SEVERITIES } from '../expertSystem';
+import type { RuleType } from '../expertSystem';
 
-export const VALID_SEVERITIES = ['danger', 'warning', 'info'];
+// Tập giá trị hợp lệ được khai báo tập trung ở expertSystem/domainSpecs.ts để validate luật
+// domain "alert" và service này dùng chung một nguồn. Re-export cho controller đang import từ đây.
+export { RULE_TYPES, VALID_SEVERITIES };
+export type { RuleType };
 
-/** Loại cảnh báo hợp lệ + đơn vị + chiều so sánh — cố định trong code, admin chỉ thêm/sửa mốc ngưỡng. */
-export const RULE_TYPES = {
-  zoneNearFullPercent: { label: 'Khu vực sắp đầy', unit: '% chỗ trống còn lại', comparator: 'lte' as const },
-  zoneImbalanceMaxPercent: { label: 'Mất cân bằng khu vực', unit: '% khu quá tải', comparator: 'gte' as const },
-  longParkingHours: { label: 'Xe đỗ quá lâu', unit: 'giờ đã đỗ', comparator: 'gte' as const },
-  parkingAnomalyMultiplier: { label: 'Xe đỗ bất thường', unit: 'lần so với trung bình', comparator: 'gte' as const },
-  suspiciousPaymentAmount: { label: 'Thanh toán bất thường', unit: 'đ', comparator: 'gte' as const },
-  revenueDropPercent: { label: 'Doanh thu sụt giảm', unit: '% sụt so với hôm qua', comparator: 'gte' as const },
-  renewalFrequency: { label: 'Gợi ý gia hạn', unit: 'lần đỗ xe/tháng', comparator: 'gte' as const },
-} as const;
-
-export type RuleType = keyof typeof RULE_TYPES;
+interface TierSpec {
+  ruleType: RuleType;
+  threshold: number;
+  severity: string;
+}
 
 /** Mốc mặc định — seed 1 lần khi chưa có luật "alert" nào (cài đặt lần đầu, chưa từng chạy AlertRuleTier cũ). */
-const DEFAULT_TIERS: { ruleType: RuleType; threshold: number; severity: string }[] = [
+const DEFAULT_TIERS: TierSpec[] = [
   { ruleType: 'zoneNearFullPercent', threshold: 10, severity: 'warning' },
   { ruleType: 'zoneImbalanceMaxPercent', threshold: 90, severity: 'warning' },
   { ruleType: 'longParkingHours', threshold: 24, severity: 'warning' },
@@ -32,9 +29,17 @@ interface AlertTier {
   ruleType: string;
   threshold: number;
   severity: string;
+  message: string;
+  enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   updatedBy: number | null;
+}
+
+interface GroupedTier {
+  threshold: number;
+  severity: string;
+  message: string;
 }
 
 /**
@@ -43,7 +48,15 @@ interface AlertTier {
  * "Cảnh báo nâng cao", chỉ khác giao diện: ở đây admin chọn loại/ngưỡng/mức độ qua dropdown
  * thay vì gõ JSON điều kiện/hành động tay. Đổi ở tab nào cũng phản ánh sang tab kia.
  */
-function toTier(row: { id: number; conditions: string; actions: string; createdAt: Date; updatedAt: Date; updatedBy: number | null }): AlertTier | null {
+function toTier(row: {
+  id: number;
+  conditions: string;
+  actions: string;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: number | null;
+}): AlertTier | null {
   try {
     const conditions = JSON.parse(row.conditions);
     const actions = JSON.parse(row.actions);
@@ -51,7 +64,17 @@ function toTier(row: { id: number; conditions: string; actions: string; createdA
     const threshold = conditions[0]?.value;
     const severity = actions[0]?.params?.severity;
     if (!ruleType || typeof threshold !== 'number' || !severity) return null;
-    return { id: row.id, ruleType, threshold, severity, createdAt: row.createdAt, updatedAt: row.updatedAt, updatedBy: row.updatedBy };
+    return {
+      id: row.id,
+      ruleType,
+      threshold,
+      severity,
+      message: actions[0]?.params?.message ?? '',
+      enabled: row.enabled,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      updatedBy: row.updatedBy,
+    };
   } catch {
     return null;
   }
@@ -61,36 +84,102 @@ function tierCode(ruleType: string, threshold: number) {
   return `alert_${ruleType}_${threshold}`;
 }
 
+function tierLabel(ruleType: RuleType, threshold: number) {
+  const meta = RULE_TYPES[ruleType];
+  const op = meta.comparator === 'gte' ? '>=' : '<=';
+  return `${meta.label} ${op} ${threshold}${meta.unit}`;
+}
+
+/**
+ * Nội dung cảnh báo của mốc, sinh từ loại/ngưỡng/mức độ — {value} là chỗ trống cho giá trị đo
+ * được lúc chạy. Lưu vào params.message để luật domain "alert" đủ field theo validate.
+ */
+function tierMessage(ruleType: RuleType, threshold: number, severity: string) {
+  const meta = RULE_TYPES[ruleType];
+  const op = meta.comparator === 'gte' ? '>=' : '<=';
+  return `${meta.label}: giá trị {value} ${op} mốc ${threshold}${meta.unit} → mức ${severity}`;
+}
+
+function tierRuleData(data: TierSpec, updatedBy?: number) {
+  const meta = RULE_TYPES[data.ruleType];
+  const payload = {
+    code: tierCode(data.ruleType, data.threshold),
+    domain: 'alert',
+    name: tierLabel(data.ruleType, data.threshold),
+    priority: 100,
+    conditions: [{ fact: data.ruleType, operator: meta.comparator, value: data.threshold }],
+    actions: [
+      {
+        type: 'alert',
+        params: { severity: data.severity, message: tierMessage(data.ruleType, data.threshold, data.severity) },
+      },
+    ],
+  };
+  // Đi qua đúng validate của domain "alert" như luật tạo tay qua API /expert-rules.
+  validateRule(payload);
+  return {
+    code: payload.code,
+    domain: payload.domain,
+    name: payload.name,
+    priority: payload.priority,
+    conditions: JSON.stringify(payload.conditions),
+    actions: JSON.stringify(payload.actions),
+    updatedBy,
+  };
+}
+
 class AlertRuleTierService {
-  /** Lấy toàn bộ mốc (đọc từ ExpertRule domain="alert"), seed mặc định nếu chưa có luật nào (lần chạy đầu). */
+  /** Bù params.message cho các mốc đã seed từ bản cũ (chỉ thêm khi thiếu) để luật qua được validate. */
+  private async backfillMessages(rows: { id: number; conditions: string; actions: string }[]): Promise<void> {
+    for (const row of rows) {
+      try {
+        const conditions = JSON.parse(row.conditions);
+        const actions = JSON.parse(row.actions);
+        const ruleType = conditions[0]?.fact as RuleType;
+        const threshold = conditions[0]?.value;
+        const severity = actions[0]?.params?.severity;
+        if (!(ruleType in RULE_TYPES) || typeof threshold !== 'number' || !severity) continue;
+        if (actions[0].params.message !== undefined) continue;
+        actions[0].params.message = tierMessage(ruleType, threshold, severity);
+        await prisma.expertRule.update({ where: { id: row.id }, data: { actions: JSON.stringify(actions) } });
+      } catch {
+        // Luật hỏng JSON — toTier() sẽ bỏ qua, không cần chặn cả danh sách.
+      }
+    }
+  }
+
+  /**
+   * Toàn bộ mốc cho màn hình quản lý — trả về cả mốc đang bật và đang tắt (kèm cờ enabled),
+   * seed mặc định nếu chưa có luật nào (lần chạy đầu).
+   */
   async list(filters: { ruleType?: string; severity?: string } = {}): Promise<AlertTier[]> {
     const count = await prisma.expertRule.count({ where: { domain: 'alert' } });
     if (count === 0) {
-      await prisma.expertRule.createMany({
-        data: DEFAULT_TIERS.map((t) => ({
-          code: tierCode(t.ruleType, t.threshold),
-          domain: 'alert',
-          name: `${RULE_TYPES[t.ruleType].label} ${RULE_TYPES[t.ruleType].comparator === 'gte' ? '>=' : '<='} ${t.threshold}${RULE_TYPES[t.ruleType].unit}`,
-          priority: 100,
-          conditions: JSON.stringify([{ fact: t.ruleType, operator: RULE_TYPES[t.ruleType].comparator, value: t.threshold }]),
-          actions: JSON.stringify([{ type: 'alert', params: { severity: t.severity } }]),
-        })),
-      });
+      await prisma.expertRule.createMany({ data: DEFAULT_TIERS.map((t) => tierRuleData(t)) });
       await knowledgeBase.reload();
     }
-    const rows = await prisma.expertRule.findMany({ where: { domain: 'alert' } });
+    let rows = await prisma.expertRule.findMany({ where: { domain: 'alert' } });
+    const needBackfill = rows.filter((r) => !r.actions.includes('"message"'));
+    // Chạy đúng 1 lần rồi đọc lại — không gọi đệ quy, vì luật hỏng JSON sẽ mãi không có message.
+    if (needBackfill.length > 0) {
+      await this.backfillMessages(needBackfill);
+      rows = await prisma.expertRule.findMany({ where: { domain: 'alert' } });
+    }
     const tiers = rows.map(toTier).filter((t): t is AlertTier => t !== null);
     return tiers
       .filter((t) => (!filters.ruleType || t.ruleType === filters.ruleType) && (!filters.severity || t.severity === filters.severity))
       .sort((a, b) => a.ruleType.localeCompare(b.ruleType) || b.threshold - a.threshold);
   }
 
-  /** Tất cả mốc, gộp theo ruleType — dùng nội bộ cho report.service tính severity. */
-  async getAllGrouped(): Promise<Record<string, { threshold: number; severity: string }[]>> {
-    const tiers = await this.list();
-    const grouped: Record<string, { threshold: number; severity: string }[]> = {};
+  /**
+   * Mốc ĐANG BẬT, gộp theo ruleType — đây là đầu vào suy diễn cảnh báo của report.service.
+   * Mốc bị tắt (enabled = false) không có ở đây nên không còn sinh cảnh báo nữa.
+   */
+  async getAllGrouped(): Promise<Record<string, GroupedTier[]>> {
+    const tiers = (await this.list()).filter((t) => t.enabled);
+    const grouped: Record<string, GroupedTier[]> = {};
     for (const t of tiers) {
-      (grouped[t.ruleType] ??= []).push({ threshold: t.threshold, severity: t.severity });
+      (grouped[t.ruleType] ??= []).push({ threshold: t.threshold, severity: t.severity, message: t.message });
     }
     return grouped;
   }
@@ -106,16 +195,15 @@ class AlertRuleTierService {
       err.status = 400;
       throw err;
     }
-    if (!VALID_SEVERITIES.includes(severity)) {
+    if (!(VALID_SEVERITIES as readonly string[]).includes(severity)) {
       const err: any = new Error(`Mức độ không hợp lệ: ${severity}`);
       err.status = 400;
       throw err;
     }
   }
 
-  async create(data: { ruleType: RuleType; threshold: number; severity: string }, updatedBy?: number) {
+  async create(data: TierSpec, updatedBy?: number) {
     this.validate(data.ruleType, data.threshold, data.severity);
-    const meta = RULE_TYPES[data.ruleType];
     const code = tierCode(data.ruleType, data.threshold);
     const existing = await prisma.expertRule.findUnique({ where: { code } });
     if (existing) {
@@ -123,24 +211,13 @@ class AlertRuleTierService {
       err.status = 400;
       throw err;
     }
-    const row = await prisma.expertRule.create({
-      data: {
-        code,
-        domain: 'alert',
-        name: `${meta.label} ${meta.comparator === 'gte' ? '>=' : '<='} ${data.threshold}${meta.unit}`,
-        priority: 100,
-        conditions: JSON.stringify([{ fact: data.ruleType, operator: meta.comparator, value: data.threshold }]),
-        actions: JSON.stringify([{ type: 'alert', params: { severity: data.severity } }]),
-        updatedBy,
-      },
-    });
+    const row = await prisma.expertRule.create({ data: tierRuleData(data, updatedBy) });
     await knowledgeBase.reload();
     return toTier(row);
   }
 
-  async update(id: number, data: { ruleType: RuleType; threshold: number; severity: string }, updatedBy?: number) {
+  async update(id: number, data: TierSpec & { enabled?: boolean }, updatedBy?: number) {
     this.validate(data.ruleType, data.threshold, data.severity);
-    const meta = RULE_TYPES[data.ruleType];
     const code = tierCode(data.ruleType, data.threshold);
     const existing = await prisma.expertRule.findUnique({ where: { code } });
     if (existing && existing.id !== id) {
@@ -148,14 +225,12 @@ class AlertRuleTierService {
       err.status = 400;
       throw err;
     }
+    const { domain: _domain, priority: _priority, ...ruleData } = tierRuleData(data, updatedBy);
     const row = await prisma.expertRule.update({
       where: { id },
       data: {
-        code,
-        name: `${meta.label} ${meta.comparator === 'gte' ? '>=' : '<='} ${data.threshold}${meta.unit}`,
-        conditions: JSON.stringify([{ fact: data.ruleType, operator: meta.comparator, value: data.threshold }]),
-        actions: JSON.stringify([{ type: 'alert', params: { severity: data.severity } }]),
-        updatedBy,
+        ...ruleData,
+        ...(data.enabled !== undefined && { enabled: data.enabled }),
       },
     });
     await knowledgeBase.reload();
@@ -167,32 +242,36 @@ class AlertRuleTierService {
     await knowledgeBase.reload();
   }
 
-  /** So khớp 1 giá trị đo được với bảng mốc của 1 ruleType — trả về severity của mốc khớp nhất, hoặc null nếu dưới mọi mốc. */
-  evaluate(ruleType: RuleType, value: number, grouped: Record<string, { threshold: number; severity: string }[]>): string | null {
+  /** Mốc khớp nhất với 1 giá trị đo được (mốc chặt nhất trước), hoặc null nếu dưới mọi mốc đang bật. */
+  private matchTier(ruleType: RuleType, value: number, grouped: Record<string, GroupedTier[]>): GroupedTier | null {
     const tiers = grouped[ruleType] || [];
     if (tiers.length === 0) return null;
     const comparator = RULE_TYPES[ruleType].comparator;
-    const sorted = [...tiers].sort((a, b) => comparator === 'gte' ? b.threshold - a.threshold : a.threshold - b.threshold);
+    const sorted = [...tiers].sort((a, b) => (comparator === 'gte' ? b.threshold - a.threshold : a.threshold - b.threshold));
     for (const tier of sorted) {
       const matched = comparator === 'gte' ? value >= tier.threshold : value <= tier.threshold;
-      if (matched) return tier.severity;
+      if (matched) return tier;
     }
     return null;
   }
 
-  /** Như evaluate(), nhưng kèm explanation — dùng khi cần hiển thị lý do phát cảnh báo cho người dùng. */
+  /** So khớp 1 giá trị đo được với bảng mốc của 1 ruleType — trả về severity của mốc khớp nhất, hoặc null nếu dưới mọi mốc. */
+  evaluate(ruleType: RuleType, value: number, grouped: Record<string, GroupedTier[]>): string | null {
+    return this.matchTier(ruleType, value, grouped)?.severity ?? null;
+  }
+
+  /** Như evaluate(), nhưng kèm explanation lấy từ nội dung cảnh báo của luật — dùng khi cần hiển thị lý do. */
   evaluateWithExplanation(
     ruleType: RuleType,
     value: number,
-    grouped: Record<string, { threshold: number; severity: string }[]>,
+    grouped: Record<string, GroupedTier[]>,
   ): { severity: string | null; explanation: string } {
-    const severity = this.evaluate(ruleType, value, grouped);
+    const tier = this.matchTier(ruleType, value, grouped);
     const meta = RULE_TYPES[ruleType];
-    const op = meta.comparator === 'gte' ? '>=' : '<=';
-    const explanation = severity
-      ? `${meta.label}: giá trị ${value} ${op} mốc đã cấu hình → ${severity}`
-      : `${meta.label}: giá trị ${value} chưa vượt mốc nào đã cấu hình`;
-    return { severity, explanation };
+    if (!tier) {
+      return { severity: null, explanation: `${meta.label}: giá trị ${value} chưa vượt mốc nào đang bật` };
+    }
+    return { severity: tier.severity, explanation: renderMessage(tier.message, { value }) };
   }
 }
 

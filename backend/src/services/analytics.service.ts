@@ -1,5 +1,5 @@
 import prisma from '../config/prisma';
-import { evaluate } from '../expertSystem';
+import { evaluate, renderMessage } from '../expertSystem';
 
 const WEEKDAY_LABELS = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 // Sắp xếp hiển thị bắt đầu từ Thứ 2 -> CN
@@ -196,13 +196,15 @@ export class AnalyticsService {
     );
     const firedIds = new Set(dssResult.firedRules.map((r) => r.actionOutputs[0]?.params?.id));
     const explanationById = new Map(dssResult.firedRules.map((r) => [r.actionOutputs[0]?.params?.id, r.explanation]));
+    // Câu hỏi quyết định lấy từ chính luật (action.params.message) — sửa được ở màn hình quản lý luật.
+    const messageById = new Map(dssResult.firedRules.map((r) => [r.actionOutputs[0]?.params?.id, r.actionOutputs[0]?.params?.message]));
 
     if (firedIds.has('d1')) {
       const z = [...zoneEfficiency].sort((a, b) => b.avgOccupancy - a.avgOccupancy)[0];
       const underusedZone = [...zoneEfficiency].sort((a, b) => a.avgOccupancy - b.avgOccupancy)[0];
       decisions.push({
         id: 'd1',
-        question: `Có nên mở thêm chỗ đỗ ở ${z.zone}?`,
+        question: renderMessage(messageById.get('d1'), { zone: z.zone }),
         analysis: `${z.zone} có occupancy ${z.avgOccupancy}% — gần đầy. Doanh thu/chỗ hiện tại: ${z.revenuePerSpot.toLocaleString('vi-VN')}đ.`,
         explanation: explanationById.get('d1'),
         options: [
@@ -227,7 +229,7 @@ export class AnalyticsService {
     if (firedIds.has('d2')) {
       decisions.push({
         id: 'd2',
-        question: 'Có nên điều chỉnh giá vào cuối tuần?',
+        question: renderMessage(messageById.get('d2')),
         analysis: `Cuối tuần chỉ ${Math.round(weekendAvg)} xe/ngày (vs ${Math.round(weekdayAvg)} xe ngày thường) — giảm ${weekendDropPercent}%.`,
         explanation: explanationById.get('d2'),
         options: [
@@ -248,7 +250,7 @@ export class AnalyticsService {
     if (firedIds.has('d3')) {
       decisions.push({
         id: 'd3',
-        question: 'Có nên triển khai chiến dịch bán gói dịch vụ?',
+        question: renderMessage(messageById.get('d3')),
         analysis: `${percentWithoutPackage}% khách hàng đỗ xe thường xuyên (≥5 lần/tháng) chưa đăng ký gói dịch vụ (${withoutPackageCount}/${frequentCustomerIds.size} khách).`,
         explanation: explanationById.get('d3'),
         options: [

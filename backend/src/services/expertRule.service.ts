@@ -1,8 +1,6 @@
 import prisma from '../config/prisma';
-import { knowledgeBase, inferenceEngine } from '../expertSystem';
+import { knowledgeBase, inferenceEngine, validateRule } from '../expertSystem';
 import type { Condition, Action, Fact } from '../expertSystem';
-
-const VALID_OPERATORS = ['gte', 'lte', 'gt', 'lt', 'eq', 'neq'];
 
 interface ExpertRuleInput {
   code: string;
@@ -41,34 +39,12 @@ class ExpertRuleService {
     return { ...row, conditions: JSON.parse(row.conditions), actions: JSON.parse(row.actions) };
   }
 
+  /**
+   * Validate chung + validate riêng theo domain (xem expertSystem/validation.ts) — luật thiếu
+   * field mà service tiêu thụ cần sẽ bị chặn ngay lúc lưu, không lưu được rồi lúc chạy mới lỗi.
+   */
   private validate(data: ExpertRuleInput) {
-    if (!data.code?.trim()) {
-      const err: any = new Error('Mã luật không được để trống');
-      err.status = 400;
-      throw err;
-    }
-    if (!data.domain?.trim()) {
-      const err: any = new Error('Nhóm luật (domain) không được để trống');
-      err.status = 400;
-      throw err;
-    }
-    if (!Array.isArray(data.conditions) || data.conditions.length === 0) {
-      const err: any = new Error('Cần ít nhất 1 điều kiện');
-      err.status = 400;
-      throw err;
-    }
-    for (const c of data.conditions) {
-      if (!c.fact || !VALID_OPERATORS.includes(c.operator) || typeof c.value !== 'number') {
-        const err: any = new Error('Điều kiện không hợp lệ');
-        err.status = 400;
-        throw err;
-      }
-    }
-    if (!Array.isArray(data.actions) || data.actions.length === 0) {
-      const err: any = new Error('Cần ít nhất 1 hành động');
-      err.status = 400;
-      throw err;
-    }
+    validateRule(data);
   }
 
   async create(data: ExpertRuleInput, updatedBy?: number) {

@@ -5,6 +5,7 @@ interface RuleTier {
   ruleType: string;
   threshold: number;
   severity: string;
+  enabled?: boolean;
 }
 
 // Chiều so sánh cố định theo từng loại — khớp với backend (alertRuleTier.service.ts RULE_TYPES).
@@ -30,7 +31,8 @@ export function useAlertRuleTiers() {
     api.get<RuleTier[]>('/alert-rule-tiers')
       .then((res) => {
         const g: Record<string, RuleTier[]> = {};
-        res.data.forEach((t) => { (g[t.ruleType] ??= []).push(t); });
+        // Chỉ mốc đang bật mới dùng để tô màu/đánh dấu — khớp với Inference Engine ở backend.
+        res.data.filter((t) => t.enabled !== false).forEach((t) => { (g[t.ruleType] ??= []).push(t); });
         setGrouped(g);
       })
       .catch(() => {})
