@@ -38,7 +38,7 @@ migrations, chạy toàn bộ seed theo đúng thứ tự, rồi in ra số bả
 
 | Thiếu gì | Thuộc tính năng |
 |---|---|
-| `AlertSettings`, `AlertRuleTiers` | Cấu hình ngưỡng cảnh báo |
+| `AlertSettings`, `ExpertRules` | Cấu hình ngưỡng cảnh báo + Knowledge Base của hệ chuyên gia (bảng `AlertRuleTiers` cũ đã bị xoá ở migration `20260829000000_drop_alert_rule_tier`, dữ liệu gộp vào `ExpertRules` với `domain = "alert"`) |
 | `PermissionGroups`, `GroupPermissions`, `Users.PermissionGroupId` | Nhóm quyền (phân quyền Thêm/Sửa/Xóa) |
 | `ParkingPackages.ValidFrom` / `ValidTo` | Khoảng thời gian bán gói dịch vụ |
 | `ParkingRecords.HourlyRateApplied` / `DailyRateApplied` | Chốt giá tại thời điểm xe vào |

@@ -30,11 +30,14 @@ không?".
 
 ```
 expertSystem/
-├── types.ts            # Condition, Action, Rule, Fact, RuleResult, EvaluationResult
-├── knowledgeBase.ts     # Load/cache luật từ DB, seed mặc định nếu bảng trống
+├── types.ts              # Condition, Action, Rule, Fact, RuleResult, EvaluationResult
+├── knowledgeBase.ts      # Load/cache luật ĐANG BẬT từ DB, seed luật mặc định còn thiếu (theo mã luật)
 ├── inferenceEngine.ts    # evaluate(facts, domain) — AND-match điều kiện, sinh explanation
-├── rules/defaults.ts     # Seed data mặc định (11 rule ban đầu)
-└── index.ts              # Facade: evaluate(), reload()
+├── domainSpecs.ts        # Tập giá trị hợp lệ của từng domain (whitelist)
+├── validation.ts         # Validate luật: phần chung + phần riêng theo domain
+├── messageTemplate.ts    # renderMessage() — điền số liệu thật vào mẫu {tenBien}
+├── rules/defaults.ts     # Seed data mặc định (11 rule ban đầu, kèm câu gợi ý dạng mẫu)
+└── index.ts              # Facade: evaluate(), reload(), validateRule(), renderMessage()
 ```
 
 Mỗi **luật (Rule)** gồm:
@@ -71,9 +74,11 @@ riêng nó hơi kỳ".
 "Xe đỗ quá lâu ≥48h → Nguy hiểm") thành các `ExpertRule` với `domain = "alert"`. Sau đó:
 
 - `alertRuleTier.service.ts` được viết lại thành **adapter mỏng** trên `ExpertRule` — giữ nguyên
-  toàn bộ API cũ (`list`, `create`, `update`, `delete`, `evaluate`) nên `report.service.ts`,
-  frontend hook `useAlertRuleTiers`, và các trang dùng nó (VD tô màu thời gian đỗ ở `ParkingExit.tsx`)
-  **không cần sửa gì**.
+  toàn bộ API cũ (`list`, `create`, `update`, `delete`, `evaluate`).
+  > **Cập nhật 01/09/2026:** ở đợt này adapter *đã* phải sửa thêm — `getAllGrouped()` trước đó
+  > không lọc `enabled` nên mốc đã tắt vẫn phát cảnh báo. Hook `useAlertRuleTiers` cũng được sửa
+  > để bỏ qua mốc đã tắt. Chi tiết ở
+  > [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).
 - Bảng `AlertRuleTiers` cũ đã **xoá** khỏi schema (migration `20260829000000_drop_alert_rule_tier`)
   sau khi xác nhận dữ liệu đã chuyển đầy đủ (8/8 mốc, kể cả mốc tuỳ chỉnh).
 - Tab **"Cấu hình mức độ"** (dễ dùng: chọn loại cảnh báo có sẵn + ngưỡng + mức độ) và tab
@@ -130,3 +135,25 @@ riêng nó hơi kỳ".
   mức độ" (8/8 mốc, kể cả mốc tuỳ chỉnh, đọc đúng từ `ExpertRule`) → tab "Cấu hình nâng cao" (11 luật,
   test luật "Gợi ý gói quý" với `frequency=15` → khớp đúng) → không còn console error/warning phát
   sinh từ code mới.
+
+---
+
+## 9. Đợt tiếp theo (01/09/2026) — sửa logic `enabled` & validate theo domain
+
+Sau khi dùng thử bộ luật ở mục 1–8, ba vấn đề còn lại đã được xử lý:
+
+1. **Luật tắt vẫn có tác dụng ở domain `alert`.** `getAllGrouped()` — nguồn dữ liệu duy nhất của
+   `getAlerts()` — không lọc `enabled`, nên tắt một mốc cảnh báo mà nó vẫn phát. Đã lọc; đồng thời
+   thêm cột bật/tắt ở tab "Cấu hình mức độ" (trước đó **không có UI nào tắt được luật `alert`**).
+2. **Luật mặc định có thể không bao giờ được seed.** `knowledgeBase` seed theo `count() === 0` trên
+   toàn bảng, trong khi tab "Cấu hình mức độ" cũng ghi 7 luật `alert` vào cùng bảng đó. Đã đổi sang
+   seed theo **mã luật**.
+3. **Validate quá lỏng.** Trước chỉ kiểm tra "có condition và action". Nay mỗi domain có bộ quy tắc
+   riêng (`expertSystem/validation.ts` + `domainSpecs.ts`), chặn cả trường hợp luật fire được nhưng
+   code không xử lý được (VD `analytics` với `id = "d9"`).
+
+Kèm theo: nội dung câu gợi ý chuyển vào `action.params.message` dạng mẫu `{tenBien}` nên admin sửa
+được câu chữ ngay trên UI; dữ liệu cũ được tự bù `message` khi khởi động, không cần migration SQL.
+
+Chi tiết đầy đủ (kèm log kiểm thử end-to-end với SQL Server và kịch bản demo):
+[SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).

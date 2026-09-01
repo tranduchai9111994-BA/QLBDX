@@ -112,8 +112,12 @@ Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn.
 | **Cảnh báo thông minh** | Xe đỗ bất thường (so với TB loại xe), biến động doanh thu, cơ hội gia hạn, mất cân bằng khu vực | Màn hình Cảnh báo (badge "Smart") |
 | **Dashboard insights** | So sánh tuần này/tuần trước, giờ cao điểm, xu hướng 7 ngày, gợi ý hành động cho admin | Trang Tổng quan |
 | **Phân tích & Gợi ý (DSS)** | Phân tích theo thứ/giờ/khu vực + đề xuất quyết định (mở rộng chỗ, đổi giá cuối tuần, chiến dịch bán gói) kèm tác động & rủi ro | Trang Phân tích & Gợi ý (admin) |
+| **Hệ chuyên gia cấu hình được** | Toàn bộ ngưỡng + nội dung gợi ý nằm trong Knowledge Base (bảng `ExpertRules`), admin thêm/sửa/bật/tắt qua UI. Luật đang **tắt** không được nạp vào Inference Engine nên ngừng sinh gợi ý/cảnh báo ngay | Cảnh báo → tab "Cấu hình mức độ" & "Cấu hình nâng cao" |
 
-> Xem chi tiết thiết kế tại [SMART_UPGRADE_PLAN.md](docs/archive/SMART_UPGRADE_PLAN.md).
+> Xem chi tiết thiết kế tại [SMART_UPGRADE_PLAN.md](docs/archive/SMART_UPGRADE_PLAN.md),
+> đợt chuyển sang hệ chuyên gia tại [NANG_CAP_NANG_CAO.md](docs/NANG_CAP_NANG_CAO.md), và đợt sửa
+> logic bật/tắt luật + validate theo domain tại
+> [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](docs/SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).
 
 ---
 
@@ -126,6 +130,11 @@ QLBDX/
 │   │   ├── config/          # DB, JWT config
 │   │   ├── controllers/     # Nhận request → gọi service (gồm analytics.controller.ts mới)
 │   │   ├── services/        # Nghiệp vụ chính (gồm analytics.service.ts — Phân tích & Gợi ý DSS)
+│   │   ├── expertSystem/    # Hệ chuyên gia: Knowledge Base + Inference Engine
+│   │   │                    #   knowledgeBase.ts (nạp luật enabled=true từ DB)
+│   │   │                    #   inferenceEngine.ts (AND-match + explanation)
+│   │   │                    #   validation.ts + domainSpecs.ts (validate luật theo domain)
+│   │   │                    #   messageTemplate.ts (điền số liệu vào mẫu {tenBien})
 │   │   ├── routes/          # Định nghĩa URL
 │   │   ├── middlewares/     # Auth JWT, activity logger, validate
 │   │   ├── validators/      # Zod schema
@@ -169,6 +178,9 @@ QLBDX/
 │   ├── KIEN_TRUC_CHI_TIET.md       # Kiến trúc chi tiết (API, luồng nghiệp vụ, rủi ro)
 │   ├── Function.md                 # Đặc tả chức năng theo endpoint
 │   ├── SMART_FEATURES_DEEP_DIVE.md # Giải thích kỹ thuật 5 tính năng thông minh
+│   ├── CAU_TRUC_CODE_TINH_NANG_THONG_MINH.md # Code mẫu có chú thích từng dòng
+│   ├── NANG_CAP_NANG_CAO.md        # Đợt chuyển sang Rule-based Expert System
+│   ├── SUA_LOI_ENABLED_VA_VALIDATE_RULE.md # Sửa logic enabled + validate rule theo domain
 │   ├── demo_accounts.md            # Tài khoản demo chi tiết
 │   ├── CHANGELOG.md                # Lịch sử thay đổi
 │   └── archive/                    # Tài liệu kế hoạch/audit đã hoàn thành

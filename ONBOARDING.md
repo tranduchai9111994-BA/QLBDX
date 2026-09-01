@@ -67,7 +67,7 @@ SQL Server của bạn khác cấu hình mặc định? Truyền tham số:
 ```
 
 > **Không dùng `database/legacy/setup.sql`.** File đó là bản dump cũ (07/2026), thiếu toàn bộ bảng
-> thêm về sau (`AlertSettings`, `AlertRuleTiers`, `PermissionGroups`, `GroupPermissions`, cột
+> thêm về sau (`AlertSettings`, `ExpertRules`, `PermissionGroups`, `GroupPermissions`, cột
 > `ValidFrom`/`ValidTo` của gói dịch vụ...) — chạy sẽ ra schema sai. Nguồn sự thật duy nhất của
 > schema là **Prisma migrations** trong `backend/prisma/migrations/`.
 

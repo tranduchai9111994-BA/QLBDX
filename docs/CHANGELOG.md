@@ -1,4 +1,35 @@
-# Cập nhật hệ thống QLBDX — 26/08/2026
+# Lịch sử cập nhật hệ thống QLBDX
+
+---
+
+## 01/09/2026 — Sửa logic `enabled` của luật & validate luật theo domain
+
+**Không có thay đổi schema, không cần chạy migration.** Chỉ cần `git pull` rồi restart backend —
+dữ liệu luật cũ được tự bù field còn thiếu khi khởi động.
+
+| Nhóm | Thay đổi |
+|---|---|
+| Sửa lỗi | Mốc cảnh báo đã tắt vẫn phát cảnh báo — `alertRuleTierService.getAllGrouped()` không lọc `enabled`. Đã lọc. |
+| Sửa lỗi | Luật mặc định (`package`/`analytics`/`report`) có thể không bao giờ được seed nếu tab "Cấu hình mức độ" ghi luật `alert` trước. Đã đổi sang seed theo mã luật. |
+| Mới | Cột bật/tắt mốc ngưỡng ở tab Cảnh báo → "Cấu hình mức độ" (trước đó không có UI nào tắt được luật `alert`). |
+| Mới | Validate luật theo từng domain (`expertSystem/validation.ts` + `domainSpecs.ts`) — chặn cả trường hợp luật lưu được nhưng runtime không xử lý được. |
+| Mới | Nội dung câu gợi ý chuyển vào `action.params.message` dạng mẫu `{tenBien}` — admin sửa câu chữ trên UI, không cần build lại. |
+
+Chi tiết + log kiểm thử: [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).
+
+---
+
+## 29/08/2026 — Rule-based Expert System & hợp nhất cấu hình cảnh báo
+
+Chuyển các logic "thông minh" từ if/else hardcode sang module hệ chuyên gia
+(`backend/src/expertSystem/`), gộp bảng `AlertRuleTier` cũ vào `ExpertRule` (`domain = "alert"`).
+Có migration DB (`20260828235326_add_expert_rule`, `20260829000000_drop_alert_rule_tier`).
+
+Chi tiết: [NANG_CAP_NANG_CAO.md](NANG_CAP_NANG_CAO.md).
+
+---
+
+## 26/08/2026 — Đợt cập nhật lớn (hướng dẫn bên dưới)
 
 File này mô tả toàn bộ thay đổi trong đợt cập nhật này, hướng dẫn tải về/cập nhật cho các thành viên trong nhóm, và cách lấy dữ liệu mới nhất để kiểm tra.
 

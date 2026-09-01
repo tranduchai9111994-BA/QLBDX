@@ -116,8 +116,10 @@ Khuyến nghị dựa trên **hành vi quá khứ của chính người dùng đ
 | Vai trò | File |
 |---|---|
 | Logic sinh cảnh báo | `ReportService` — `backend/src/services/report.service.ts` (~dòng 482–601) |
-| Bảng ngưỡng cấu hình được | `AlertRuleTierService` — `backend/src/services/alertRuleTier.service.ts` |
-| Model dữ liệu ngưỡng | `AlertRuleTier` — `backend/prisma/schema.prisma` |
+| Bảng ngưỡng cấu hình được | `AlertRuleTierService` — `backend/src/services/alertRuleTier.service.ts` (adapter mỏng trên `ExpertRule`) |
+| Model dữ liệu ngưỡng | `ExpertRule` với `domain = "alert"` — `backend/prisma/schema.prisma` (bảng `AlertRuleTier` cũ đã bị xoá) |
+| Lọc luật đang bật | `alertRuleTierService.getAllGrouped()` — chỉ trả mốc `enabled = true`, đây là đầu vào duy nhất của `getAlerts()` |
+| Validate luật theo domain | `backend/src/expertSystem/validation.ts` + `domainSpecs.ts` |
 | API cấu hình ngưỡng (admin) | `backend/src/routes/alertRuleTier.routes.ts`, `backend/src/controllers/alertRuleTier.controller.ts` |
 | Hiển thị | `frontend/src/pages/Alerts.tsx` (tab cảnh báo + tab "Cấu hình mức độ") |
 
@@ -132,7 +134,7 @@ Khuyến nghị dựa trên **hành vi quá khứ của chính người dùng đ
 
 ### Điểm nâng cấp so với thiết kế ban đầu: ngưỡng KHÔNG hardcode
 
-Bản kế hoạch gốc (`docs/archive/SMART_UPGRADE_PLAN.md`) mô tả ngưỡng cố định trong code (VD: "duration > avg × 3"). Khi triển khai thực tế, hệ thống được nâng lên một mức: toàn bộ ngưỡng (`parkingAnomalyMultiplier`, `revenueDropPercent`, `renewalFrequency`, `zoneImbalanceMaxPercent`, `zoneNearFullPercent`, `longParkingHours`, `suspiciousPaymentAmount`) được lưu trong bảng `AlertRuleTier`, **admin tự chỉnh qua giao diện** (Cảnh báo → tab "Cấu hình mức độ"), không cần sửa code hay deploy lại. Mỗi loại luật còn hỗ trợ **nhiều mốc (tier) với mức độ nghiêm trọng khác nhau** — ví dụ "đỗ quá 24h → warning, quá 48h → danger" — hàm `evaluate()` trong `alertRuleTier.service.ts` chọn mốc khớp nghiêm trọng nhất:
+Bản kế hoạch gốc (`docs/archive/SMART_UPGRADE_PLAN.md`) mô tả ngưỡng cố định trong code (VD: "duration > avg × 3"). Khi triển khai thực tế, hệ thống được nâng lên một mức: toàn bộ ngưỡng (`parkingAnomalyMultiplier`, `revenueDropPercent`, `renewalFrequency`, `zoneImbalanceMaxPercent`, `zoneNearFullPercent`, `longParkingHours`, `suspiciousPaymentAmount`) được lưu trong bảng `ExpertRules` (`domain = "alert"`), **admin tự chỉnh qua giao diện** (Cảnh báo → tab "Cấu hình mức độ"), không cần sửa code hay deploy lại. Mỗi mốc còn **bật/tắt được** — mốc tắt bị `getAllGrouped()` loại khỏi Inference Engine nên ngừng phát cảnh báo ngay (kiểm chứng: tắt cả 2 mốc "Xe đỗ quá lâu" thì số cảnh báo loại đó về 0, bật lại thì quay về đủ). Mỗi loại luật còn hỗ trợ **nhiều mốc (tier) với mức độ nghiêm trọng khác nhau** — ví dụ "đỗ quá 24h → warning, quá 48h → danger" — hàm `evaluate()` trong `alertRuleTier.service.ts` chọn mốc khớp nghiêm trọng nhất:
 
 ```ts
 evaluate(ruleType, value, grouped): string | null {
@@ -265,10 +267,11 @@ Mỗi `decision` render thành 1 `Collapse` panel: tiêu đề là câu hỏi ra
 | **DSS — phân tích phương án & hậu quả quyết định** | Tính năng 5 | `getInsights()` trong `analytics.service.ts`, mảng `decisions` với `estimatedImpact`/`risk` |
 | **Hệ thống khuyến nghị (recommender)** | Tính năng 2 | `getRecommendation()` trong `customerPackage.service.ts` |
 | **Hệ thống cảnh báo / giám sát tiêu chí thành công** | Tính năng 3 | `report.service.ts` phần "Cảnh báo thông minh nâng cao" + `alertRuleTier.service.ts` |
+| **Hệ chuyên gia (Knowledge Base + Inference Engine + Explanation)** | Cả 5 tính năng | `backend/src/expertSystem/` — luật lưu trong DB, bật/tắt được, validate theo domain, mỗi kết quả kèm chuỗi giải thích |
 | **Trải nghiệm thông minh — thay đổi những gì người dùng thấy** | Tính năng 4 | `smartLookup()` trong `parking.service.ts` + auto-`setFieldsValue` trong `ParkingEntry.tsx` |
 | **Giảm thiểu sai sót người dùng** | Tính năng 4 (auto-fill giảm chọn nhầm chỗ), Tính năng 3 (phát hiện bất thường sớm) | như trên |
 | **Hệ thống cải thiện/thích nghi theo thời gian** | Cả 5 tính năng | Mọi ngưỡng/tính toán đều dùng **rolling window** (30 ngày gần nhất) chứ không phải hằng số tĩnh nhập 1 lần — dữ liệu tích luỹ thêm thì trung bình, tần suất, giờ cao điểm tự cập nhật theo lần gọi API tiếp theo, không cần "huấn luyện lại" |
-| **Cấu hình được, không hardcode (đáp ứng nhu cầu khác nhau mỗi bãi xe)** | Tính năng 3 | Bảng `AlertRuleTier` trong DB + UI cấu hình cho admin |
+| **Cấu hình được, không hardcode (đáp ứng nhu cầu khác nhau mỗi bãi xe)** | Tính năng 3 | Bảng `ExpertRules` trong DB + UI cấu hình cho admin (cả ngưỡng, nội dung câu gợi ý, và cờ bật/tắt) |
 
 ---
 
@@ -281,13 +284,13 @@ Mỗi `decision` render thành 1 `Collapse` panel: tiêu đề là câu hỏi ra
 → Xem mục 0. Tóm tắt: dữ liệu 1 bãi xe không đủ lớn để ML có lợi thế thống kê rõ rệt so với rule-based; rule-based dễ giải thích và dễ tin cậy hơn với người vận hành không rành kỹ thuật; chi phí hạ tầng thấp hơn hẳn (không cần service ML riêng, không cần retrain).
 
 **Q: Ngưỡng (VD: "gấp 3 lần trung bình") được chọn dựa trên cơ sở gì, có phải chỉ đoán bừa?**
-→ Ban đầu là ước lượng nghiệp vụ hợp lý (tương tự cách một quản lý giàu kinh nghiệm sẽ đặt ngưỡng cảnh báo), nhưng điểm quan trọng là **toàn bộ ngưỡng đều lưu trong bảng `AlertRuleTier` và admin chỉnh được qua UI**, không hardcode trong code. Vì vậy hệ thống không cứng nhắc theo 1 con số đoán ban đầu — mỗi bãi xe có thể tinh chỉnh ngưỡng theo đặc thù thực tế của mình mà không cần sửa code/deploy lại.
+→ Ban đầu là ước lượng nghiệp vụ hợp lý (tương tự cách một quản lý giàu kinh nghiệm sẽ đặt ngưỡng cảnh báo), nhưng điểm quan trọng là **toàn bộ ngưỡng đều lưu trong bảng `ExpertRules` và admin chỉnh được qua UI** (thêm/sửa/xoá/bật/tắt), không hardcode trong code. Vì vậy hệ thống không cứng nhắc theo 1 con số đoán ban đầu — mỗi bãi xe có thể tinh chỉnh ngưỡng theo đặc thù thực tế của mình mà không cần sửa code/deploy lại.
 
 **Q: Hệ thống có "học" được gì không, hay ngưỡng cố định mãi mãi?**
 → Bản thân *ngưỡng* (threshold) là cố định cho tới khi admin đổi tay — đây là điểm khác biệt thật với ML (ML tự điều chỉnh tham số qua quá trình huấn luyện, rule-based thì không). Nhưng *dữ liệu đầu vào cho luật* luôn là rolling window (30 ngày gần nhất) — nên các con số trung bình, tần suất, giờ cao điểm luôn tự cập nhật theo dữ liệu mới nhất mỗi lần gọi API, không "đóng băng" theo dữ liệu tại thời điểm code được viết. Đây là lý do khi trả lời câu này nên phân biệt rõ 2 khái niệm: "ngưỡng so sánh" (tĩnh, admin kiểm soát) và "dữ liệu để so sánh" (động, tự cập nhật).
 
 **Q: 5 tính năng này có phụ thuộc lẫn nhau không, hay độc lập?**
-→ Phần lớn độc lập về code (mỗi tính năng có service/endpoint riêng), nhưng **chia sẻ chung 1 nguồn ngưỡng cấu hình** (`AlertRuleTier`) giữa Tính năng 3 và gián tiếp ảnh hưởng tới các "suggestions" trong Tính năng 1 — đây là thiết kế có chủ đích để tránh tình trạng "2 nơi hiển thị 2 ngưỡng khác nhau cho cùng 1 khái niệm" (từng là một lỗi thực tế trong hệ thống, đã ghi nhận và sửa — xem mục A-02 trong `docs/archive/QLBDX_UIUX_Review_and_Remediation_Plan.md`).
+→ Phần lớn độc lập về code (mỗi tính năng có service/endpoint riêng), nhưng **chia sẻ chung 1 nguồn ngưỡng cấu hình** (`ExpertRules`) giữa Tính năng 3 và gián tiếp ảnh hưởng tới các "suggestions" trong Tính năng 1 — đây là thiết kế có chủ đích để tránh tình trạng "2 nơi hiển thị 2 ngưỡng khác nhau cho cùng 1 khái niệm" (từng là một lỗi thực tế trong hệ thống, đã ghi nhận và sửa — xem mục A-02 trong `docs/archive/QLBDX_UIUX_Review_and_Remediation_Plan.md`).
 
 **Q: Có thể chứng minh các tính năng này chạy đúng bằng cách nào (không chỉ đọc code)?**
 → Gợi ý demo trực tiếp: (1) Tính năng 4 — gõ 1 biển số khách quen ở màn Xe vào, quan sát ô chọn chỗ tự điền sẵn; (2) Tính năng 2 — checkout 1 xe của khách có tần suất cao, quan sát Alert gợi ý gói hiện lên với đúng tên gói/giá; (3) Tính năng 3 — vào Cảnh báo → Cấu hình mức độ, đổi 1 ngưỡng, quan sát danh sách cảnh báo đổi theo ngay; (4) Tính năng 5 — vào Phân tích & Gợi ý, đổi bộ lọc kỳ (tháng/quý), quan sát `zoneEfficiency` và `decisions` thay đổi theo đúng kỳ đang chọn (điểm này còn chứng minh được cả bug time-weighted occupancy đã sửa, vì trước đây đổi kỳ không làm % lấp đầy thay đổi).

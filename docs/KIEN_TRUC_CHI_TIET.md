@@ -43,12 +43,13 @@
 
 | Thành phần | Số file | Ghi chú |
 |---|---|---|
-| Backend services | 17 | ~3,980 dòng (gồm `analytics.service.ts`, `alertSettings.service.ts`, `alertRuleTier.service.ts`) |
+| Backend services | 19 | ~4,300 dòng (gồm `analytics.service.ts`, `alertSettings.service.ts`, `alertRuleTier.service.ts`, `expertRule.service.ts`) |
+| Backend expert system | 7 file | `src/expertSystem/` — Knowledge Base, Inference Engine, validate luật theo domain, mẫu nội dung gợi ý |
 | Backend controllers | 16 | mỏng, chỉ điều phối |
 | Backend routes | 16 + index | khai báo URL + middleware chain |
 | Backend validators | 11 | Zod schema |
 | Frontend pages | 18 | ~6,300 dòng (gồm `Analytics.tsx`) |
-| Prisma models | 11 | SQL Server |
+| Prisma models | 17 | SQL Server (gồm `ExpertRule` — Knowledge Base; bảng `AlertRuleTier` cũ đã bị xoá) |
 | Seed data | 1 | ~800 dòng, dữ liệu nhiều năm |
 
 ---
