@@ -12,6 +12,8 @@ router.get('/form-spec', auth, (req, res) => expertRuleController.formSpec(req, 
 router.get('/:id', auth, (req, res) => expertRuleController.getById(req, res));
 router.post('/', auth, adminOnly, (req, res) => expertRuleController.create(req, res));
 router.put('/:id', auth, adminOnly, (req, res) => expertRuleController.update(req, res));
+// Bật/tắt nhanh 1 luật — PATCH thay vì PUT vì chỉ đổi đúng 1 field, không cần gửi lại cả rule.
+router.patch('/:id/enabled', auth, adminOnly, (req, res) => expertRuleController.setEnabled(req, res));
 router.delete('/:id', auth, adminOnly, (req, res) => expertRuleController.delete(req, res));
 router.post('/evaluate', auth, adminOnly, (req, res) => expertRuleController.evaluate(req, res));
 

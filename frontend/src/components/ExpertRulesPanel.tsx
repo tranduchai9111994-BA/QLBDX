@@ -60,7 +60,7 @@ interface RuleFormValues {
  * (dùng khi nhiều luật cùng domain đều thỏa mãn, ví dụ ngưỡng gói năm/quý/tháng).
  */
 const ExpertRulesPanel: React.FC = () => {
-  const { rules: allRules, domains, formSpec, loading, createRule, updateRule, deleteRule, testEvaluate } = useExpertRules();
+  const { rules: allRules, domains, formSpec, loading, createRule, updateRule, setRuleEnabled, deleteRule, testEvaluate } = useExpertRules();
   const rules = useMemo(() => allRules.filter((r) => r.domain !== 'alert'), [allRules]);
 
   const [filterDomain, setFilterDomain] = useState<string | undefined>();
@@ -245,18 +245,11 @@ const ExpertRulesPanel: React.FC = () => {
     });
   };
 
+  // Bật/tắt nhanh dùng PATCH /expert-rules/:id/enabled — chỉ gửi đúng cờ enabled thay vì
+  // gửi lại toàn bộ rule qua PUT, nên không thể ghi đè nhầm nội dung luật.
   const handleToggleEnabled = async (rule: ExpertRule, enabled: boolean) => {
     try {
-      await updateRule(rule.id, {
-        code: rule.code,
-        domain: rule.domain,
-        name: rule.name,
-        description: rule.description,
-        priority: rule.priority,
-        enabled,
-        conditions: rule.conditions,
-        actions: rule.actions,
-      });
+      await setRuleEnabled(rule.id, enabled);
     } catch {
       message.error('Không cập nhật được trạng thái');
     }

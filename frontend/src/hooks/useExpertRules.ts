@@ -102,6 +102,16 @@ export function useExpertRules() {
     await fetchDomains();
   };
 
+  /**
+   * Bật/tắt nhanh 1 luật (Switch trên bảng) — gọi PATCH chỉ gửi đúng cờ `enabled`.
+   * Không dùng updateRule() cho việc này: PUT là full-replace nên phải gửi lại toàn bộ rule,
+   * thừa dữ liệu và tạo cơ hội ghi đè nhầm nội dung luật chỉ vì muốn đổi 1 boolean.
+   */
+  const setRuleEnabled = async (id: number, enabled: boolean) => {
+    await api.patch(`/expert-rules/${id}/enabled`, { enabled });
+    await fetchRules();
+  };
+
   const deleteRule = async (id: number) => {
     await api.delete(`/expert-rules/${id}`);
     await fetchRules();
@@ -112,5 +122,5 @@ export function useExpertRules() {
     return res.data;
   };
 
-  return { rules, domains, formSpec, loading, fetchRules, createRule, updateRule, deleteRule, testEvaluate };
+  return { rules, domains, formSpec, loading, fetchRules, createRule, updateRule, setRuleEnabled, deleteRule, testEvaluate };
 }

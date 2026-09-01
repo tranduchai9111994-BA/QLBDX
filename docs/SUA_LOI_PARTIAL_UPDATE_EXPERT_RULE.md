@@ -1,8 +1,8 @@
 # Sửa lỗi PUT /expert-rules ghi đè field tùy chọn không gửi
 
 > Ngày: 02/09/2026
-> File thay đổi: `backend/src/services/expertRule.service.ts` (hàm `update()`)
-> Loại: sửa lỗi tiềm ẩn (latent bug) — không phải hotfix, UI hiện tại chưa dính
+> Phần 1–5: sửa `update()` trong `backend/src/services/expertRule.service.ts` — lỗi tiềm ẩn (latent bug), UI hiện tại chưa dính.
+> Phần 6: bổ sung endpoint `PATCH /expert-rules/:id/enabled` cho thao tác bật/tắt nhanh (FE + BE).
 
 ---
 
@@ -188,12 +188,75 @@ Dữ liệu test đã dọn sạch — không còn rule `TEST_PARTIAL_UPDATE` n�
   (đúng trường hợp UI hiện tại).
 - Một client vốn *cố ý* dựa vào việc "không gửi `priority` để reset về 100" sẽ mất hành vi đó —
   không có client nào trong repo làm vậy.
-- **Khuyến nghị tiếp theo (chưa làm):** cân nhắc tách một endpoint `PATCH /expert-rules/:id/enabled`
-  riêng cho thao tác bật/tắt nhanh, thay vì Switch trên UI phải gửi lại toàn bộ object rule.
+- Khuyến nghị tách endpoint bật/tắt riêng **đã được thực hiện** — xem phần 6 dưới đây.
 
 ---
 
-## 6. Tài liệu liên quan
+## 6. Phần bổ sung: endpoint `PATCH /expert-rules/:id/enabled`
+
+### 6.1. Vì sao cần
+
+Switch bật/tắt trên bảng quản trị trước đây gọi `PUT /expert-rules/:id` và phải **gửi lại toàn bộ
+object rule** chỉ để đổi 1 boolean. Vấn đề:
+
+- Chạy lại `validateRule()` cho dữ liệu vốn đã hợp lệ trong DB — thừa.
+- Mọi field client gửi kèm đều có cơ hội ghi đè nhầm nội dung luật. Nếu state phía UI lệch
+  (ví dụ `rules` chưa refetch sau khi ai đó vừa sửa luật), một cú bật/tắt sẽ ghi đè bằng dữ liệu cũ.
+- Nếu quên gửi field nào đó thì lại rơi đúng vào lớp lỗi đã sửa ở mục 2.
+
+Bật/tắt là thao tác **partial update trên đúng 1 cột** — đúng ngữ nghĩa của `PATCH`, không phải `PUT`.
+
+### 6.2. Thay đổi
+
+| Lớp | File | Nội dung |
+|---|---|---|
+| Service | `backend/src/services/expertRule.service.ts` | Thêm `setEnabled(id, enabled, updatedBy)` — chỉ ghi cột `enabled` + `updatedBy`, rồi `knowledgeBase.reload()`. Map lỗi Prisma `P2025` thành HTTP 404. |
+| Controller | `backend/src/controllers/expertRule.controller.ts` | Thêm `setEnabled()` — chặn 400 nếu `body.enabled` không phải boolean. |
+| Route | `backend/src/routes/expertRule.routes.ts` | `router.patch('/:id/enabled', auth, adminOnly, ...)` |
+| Hook FE | `frontend/src/hooks/useExpertRules.ts` | Thêm `setRuleEnabled(id, enabled)` gọi `api.patch`. |
+| UI | `frontend/src/components/ExpertRulesPanel.tsx` | `handleToggleEnabled` dùng `setRuleEnabled` thay vì `updateRule`. |
+
+Điểm quan trọng: `setEnabled()` **không đọc field nào khác ngoài `enabled`** — dù client có gửi kèm
+`name`, `conditions`... cũng không thể làm hỏng nội dung luật.
+
+`knowledgeBase.reload()` vẫn được gọi vì Inference Engine chỉ nạp luật `enabled = true`; không reload
+thì luật vừa tắt vẫn tiếp tục fire.
+
+### 6.3. Kiểm thử — API thật (18/18 PASS)
+
+| # | Kịch bản | Kết quả |
+|---|---|---|
+| 1 | `PATCH {enabled:false}` → response + DB đều `false` | PASS |
+| 1b | `name` / `priority` / `description` / `conditions` **giữ nguyên** sau PATCH | PASS (4 assert) |
+| 2 | `PATCH {enabled:true}` → bật lại được | PASS |
+| 3 | Body `{}`, `{"enabled":"false"}`, `{"enabled":1}`, `{"enabled":null}` → **400** | PASS (4 assert) |
+| 4 | Không token → **401**; token nhân viên → **403** (`adminOnly`) | PASS |
+| 5 | `id` không tồn tại → **404** (không phải 500) | PASS |
+| 6 | Route `/:id/enabled` **không đè** `/:id`: `PUT` và `DELETE` vẫn chạy đúng | PASS |
+
+Bộ test regression ở mục 4 chạy lại sau thay đổi: vẫn **18/18 PASS**.
+
+### 6.4. Kiểm thử — UI thật (end-to-end)
+
+Chạy cả backend + frontend, đăng nhập `admin`, vào **Cảnh báo → Cấu hình nâng cao**, bấm Switch cột "BẬT":
+
+```
+[2164.118] PATCH http://localhost:5000/api/expert-rules/4/enabled -> 200 OK
+[2164.119] GET   http://localhost:5000/api/expert-rules            -> 200 OK
+```
+
+⇒ Switch gọi đúng `PATCH`, **không còn `PUT`** nào. Reload trang, Switch hiển thị đúng trạng thái
+trong DB. Console không phát sinh lỗi mới (chỉ còn cảnh báo deprecated của antd đã có từ trước).
+Trạng thái dữ liệu đã khôi phục — cả 19 luật đều `enabled = true` như ban đầu.
+
+### 6.5. Tương thích ngược
+
+`PUT /expert-rules/:id` **giữ nguyên**, vẫn cập nhật được `enabled` khi có gửi. Endpoint PATCH là
+bổ sung, không phá client cũ.
+
+---
+
+## 7. Tài liệu liên quan
 
 - [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](SUA_LOI_ENABLED_VA_VALIDATE_RULE.md) — lần sửa trước:
   Inference Engine chỉ dùng rule `enabled`, và validate rule theo domain.

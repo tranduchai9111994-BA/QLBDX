@@ -1,5 +1,5 @@
 import prisma from '../config/prisma';
-import { knowledgeBase, inferenceEngine, validateRule, DOMAIN_FORM_SPEC } from '../expertSystem';
+import { knowledgeBase, inferenceEngine, validateRule, ruleError, DOMAIN_FORM_SPEC } from '../expertSystem';
 import type { Condition, Action, Fact } from '../expertSystem';
 
 interface ExpertRuleInput {
@@ -98,6 +98,34 @@ class ExpertRuleService {
     });
     await knowledgeBase.reload();
     return row;
+  }
+
+  /**
+   * Bật/tắt nhanh 1 luật — dùng cho Switch trên bảng quản trị.
+   *
+   * Tách riêng khỏi update() vì thao tác này chỉ đổi đúng 1 cột: nếu bắt UI gửi lại toàn bộ
+   * object rule thì (a) phải chạy lại validateRule cho dữ liệu vốn đã hợp lệ trong DB, và
+   * (b) mọi field client gửi kèm đều có cơ hội ghi đè nhầm. PATCH ở đây không đọc field nào
+   * khác ngoài `enabled` nên không thể làm hỏng nội dung luật.
+   */
+  async setEnabled(id: number, enabled: boolean, updatedBy?: number) {
+    // Prisma ném P2025 khi không có bản ghi nào khớp `where`. Không bắt lại thì controller
+    // rơi vào nhánh mặc định và trả 500 cho một lỗi thực chất là "không tìm thấy".
+    const row = await prisma.expertRule.update({
+      where: { id },
+      data: { enabled, updatedBy },
+    }).catch((err: any) => {
+      if (err?.code === 'P2025') {
+        const e = ruleError(`Không tìm thấy luật id = ${id}`);
+        e.status = 404;
+        throw e;
+      }
+      throw err;
+    });
+    // Inference Engine chỉ nạp luật enabled = true, nên đổi cờ này phải nạp lại Knowledge Base
+    // ngay, nếu không luật vừa tắt vẫn tiếp tục fire cho tới lần reload sau.
+    await knowledgeBase.reload();
+    return { ...row, conditions: JSON.parse(row.conditions), actions: JSON.parse(row.actions) };
   }
 
   async delete(id: number) {

@@ -55,6 +55,25 @@ export class ExpertRuleController {
     }
   }
 
+  /**
+   * PATCH /:id/enabled — bật/tắt nhanh, body chỉ nhận { enabled: boolean }.
+   * Chặn ngay tại đây nếu client gửi thiếu hoặc gửi sai kiểu, tránh Prisma nhận undefined
+   * rồi update "rỗng" mà vẫn trả 200 làm UI tưởng đã đổi trạng thái.
+   */
+  async setEnabled(req: Request, res: Response): Promise<void> {
+    try {
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ message: 'Trường "enabled" phải là true hoặc false' });
+        return;
+      }
+      const result = await expertRuleService.setEnabled(Number(req.params.id), enabled, req.user?.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ message: err.message || 'Lỗi server' });
+    }
+  }
+
   async delete(req: Request, res: Response): Promise<void> {
     try {
       await expertRuleService.delete(Number(req.params.id));
