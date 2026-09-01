@@ -6,6 +6,9 @@ const router = Router();
 
 router.get('/', auth, (req, res) => expertRuleController.list(req, res));
 router.get('/domains', auth, (req, res) => expertRuleController.domains(req, res));
+// Khuôn form nhập luật (dropdown + biến dùng được trong nội dung) — phải khai báo
+// trước '/:id' nếu không Express sẽ hiểu "form-spec" là một id.
+router.get('/form-spec', auth, (req, res) => expertRuleController.formSpec(req, res));
 router.get('/:id', auth, (req, res) => expertRuleController.getById(req, res));
 router.post('/', auth, adminOnly, (req, res) => expertRuleController.create(req, res));
 router.put('/:id', auth, adminOnly, (req, res) => expertRuleController.update(req, res));

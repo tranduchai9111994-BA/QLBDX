@@ -1,5 +1,5 @@
 import prisma from '../config/prisma';
-import { knowledgeBase, inferenceEngine, validateRule } from '../expertSystem';
+import { knowledgeBase, inferenceEngine, validateRule, DOMAIN_FORM_SPEC } from '../expertSystem';
 import type { Condition, Action, Fact } from '../expertSystem';
 
 interface ExpertRuleInput {
@@ -27,6 +27,14 @@ class ExpertRuleService {
       conditions: JSON.parse(r.conditions),
       actions: JSON.parse(r.actions),
     }));
+  }
+
+  /**
+   * Khuôn form nhập luật cho màn hình quản trị — sinh từ cùng nguồn với validate
+   * (expertSystem/domainSpecs.ts) nên dropdown trên UI luôn khớp giá trị hợp lệ ở backend.
+   */
+  formSpec() {
+    return DOMAIN_FORM_SPEC;
   }
 
   async domains(): Promise<string[]> {

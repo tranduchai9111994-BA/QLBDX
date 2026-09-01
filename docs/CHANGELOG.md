@@ -14,8 +14,13 @@ dữ liệu luật cũ được tự bù field còn thiếu khi khởi động.
 | Mới | Cột bật/tắt mốc ngưỡng ở tab Cảnh báo → "Cấu hình mức độ" (trước đó không có UI nào tắt được luật `alert`). |
 | Mới | Validate luật theo từng domain (`expertSystem/validation.ts` + `domainSpecs.ts`) — chặn cả trường hợp luật lưu được nhưng runtime không xử lý được. |
 | Mới | Nội dung câu gợi ý chuyển vào `action.params.message` dạng mẫu `{tenBien}` — admin sửa câu chữ trên UI, không cần build lại. |
+| Mới | Form thêm/sửa luật không còn bắt gõ JSON: dropdown + ô chữ sinh từ khuôn form backend gửi về (`GET /expert-rules/form-spec`). Ô "Loại hành động" bị bỏ vì mỗi nhóm chỉ dùng đúng 1 loại. |
+| Dọn | Bỏ field thừa `params.template` (ghi vào DB nhưng không service nào đọc) — tự dọn khỏi dữ liệu cũ khi khởi động. |
+| Hiệu năng | Bấm icon mở app: thêm cửa sổ "Đang khởi động" + khoá chống bấm trùng. Bấm 3 lần liên tiếp trước đây mất 61s (mỗi lần bấm kill tiến trình đang khởi động dở), nay ~10s. |
+| Hiệu năng | Tắt bước lint của dev server (`frontend/.env`) — biên dịch lại từ đầu 36.3s → 31.3s. Lint chuyển sang `npm run lint`. |
 
-Chi tiết + log kiểm thử: [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).
+Tóm tắt + cách tự kiểm chứng từng thay đổi: [CAP_NHAT_MOI_NHAT.md](CAP_NHAT_MOI_NHAT.md).
+Chi tiết kỹ thuật + log kiểm thử: [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).
 
 ---
 

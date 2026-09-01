@@ -114,6 +114,9 @@ Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn.
 | **Phân tích & Gợi ý (DSS)** | Phân tích theo thứ/giờ/khu vực + đề xuất quyết định (mở rộng chỗ, đổi giá cuối tuần, chiến dịch bán gói) kèm tác động & rủi ro | Trang Phân tích & Gợi ý (admin) |
 | **Hệ chuyên gia cấu hình được** | Toàn bộ ngưỡng + nội dung gợi ý nằm trong Knowledge Base (bảng `ExpertRules`), admin thêm/sửa/bật/tắt qua UI. Luật đang **tắt** không được nạp vào Inference Engine nên ngừng sinh gợi ý/cảnh báo ngay | Cảnh báo → tab "Cấu hình mức độ" & "Cấu hình nâng cao" |
 
+> **Mới nhất:** [CAP_NHAT_MOI_NHAT.md](docs/CAP_NHAT_MOI_NHAT.md) — tóm tắt các thay đổi gần đây
+> kèm hướng dẫn tự kiểm chứng từng cái.
+>
 > Xem chi tiết thiết kế tại [SMART_UPGRADE_PLAN.md](docs/archive/SMART_UPGRADE_PLAN.md),
 > đợt chuyển sang hệ chuyên gia tại [NANG_CAP_NANG_CAO.md](docs/NANG_CAP_NANG_CAO.md), và đợt sửa
 > logic bật/tắt luật + validate theo domain tại
@@ -177,6 +180,7 @@ QLBDX/
 │   ├── KIEN_TRUC_TONG_QUAN.md      # Kiến trúc tổng quan
 │   ├── KIEN_TRUC_CHI_TIET.md       # Kiến trúc chi tiết (API, luồng nghiệp vụ, rủi ro)
 │   ├── Function.md                 # Đặc tả chức năng theo endpoint
+│   ├── CAP_NHAT_MOI_NHAT.md        # ★ ĐỌC TRƯỚC — tóm tắt thay đổi + cách tự kiểm chứng
 │   ├── SMART_FEATURES_DEEP_DIVE.md # Giải thích kỹ thuật 5 tính năng thông minh
 │   ├── CAU_TRUC_CODE_TINH_NANG_THONG_MINH.md # Code mẫu có chú thích từng dòng
 │   ├── NANG_CAP_NANG_CAO.md        # Đợt chuyển sang Rule-based Expert System

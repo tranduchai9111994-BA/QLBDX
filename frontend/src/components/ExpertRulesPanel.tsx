@@ -7,7 +7,7 @@ import {
   PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, InfoCircleOutlined, BulbOutlined,
   DownloadOutlined, FileExcelOutlined, FileTextOutlined,
 } from '@ant-design/icons';
-import { useExpertRules, ExpertRule, ExpertRuleInput, RuleCondition, RuleAction } from '../hooks/useExpertRules';
+import { useExpertRules, ExpertRule, ExpertRuleInput, RuleCondition, RuleAction, RuleFormField } from '../hooks/useExpertRules';
 import { confirmDanger } from '../utils/confirmDanger';
 import api from '../api/axios';
 import { exportExpertRulesExcel, exportExpertRulesCsv } from '../utils/reportExport';
@@ -36,7 +36,7 @@ const EXAMPLE_RULE = {
   priority: 30,
   enabled: true,
   conditions: [{ fact: 'frequency', operator: 'gte' as const, value: 5 }],
-  actions: [{ type: 'recommend', paramsJson: JSON.stringify({ package: 'monthly', savings: '~20%', durationDays: 30 }, null, 2) }],
+  params: { package: 'monthly', savings: '~20%', durationDays: 30 },
 };
 
 interface RuleFormValues {
@@ -47,7 +47,10 @@ interface RuleFormValues {
   priority: number;
   enabled: boolean;
   conditions: RuleCondition[];
-  actions: { type: string; paramsJson: string }[];
+  /** Nhóm đã biết (package/analytics/report/alert): nhập bằng các ô cụ thể theo khuôn form của backend. */
+  params?: Record<string, any>;
+  /** Nhóm admin tự thêm: chưa có khuôn form nên vẫn nhập JSON tay. */
+  actions?: { type: string; paramsJson: string }[];
 }
 
 /**
@@ -57,7 +60,7 @@ interface RuleFormValues {
  * (dùng khi nhiều luật cùng domain đều thỏa mãn, ví dụ ngưỡng gói năm/quý/tháng).
  */
 const ExpertRulesPanel: React.FC = () => {
-  const { rules: allRules, domains, loading, createRule, updateRule, deleteRule, testEvaluate } = useExpertRules();
+  const { rules: allRules, domains, formSpec, loading, createRule, updateRule, deleteRule, testEvaluate } = useExpertRules();
   const rules = useMemo(() => allRules.filter((r) => r.domain !== 'alert'), [allRules]);
 
   const [filterDomain, setFilterDomain] = useState<string | undefined>();
@@ -84,10 +87,18 @@ const ExpertRulesPanel: React.FC = () => {
   const formDomain = Form.useWatch('domain', form);
   const watchedDomain = Array.isArray(formDomain) ? formDomain[0] : formDomain;
 
+  // Khuôn form của nhóm đang chọn. Nhóm nào có khuôn thì nhập bằng ô cụ thể,
+  // nhóm admin tự thêm (chưa có service tiêu thụ) thì vẫn nhập JSON tay.
+  const activeSpec = watchedDomain ? formSpec[watchedDomain] : undefined;
+
+  // Params cũ có khoá không nằm trong khuôn form (VD "template" của luật analytics)
+  // — giữ nguyên khi lưu để không làm mất dữ liệu admin/hệ thống đã đặt trước đó.
+  const [extraParams, setExtraParams] = useState<Record<string, any>>({});
+
   const domainOptions = useMemo(() => {
     const all = Array.from(new Set([...KNOWN_DOMAINS, ...domains.filter((d) => d !== 'alert')]));
-    return all.map((d) => ({ value: d, label: d }));
-  }, [domains]);
+    return all.map((d) => ({ value: d, label: formSpec[d] ? `${formSpec[d].label} (${d})` : d }));
+  }, [domains, formSpec]);
 
   const filteredRules = useMemo(
     () => (filterDomain ? rules.filter((r) => r.domain === filterDomain) : rules),
@@ -116,10 +127,12 @@ const ExpertRulesPanel: React.FC = () => {
 
   const openAdd = () => {
     form.resetFields();
+    setExtraParams({});
     form.setFieldsValue({
       priority: 100,
       enabled: true,
       conditions: [{ fact: '', operator: 'gte', value: 0 }],
+      params: {},
       actions: [{ type: '', paramsJson: '{}' }],
     });
     setModal({ open: true, editing: null });
@@ -130,6 +143,14 @@ const ExpertRulesPanel: React.FC = () => {
   };
 
   const openEdit = (rule: ExpertRule) => {
+    const spec = formSpec[rule.domain];
+    const params = rule.actions[0]?.params ?? {};
+    if (spec) {
+      const known = new Set(spec.fields.map((f) => f.name));
+      setExtraParams(Object.fromEntries(Object.entries(params).filter(([k]) => !known.has(k))));
+    } else {
+      setExtraParams({});
+    }
     form.setFieldsValue({
       code: rule.code,
       domain: rule.domain,
@@ -138,6 +159,7 @@ const ExpertRulesPanel: React.FC = () => {
       priority: rule.priority,
       enabled: rule.enabled,
       conditions: rule.conditions,
+      params: spec ? Object.fromEntries(spec.fields.map((f) => [f.name, params[f.name]])) : {},
       actions: rule.actions.map((a) => ({ type: a.type, paramsJson: JSON.stringify(a.params, null, 2) })),
     });
     setModal({ open: true, editing: rule });
@@ -162,13 +184,25 @@ const ExpertRulesPanel: React.FC = () => {
   };
 
   const handleSave = async (values: RuleFormValues) => {
+    const domain = Array.isArray(values.domain) ? values.domain[0] : values.domain;
+    const spec = formSpec[domain];
     let actions: RuleAction[];
-    try {
-      actions = values.actions.map((a) => ({ type: a.type, params: JSON.parse(a.paramsJson || '{}') }));
-    } catch {
-      message.error('Params của hành động phải là JSON hợp lệ');
-      return;
+
+    if (spec) {
+      // Loại hành động là cố định theo nhóm (1 nhóm chỉ dùng đúng 1 loại) nên không bắt admin gõ.
+      const entered = Object.fromEntries(
+        Object.entries(values.params || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+      );
+      actions = [{ type: spec.actionType, params: { ...extraParams, ...entered } }];
+    } else {
+      try {
+        actions = (values.actions || []).map((a) => ({ type: a.type, params: JSON.parse(a.paramsJson || '{}') }));
+      } catch {
+        message.error('Params của hành động phải là JSON hợp lệ');
+        return;
+      }
     }
+
     const payload: ExpertRuleInput = {
       code: values.code,
       domain: values.domain,
@@ -182,7 +216,7 @@ const ExpertRulesPanel: React.FC = () => {
 
     // domain "package" + action "recommend" cần durationDays khớp đúng gói đang có trong hệ thống,
     // nếu không luật vẫn fire được nhưng sẽ không tra ra gói nào để gợi ý cho khách (xem customerPackage.service.ts).
-    if (values.domain === 'package' && validDurationDays.length > 0) {
+    if (domain === 'package' && validDurationDays.length > 0) {
       const mismatched = actions
         .filter((a) => a.type === 'recommend' && typeof a.params?.durationDays === 'number')
         .map((a) => a.params.durationDays as number)
@@ -254,6 +288,70 @@ const ExpertRulesPanel: React.FC = () => {
     if (!testResult || !testRule) return [];
     return (testResult.results || []).filter((r: any) => r.rule?.code !== testRule.code);
   }, [testResult, testRule]);
+
+  /**
+   * Vẽ 1 ô nhập của phần "Kết quả khi luật khớp" theo mô tả backend gửi về.
+   * Nhờ vậy admin không phải biết JSON, và danh sách lựa chọn luôn khớp với
+   * giá trị mà backend chấp nhận (expertSystem/domainSpecs.ts).
+   */
+  const renderParamField = (field: RuleFormField) => {
+    const rules = field.required ? [{ required: true, message: `Nhập ${field.label.toLowerCase()}` }] : [];
+
+    // Thời hạn gói: chỉ cho chọn số ngày của gói đang bán để khỏi gõ sai.
+    if (field.name === 'durationDays' && validDurationDays.length > 0) {
+      return (
+        <Form.Item
+          key={field.name}
+          name={['params', field.name]}
+          label={field.label}
+          rules={rules}
+          extra={field.help}
+        >
+          <Select
+            placeholder="Chọn thời hạn"
+            options={validDurationDays.map((d) => ({ value: d, label: `${d} ngày` }))}
+          />
+        </Form.Item>
+      );
+    }
+
+    let control: React.ReactNode;
+    if (field.type === 'select') {
+      control = <Select placeholder={`Chọn ${field.label.toLowerCase()}`} options={field.options} />;
+    } else if (field.type === 'number') {
+      control = <InputNumber style={{ width: '100%' }} placeholder={field.placeholder} />;
+    } else if (field.type === 'textarea') {
+      control = <Input.TextArea rows={3} placeholder={field.placeholder} />;
+    } else {
+      control = <Input placeholder={field.placeholder} />;
+    }
+
+    return (
+      <Form.Item
+        key={field.name}
+        name={['params', field.name]}
+        label={field.label}
+        rules={rules}
+        extra={
+          <>
+            {field.help}
+            {field.variables && field.variables.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                Có thể chèn số liệu thật bằng các chỗ trống sau:{' '}
+                {field.variables.map((v) => (
+                  <Tooltip key={v.name} title={v.description}>
+                    <Tag style={{ cursor: 'help', marginBottom: 2 }}>{`{${v.name}}`}</Tag>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
+          </>
+        }
+      >
+        {control}
+      </Form.Item>
+    );
+  };
 
   const columns = [
     { title: 'Mã', dataIndex: 'code', key: 'code', render: (v: string) => <Text code>{v}</Text> },
@@ -465,8 +563,22 @@ const ExpertRulesPanel: React.FC = () => {
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
-                    <Form.Item {...restField} name={[name, 'fact']} rules={[{ required: true, message: 'Fact' }]}>
-                      <Input placeholder="fact, vd: frequency" style={{ width: 200 }} />
+                    <Form.Item {...restField} name={[name, 'fact']} rules={[{ required: true, message: 'Dữ kiện' }]}>
+                      {activeSpec ? (
+                        <Select
+                          style={{ width: 280 }}
+                          placeholder="Chọn dữ kiện"
+                          showSearch
+                          optionFilterProp="label"
+                          options={activeSpec.facts.map((f) => ({
+                            value: f.name,
+                            label: f.label,
+                            title: f.help ? `${f.name} — ${f.help}` : f.name,
+                          }))}
+                        />
+                      ) : (
+                        <Input placeholder="fact, vd: frequency" style={{ width: 280 }} />
+                      )}
                     </Form.Item>
                     <Form.Item {...restField} name={[name, 'operator']} rules={[{ required: true }]}>
                       <Select options={OPERATOR_OPTIONS} style={{ width: 200 }} />
@@ -484,35 +596,70 @@ const ExpertRulesPanel: React.FC = () => {
             )}
           </Form.List>
 
-          <Divider orientation="left" plain>Hành động (Output — khi luật khớp)</Divider>
-          {watchedDomain === 'package' && validDurationDays.length > 0 && (
+          <Divider orientation="left" plain>
+            Kết quả khi luật khớp
+            {activeSpec && <Tag color="purple" style={{ marginLeft: 8 }}>{activeSpec.actionType}</Tag>}
+          </Divider>
+
+          {!watchedDomain ? (
             <Alert
-              type="warning"
+              type="info"
               showIcon
-              style={{ marginBottom: 12 }}
-              message={`Nếu action có "durationDays", giá trị phải là 1 trong các gói đang active: ${validDurationDays.join(', ')} ngày — sai số này sẽ khiến luật fire nhưng không tra ra gói nào để gợi ý.`}
+              message="Chọn Nhóm (domain) ở phía trên trước"
+              description="Mỗi nhóm cần thông tin khác nhau, nên các ô nhập sẽ hiện ra theo đúng nhóm bạn chọn."
             />
+          ) : activeSpec ? (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={activeSpec.description}
+                description={
+                  <>Loại hành động của nhóm này luôn là <Text code>{activeSpec.actionType}</Text> nên hệ thống tự điền, bạn không cần nhập.</>
+                }
+              />
+              {watchedDomain === 'package' && validDurationDays.length > 0 && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message={`Thời hạn gói phải trùng một gói dịch vụ đang bán (${validDurationDays.join(', ')} ngày) — sai số này khiến luật vẫn khớp nhưng không tra ra gói nào để gợi ý.`}
+                />
+              )}
+              {activeSpec.fields.map((field) => renderParamField(field))}
+            </>
+          ) : (
+            <>
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="Nhóm tự đặt — chưa có khuôn nhập sẵn"
+                description="Nhóm này chưa có chức năng nào trong hệ thống đọc tới, nên phải nhập hành động dạng JSON. Chọn một nhóm có sẵn (Gợi ý gói / DSS / Báo cáo) để nhập bằng các ô thông thường."
+              />
+              <Form.List name="actions">
+                {(fields, { add, remove }) => (
+                  <>
+                    {fields.map(({ key, name, ...restField }) => (
+                      <Space key={key} align="baseline" style={{ display: 'flex', marginBottom: 8 }} wrap>
+                        <Form.Item {...restField} name={[name, 'type']} rules={[{ required: true, message: 'Loại' }]}>
+                          <Input placeholder="type, vd: recommend" style={{ width: 200 }} />
+                        </Form.Item>
+                        <Form.Item {...restField} name={[name, 'paramsJson']} rules={[{ required: true, message: 'Params' }]}>
+                          <Input.TextArea placeholder='{"package":"monthly"}' style={{ width: 320 }} rows={2} />
+                        </Form.Item>
+                        <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                      </Space>
+                    ))}
+                    <Button type="dashed" onClick={() => add({ type: '', paramsJson: '{}' })} icon={<PlusOutlined />}>
+                      Thêm hành động
+                    </Button>
+                  </>
+                )}
+              </Form.List>
+            </>
           )}
-          <Form.List name="actions">
-            {(fields, { add, remove }) => (
-              <>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} align="baseline" style={{ display: 'flex', marginBottom: 8 }} wrap>
-                    <Form.Item {...restField} name={[name, 'type']} rules={[{ required: true, message: 'Loại' }]}>
-                      <Input placeholder="type, vd: recommend" style={{ width: 200 }} />
-                    </Form.Item>
-                    <Form.Item {...restField} name={[name, 'paramsJson']} rules={[{ required: true, message: 'Params' }]}>
-                      <Input.TextArea placeholder='{"package":"monthly"}' style={{ width: 320 }} rows={2} />
-                    </Form.Item>
-                    <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(name)} />
-                  </Space>
-                ))}
-                <Button type="dashed" onClick={() => add({ type: '', paramsJson: '{}' })} icon={<PlusOutlined />}>
-                  Thêm hành động
-                </Button>
-              </>
-            )}
-          </Form.List>
         </Form>
       </Modal>
 

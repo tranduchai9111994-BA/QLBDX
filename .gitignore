@@ -10,6 +10,10 @@ frontend/build/
 .env.local
 .env.*.local
 
+# frontend/.env chi chua cau hinh build cua CRA (khong co secret) va can dung chung
+# cho ca nhom - bo qua luat .env o tren. Secret rieng cua frontend dat o .env.local.
+!frontend/.env
+
 # IDE
 .vscode/
 .idea/

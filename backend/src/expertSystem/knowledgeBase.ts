@@ -38,9 +38,16 @@ class KnowledgeBase {
       }
       let changed = false;
       current.forEach((action, i) => {
+        if (!action?.params) return;
         const defMessage = defActions[i]?.params?.message;
-        if (defMessage && action?.params && action.params.message === undefined) {
+        if (defMessage && action.params.message === undefined) {
           action.params.message = defMessage;
+          changed = true;
+        }
+        // "template" là field thừa của bản đầu: được ghi vào DB nhưng không service nào đọc tới.
+        // Dọn luôn cho dữ liệu khớp với code, tránh gây hiểu nhầm khi admin xem luật.
+        if ('template' in action.params) {
+          delete action.params.template;
           changed = true;
         }
       });

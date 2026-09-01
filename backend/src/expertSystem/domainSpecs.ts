@@ -41,3 +41,187 @@ export const DOMAIN_ACTION_TYPE: Record<string, string> = {
   analytics: 'decision',
   report: 'suggestion',
 };
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Mô tả form nhập luật cho giao diện quản trị.
+ *
+ * Sinh form từ đây (thay vì để admin gõ JSON tay) nên màn hình luôn khớp với
+ * validate ở validation.ts — thêm 1 giá trị hợp lệ mới thì cả dropdown lẫn
+ * validate cùng đổi theo, không lệch nhau.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface RuleFormOption {
+  value: string;
+  label: string;
+}
+
+export interface RuleFormField {
+  /** Tên khoá trong action.params */
+  name: string;
+  label: string;
+  type: 'select' | 'text' | 'number' | 'textarea';
+  required: boolean;
+  options?: RuleFormOption[];
+  placeholder?: string;
+  help?: string;
+  /** Với ô nội dung: các chỗ trống {tenBien} dùng được, hệ thống điền số liệu thật lúc chạy. */
+  variables?: { name: string; description: string }[];
+}
+
+export interface DomainFormSpec {
+  label: string;
+  description: string;
+  /** Loại hành động cố định của domain — admin không cần (và không được) tự gõ. */
+  actionType: string;
+  /** Gợi ý dữ kiện dùng được ở phần Điều kiện. */
+  facts: { name: string; label: string; help?: string }[];
+  fields: RuleFormField[];
+}
+
+export const DOMAIN_FORM_SPEC: Record<string, DomainFormSpec> = {
+  package: {
+    label: 'Gợi ý gói dịch vụ',
+    description: 'Khi khách đỗ xe đủ thường xuyên thì gợi ý mua gói tháng/quý/năm.',
+    actionType: 'recommend',
+    facts: [
+      { name: 'frequency', label: 'Số lần đỗ xe trong 30 ngày gần nhất', help: 'Đếm từ lịch sử ra/vào của khách' },
+    ],
+    fields: [
+      {
+        name: 'package',
+        label: 'Mức gói gợi ý',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'monthly', label: 'Gói tháng' },
+          { value: 'quarterly', label: 'Gói quý' },
+          { value: 'yearly', label: 'Gói năm' },
+        ],
+      },
+      {
+        name: 'durationDays',
+        label: 'Thời hạn gói (số ngày)',
+        type: 'number',
+        required: true,
+        help: 'Phải khớp thời hạn của một gói dịch vụ đang bán, nếu không hệ thống sẽ không tra ra gói để gợi ý.',
+      },
+      {
+        name: 'savings',
+        label: 'Mức tiết kiệm hiển thị cho khách',
+        type: 'text',
+        required: true,
+        placeholder: '~20%',
+      },
+    ],
+  },
+
+  analytics: {
+    label: 'Hỗ trợ ra quyết định (DSS)',
+    description: 'Khi số liệu vượt ngưỡng thì đưa câu hỏi quyết định kèm các phương án cho quản lý.',
+    actionType: 'decision',
+    facts: [
+      { name: 'maxZoneOccupancy', label: 'Tỷ lệ lấp đầy cao nhất trong các khu (%)' },
+      { name: 'weekendDropPercent', label: 'Mức sụt giảm lượng xe cuối tuần so với ngày thường (%)' },
+      { name: 'percentWithoutPackage', label: 'Tỷ lệ khách đỗ thường xuyên chưa có gói (%)' },
+    ],
+    fields: [
+      {
+        name: 'id',
+        label: 'Quyết định hiển thị',
+        type: 'select',
+        required: true,
+        help: 'Mỗi quyết định đã có sẵn khối phân tích và 2 phương án tương ứng trong màn Phân tích & Gợi ý.',
+        options: [
+          { value: 'd1', label: 'd1 — Mở thêm chỗ đỗ / điều phối sang khu trống' },
+          { value: 'd2', label: 'd2 — Điều chỉnh giá cuối tuần' },
+          { value: 'd3', label: 'd3 — Chiến dịch bán gói dịch vụ' },
+        ],
+      },
+      {
+        name: 'message',
+        label: 'Câu hỏi quyết định',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Có nên mở thêm chỗ đỗ ở {zone}?',
+        variables: [
+          { name: 'zone', description: 'Tên khu vực có tỷ lệ lấp đầy cao nhất (chỉ dùng được ở quyết định d1)' },
+        ],
+      },
+    ],
+  },
+
+  report: {
+    label: 'Gợi ý trên báo cáo tuần',
+    description: 'Khi số liệu tuần vượt ngưỡng thì hiện một dòng gợi ý hành động trên Dashboard thông minh.',
+    actionType: 'suggestion',
+    facts: [
+      { name: 'revenueChangePercent', label: 'Thay đổi doanh thu tuần này so với tuần trước (%)', help: 'Số âm nghĩa là giảm' },
+      { name: 'longParkedCount', label: 'Số xe đang đỗ quá 24 giờ' },
+      { name: 'expiringPackagesCount', label: 'Số khách sắp hết gói trong 7 ngày tới' },
+      { name: 'zoneOccupancyRate', label: 'Tỷ lệ lấp đầy của một khu (0 đến 1)', help: 'VD 0.8 nghĩa là 80%' },
+    ],
+    fields: [
+      {
+        name: 'type',
+        label: 'Loại gợi ý',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'revenue_up', label: 'Doanh thu tăng' },
+          { value: 'revenue_down', label: 'Doanh thu giảm' },
+          { value: 'occupancy_warning', label: 'Khu vực đông — cần điều phối' },
+          { value: 'long_parking', label: 'Xe đỗ quá lâu' },
+          { value: 'renewal_campaign', label: 'Cơ hội gia hạn gói' },
+        ],
+      },
+      {
+        name: 'message',
+        label: 'Nội dung gợi ý hiển thị cho quản lý',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Có {longParkedCount} xe đỗ quá 24 giờ, cần kiểm tra và xử lý.',
+        variables: [
+          { name: 'revenueChangePercent', description: '% thay đổi doanh thu, giữ nguyên dấu âm/dương' },
+          { name: 'revenueDropPercent', description: '% sụt giảm doanh thu, luôn là số dương' },
+          { name: 'peakAfternoonHour', description: 'Giờ cao điểm buổi chiều' },
+          { name: 'longParkedCount', description: 'Số xe đỗ quá 24 giờ' },
+          { name: 'expiringPackagesCount', description: 'Số khách sắp hết gói' },
+          { name: 'zoneName', description: 'Tên khu vực (chỉ dùng được ở loại "Khu vực đông")' },
+          { name: 'zoneOccupancyPercent', description: 'Tỷ lệ lấp đầy của khu, đã quy ra % (chỉ dùng được ở loại "Khu vực đông")' },
+        ],
+      },
+    ],
+  },
+
+  alert: {
+    label: 'Ngưỡng cảnh báo',
+    description: 'Nên cấu hình ở tab "Cấu hình mức độ" cho tiện — ở đó chọn loại/ngưỡng/mức độ bằng dropdown.',
+    actionType: 'alert',
+    facts: Object.entries(RULE_TYPES).map(([name, meta]) => ({
+      name,
+      label: `${meta.label} (${meta.unit})`,
+      help: meta.comparator === 'gte' ? 'So sánh theo chiều >=' : 'So sánh theo chiều <=',
+    })),
+    fields: [
+      {
+        name: 'severity',
+        label: 'Mức độ nghiêm trọng',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'danger', label: 'Nguy hiểm' },
+          { value: 'warning', label: 'Cảnh báo' },
+          { value: 'info', label: 'Thông tin' },
+        ],
+      },
+      {
+        name: 'message',
+        label: 'Nội dung cảnh báo',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Xe đỗ quá lâu: giá trị {value} >= mốc 24giờ đã đỗ → mức warning',
+        variables: [{ name: 'value', description: 'Giá trị đo được thực tế tại thời điểm cảnh báo' }],
+      },
+    ],
+  },
+};

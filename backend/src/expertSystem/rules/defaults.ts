@@ -45,7 +45,7 @@ export const DEFAULT_RULES = [
     priority: 10,
     conditions: JSON.stringify([{ fact: 'maxZoneOccupancy', operator: 'gt', value: 80 }]),
     actions: JSON.stringify([
-      { type: 'decision', params: { id: 'd1', template: 'expand_zone', message: 'Có nên mở thêm chỗ đỗ ở {zone}?' } },
+      { type: 'decision', params: { id: 'd1', message: 'Có nên mở thêm chỗ đỗ ở {zone}?' } },
     ]),
   },
   {
@@ -56,7 +56,7 @@ export const DEFAULT_RULES = [
     priority: 20,
     conditions: JSON.stringify([{ fact: 'weekendDropPercent', operator: 'gt', value: 50 }]),
     actions: JSON.stringify([
-      { type: 'decision', params: { id: 'd2', template: 'weekend_pricing', message: 'Có nên điều chỉnh giá vào cuối tuần?' } },
+      { type: 'decision', params: { id: 'd2', message: 'Có nên điều chỉnh giá vào cuối tuần?' } },
     ]),
   },
   {
@@ -67,7 +67,7 @@ export const DEFAULT_RULES = [
     priority: 30,
     conditions: JSON.stringify([{ fact: 'percentWithoutPackage', operator: 'gt', value: 20 }]),
     actions: JSON.stringify([
-      { type: 'decision', params: { id: 'd3', template: 'package_campaign', message: 'Có nên triển khai chiến dịch bán gói dịch vụ?' } },
+      { type: 'decision', params: { id: 'd3', message: 'Có nên triển khai chiến dịch bán gói dịch vụ?' } },
     ]),
   },
 

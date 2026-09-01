@@ -1,5 +1,7 @@
 # Sửa logic `enabled` của rule + Validate rule theo từng domain
 
+> Cần bản tóm tắt ngắn kèm hướng dẫn tự kiểm chứng? Xem [CAP_NHAT_MOI_NHAT.md](CAP_NHAT_MOI_NHAT.md).
+>
 > Phạm vi: module Expert System (Knowledge Base + Inference Engine) của hệ thống QLBDX.
 > Ngày thực hiện: 01/09/2026.
 > Kết quả kiểm thử: backend + frontend `tsc --noEmit` exit 0; chạy end-to-end thật với SQL Server (kết quả ở mục 6).
@@ -422,3 +424,131 @@ Trạng thái DB sau toàn bộ test: **19 luật, không luật nào bị tắt
   như vậy) — cố ý, để admin thấy mình gõ sai tên biến thay vì ra chuỗi rỗng khó hiểu.
 - Domain `package` không bắt buộc `message` (theo spec) — nội dung `reason` vẫn ghép trong
   `customerPackage.service.ts`. Nếu muốn nhất quán, có thể chuyển tiếp sang message-driven.
+
+---
+
+## 9. Bổ sung — form nhập luật thay cho ô JSON
+
+Phản hồi khi dùng thử: form thêm/sửa luật bắt gõ JSON vào ô `params`, mà *"không phải ai cũng biết
+code"*; thêm nữa ô `Loại hành động` chỉ có đúng một giá trị hợp lệ cho mỗi nhóm nên để đó là thừa.
+
+### 9.1. Khuôn form sinh từ backend
+
+Thêm `DOMAIN_FORM_SPEC` trong [`domainSpecs.ts`](../backend/src/expertSystem/domainSpecs.ts) — mô tả
+cho mỗi nhóm: loại hành động cố định, danh sách dữ kiện dùng được ở phần Điều kiện, và từng ô nhập
+của phần `params` (kiểu ô, nhãn tiếng Việt, danh sách lựa chọn, các chỗ trống `{tenBien}` dùng được).
+
+Backend expose qua `GET /expert-rules/form-spec`; frontend dựng form từ đó. Nhờ vậy **dropdown trên
+UI và validate ở server dùng chung một nguồn** — thêm một loại gợi ý mới chỉ sửa `domainSpecs.ts`,
+không phải sửa 2 nơi rồi lệch nhau.
+
+### 9.2. Thay đổi ở `ExpertRulesPanel.tsx`
+
+| Trước | Sau |
+|---|---|
+| Ô `type` phải tự gõ (`recommend`/`decision`/...) | Bỏ hẳn — hiện nhãn cho biết, hệ thống tự điền theo nhóm |
+| Ô `params` là textarea JSON | Các ô nhập cụ thể: Select cho giá trị có sẵn, Input/TextArea cho nội dung |
+| Ô `fact` gõ tay (`longParkedCount`...) | Select có nhãn tiếng Việt ("Số xe đang đỗ quá 24 giờ") |
+| `durationDays` gõ tay, dễ sai | Select đúng các thời hạn gói đang bán |
+| Chưa chọn nhóm vẫn hiện ô JSON | Hiện hướng dẫn "Chọn Nhóm (domain) ở phía trên trước" |
+| Nhóm admin tự thêm | Vẫn dùng ô JSON (chưa service nào tiêu thụ nên không thể biết cần field gì) |
+
+Các khoá `params` không nằm trong khuôn form được **giữ nguyên khi lưu** (state `extraParams`) để
+không làm mất dữ liệu đã có.
+
+### 9.3. Dọn field thừa `params.template`
+
+`template` (`expand_zone` / `weekend_pricing` / `package_campaign`) được ghi vào DB từ bản đầu
+nhưng `grep` toàn bộ source cho thấy **không có chỗ nào đọc tới** — `analytics.service.ts` tra khối
+phân tích theo `params.id`. Đã bỏ khỏi `rules/defaults.ts` và tự xoá khỏi dữ liệu cũ trong
+`knowledgeBase.syncDefaults()`.
+
+### 9.4. Kiểm chứng trên trình duyệt thật
+
+Mở luật `dss_zone_overloaded` → **Sửa**, đọc DOM của modal:
+
+```
+Kết quả khi luật khớp  [decision]
+Khi số liệu vượt ngưỡng thì đưa câu hỏi quyết định kèm các phương án cho quản lý.
+Loại hành động của nhóm này luôn là decision nên hệ thống tự điền, bạn không cần nhập.
+Quyết định hiển thị     → d1 — Mở thêm chỗ đỗ / điều phối sang khu trống
+Câu hỏi quyết định      → Có nên mở thêm chỗ đỗ ở {zone}?
+Có thể chèn số liệu thật bằng các chỗ trống sau: {zone}
+```
+
+Không còn textarea JSON nào (kiểm tra bằng script: mọi textarea đều không bắt đầu bằng `{`).
+Bấm **Cập nhật** → toast "Đã cập nhật luật", đọc lại DB xác nhận `template` đã được dọn:
+
+```
+dss_zone_overloaded  -> [{"type":"decision","params":{"id":"d1","message":"Có nên mở thêm chỗ đỗ ở {zone}?"}}]
+dss_weekend_drop     -> [{"type":"decision","params":{"id":"d2","message":"Có nên điều chỉnh giá vào cuối tuần?"}}]
+dss_package_campaign -> [{"type":"decision","params":{"id":"d3","message":"Có nên triển khai chiến dịch bán gói dịch vụ?"}}]
+```
+
+---
+
+## 10. Bổ sung — tăng tốc mở app khi bấm icon
+
+### 10.1. Nguyên nhân thật, đọc từ `logs/launcher.log`
+
+```
+18:27:44  === Khoi dong QLBDX ===          ← bấm lần 1
+18:27:56  === Khoi dong QLBDX ===          ← bấm lần 2 (chưa thấy gì nên bấm lại)
+18:27:59  Dang tat process cu tren cong 3000 (PID 5408)   ← GIẾT tiến trình của lần 1
+18:28:19  === Khoi dong QLBDX ===          ← bấm lần 3
+18:28:22  Dang tat process cu tren cong 3000 (PID 19216)  ← GIẾT tiến trình của lần 2
+18:28:45  San sang! Mo trinh duyet.        ← tổng cộng 61 giây
+```
+
+Launcher không có phản hồi gì trong ~20 giây đầu, nên người dùng bấm lại; mỗi lần bấm lại chạy
+bước "dọn tiến trình cũ trên cổng 3000/5001" và **giết đúng tiến trình đang khởi động dở**.
+
+### 10.2. Các thay đổi trong `scripts/start-silent.ps1`
+
+1. **Mutex `Global\QLBDX_Launcher`** — lần bấm thứ 2 trở đi không kill và khởi động lại nữa, chỉ
+   chờ tới khi sẵn sàng rồi mở trình duyệt.
+2. **Cửa sổ "Đang khởi động QLBDX..."** (WinForms, có thanh tiến trình chạy) hiện ngay khi bấm, cập
+   nhật theo từng bước (khởi động SQL Server / dọn tiến trình cũ / biên dịch giao diện) và tự đóng
+   khi mở trình duyệt. Tham số `-NoSplash` để tắt khi chạy từ script khác.
+3. **Quét cổng bằng 1 lệnh `netstat -ano`** thay cho 2 lần `Get-NetTCPConnection` — cmdlet đó phải
+   nạp module NetTCPIP, tốn ~1.5s ở lần gọi đầu.
+4. **Kiểm tra sẵn sàng bằng `HttpWebRequest`** (nhẹ hơn `Invoke-WebRequest`), poll 300ms thay 500ms.
+   Vẫn phải dùng HTTP chứ không kiểm tra cổng: webpack-dev-server mở cổng 3000 từ giây thứ ~4 nhưng
+   giữ request lại cho tới khi biên dịch xong.
+5. Ghi thời gian thật vào log: `San sang sau 8.0s! Mo trinh duyet.`
+
+### 10.3. `frontend/.env` mới
+
+```
+BROWSER=none              # launcher tự mở trình duyệt 1 lần khi thực sự sẵn sàng
+DISABLE_ESLINT_PLUGIN=true  # bớt ~5s mỗi lần biên dịch lại từ đầu
+```
+
+Đã đo: cache lạnh **36.3s → 31.3s**. Cảnh báo lint trước đây chỉ ghi vào `logs/frontend.log` không
+ai đọc; nay chạy tường minh bằng `npm run lint` / `npm run typecheck` (2 script mới trong
+`frontend/package.json`).
+
+> Đã thử `GENERATE_SOURCEMAP=false` nhưng **không đưa vào**: trong CRA 5 biến này chỉ ảnh hưởng bản
+> build production, chế độ dev luôn dùng `cheap-module-source-map` — thêm vào chỉ gây hiểu nhầm.
+
+### 10.4. Số đo trước/sau
+
+| Tình huống | Trước | Sau |
+|---|---|---|
+| Bấm icon 3 lần liên tiếp | 61s (đo từ log 18:27:44 → 18:28:45) | ~10s (18:39:25 → 18:39:35) |
+| Bấm 1 lần, cache ấm | ~11s | ~8-10s |
+| Bấm 1 lần, sau khi sửa code (cache lạnh) | ~36s | ~31s |
+| Bấm khi app đang chạy sẵn | mở ngay | mở ngay (giữ nguyên) |
+
+Log xác nhận cơ chế chống bấm trùng hoạt động:
+
+```
+18:37:16  === Khoi dong QLBDX ===
+18:37:29  Da co mot lan khoi dong dang chay - chi doi va mo trinh duyet (khong khoi dong lai).
+18:37:38  San sang sau 18.9s! Mo trinh duyet.
+```
+
+> Phần biên dịch giao diện (~7s ấm / ~31s lạnh) là giới hạn của `react-scripts` dev server, không
+> rút ngắn thêm được nếu vẫn chạy chế độ dev. Muốn mở gần như tức thì thì phải chuyển sang chạy bản
+> build sẵn (`npm run build` rồi phục vụ tĩnh) — đổi lại mỗi lần sửa code phải build lại ~1-2 phút,
+> nên chưa làm.

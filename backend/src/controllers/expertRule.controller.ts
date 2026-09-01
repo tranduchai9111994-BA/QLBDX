@@ -24,6 +24,10 @@ export class ExpertRuleController {
     }
   }
 
+  async formSpec(_req: Request, res: Response): Promise<void> {
+    res.json(expertRuleService.formSpec());
+  }
+
   async getById(req: Request, res: Response): Promise<void> {
     try {
       const result = await expertRuleService.getById(Number(req.params.id));

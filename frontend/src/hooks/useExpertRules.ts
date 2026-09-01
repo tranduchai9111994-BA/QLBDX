@@ -25,6 +25,26 @@ export interface ExpertRule {
   updatedAt?: string;
 }
 
+/** Khuôn form nhập luật do backend mô tả (expertSystem/domainSpecs.ts) — xem DOMAIN_FORM_SPEC. */
+export interface RuleFormField {
+  name: string;
+  label: string;
+  type: 'select' | 'text' | 'number' | 'textarea';
+  required: boolean;
+  options?: { value: string; label: string }[];
+  placeholder?: string;
+  help?: string;
+  variables?: { name: string; description: string }[];
+}
+
+export interface DomainFormSpec {
+  label: string;
+  description: string;
+  actionType: string;
+  facts: { name: string; label: string; help?: string }[];
+  fields: RuleFormField[];
+}
+
 export interface ExpertRuleInput {
   code: string;
   domain: string;
@@ -43,6 +63,7 @@ export interface ExpertRuleInput {
 export function useExpertRules() {
   const [rules, setRules] = useState<ExpertRule[]>([]);
   const [domains, setDomains] = useState<string[]>([]);
+  const [formSpec, setFormSpec] = useState<Record<string, DomainFormSpec>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchRules = useCallback(async (domain?: string) => {
@@ -60,7 +81,14 @@ export function useExpertRules() {
     setDomains(res.data);
   }, []);
 
-  useEffect(() => { fetchRules(); fetchDomains(); }, [fetchRules, fetchDomains]);
+  // Khuôn form lấy từ backend để dropdown trên UI luôn khớp với validate ở server —
+  // thêm 1 loại gợi ý mới chỉ cần sửa domainSpecs.ts, không phải sửa 2 nơi.
+  const fetchFormSpec = useCallback(async () => {
+    const res = await api.get<Record<string, DomainFormSpec>>('/expert-rules/form-spec');
+    setFormSpec(res.data);
+  }, []);
+
+  useEffect(() => { fetchRules(); fetchDomains(); fetchFormSpec(); }, [fetchRules, fetchDomains, fetchFormSpec]);
 
   const createRule = async (data: ExpertRuleInput) => {
     await api.post('/expert-rules', data);
@@ -84,5 +112,5 @@ export function useExpertRules() {
     return res.data;
   };
 
-  return { rules, domains, loading, fetchRules, createRule, updateRule, deleteRule, testEvaluate };
+  return { rules, domains, formSpec, loading, fetchRules, createRule, updateRule, deleteRule, testEvaluate };
 }

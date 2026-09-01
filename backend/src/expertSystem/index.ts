@@ -14,8 +14,9 @@ export {
   ANALYTICS_DECISION_IDS,
   REPORT_SUGGESTION_TYPES,
   DOMAIN_ACTION_TYPE,
+  DOMAIN_FORM_SPEC,
 } from './domainSpecs';
-export type { RuleType } from './domainSpecs';
+export type { RuleType, DomainFormSpec, RuleFormField } from './domainSpecs';
 
 export async function evaluate(facts: Fact, domain: string): Promise<EvaluationResult> {
   return inferenceEngine.evaluate(facts, domain);
