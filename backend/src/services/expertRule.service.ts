@@ -74,6 +74,12 @@ class ExpertRuleService {
     return row;
   }
 
+  /**
+   * Lưu ý: các field tùy chọn (description / priority / enabled) chỉ ghi đè khi payload có gửi.
+   * Nếu dùng `?? <default>` như lúc create thì client nào không gửi field sẽ vô tình reset giá trị
+   * cũ trong DB — ví dụ sửa mỗi tên luật lại làm rule đang tắt bị bật lại, hoặc priority về 100
+   * làm đổi thứ tự fire của Inference Engine. Gửi `description: null` vẫn xóa được mô tả như cũ.
+   */
   async update(id: number, data: ExpertRuleInput, updatedBy?: number) {
     this.validate(data);
     const row = await prisma.expertRule.update({
@@ -82,11 +88,11 @@ class ExpertRuleService {
         code: data.code,
         domain: data.domain,
         name: data.name,
-        description: data.description ?? null,
-        priority: data.priority ?? 100,
         conditions: JSON.stringify(data.conditions),
         actions: JSON.stringify(data.actions),
-        enabled: data.enabled ?? true,
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.priority !== undefined && { priority: data.priority }),
+        ...(data.enabled !== undefined && { enabled: data.enabled }),
         updatedBy,
       },
     });
