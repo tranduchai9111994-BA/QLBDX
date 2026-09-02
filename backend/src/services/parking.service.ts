@@ -1,3 +1,19 @@
+/**
+ * Nghiệp vụ vận hành bãi xe — trái tim của hệ thống: xe vào, xe ra, tính phí, tra cứu lịch sử.
+ *
+ * Vị trí trong luồng:
+ *   pages/ParkingEntry.tsx  -> POST /api/parking/entry     -> entry()
+ *   pages/ParkingExit.tsx   -> GET  /api/parking/preview   -> preview()   (báo giá trước)
+ *                           -> POST /api/parking/exit      -> exit()      (chốt, thu tiền)
+ *   pages/ParkingHistory.tsx-> GET  /api/parking/history   -> history()
+ *
+ * Ba nguyên tắc xuyên suốt file này:
+ *   1. Biển số luôn được chuẩn hoá trước khi so sánh (utils/businessRules.ts).
+ *   2. Giá được CHỐT vào bản ghi ngay lúc xe vào, nên đổi bảng giá giữa chừng không ảnh hưởng
+ *      những xe đang gửi.
+ *   3. Mọi trường hợp cho xe ra đều đi qua cùng một hàm `completeExit`, để luồng thường và
+ *      luồng ngoại lệ không bị lệch nghiệp vụ.
+ */
 import { Decimal } from '@prisma/client/runtime/library';
 import prisma from '../config/prisma';
 import {
@@ -13,6 +29,11 @@ import {
 import { calculateParkingFee } from '../utils/feeCalculator';
 import { syncDueVehicleTypeRates } from './pricing.service';
 
+/**
+ * Danh sách lý do cho xe ra "ngoại lệ" — trường hợp không đi theo quy trình bình thường
+ * (khách mất vé, vé hỏng, cần giải phóng chỗ gấp, miễn phí...). Mã lý do được ghi vào ghi chú
+ * của bản ghi để sau này lọc và thống kê được.
+ */
 const EXCEPTION_REASON_LABEL: Record<string, string> = {
   lost_ticket: 'Mất vé / mất phiếu',
   damaged_ticket: 'Vé hỏng / không quét được',
@@ -22,6 +43,14 @@ const EXCEPTION_REASON_LABEL: Record<string, string> = {
 };
 
 export class ParkingService {
+  /**
+   * Tìm xe trong danh mục theo biển số, có bỏ qua khác biệt về dấu gạch / khoảng trắng.
+   *
+   * Hạn chế: đang tải toàn bộ danh sách xe rồi lọc trong bộ nhớ, vì SQL Server không so khớp
+   * trực tiếp được hai biển số khác định dạng. Chấp nhận được với quy mô bãi xe (vài nghìn xe),
+   * nhưng nếu dữ liệu lớn hơn thì nên thêm một cột "biển số đã chuẩn hoá" có đánh chỉ mục vào
+   * bảng Vehicles và truy vấn thẳng trên cột đó.
+   */
   private async findVehicleByNormalizedPlate(licensePlate: string) {
     const normalizedPlate = normalizeLicensePlate(licensePlate);
     const vehicles = await prisma.vehicle.findMany({
@@ -33,6 +62,13 @@ export class ParkingService {
     return vehicles.find((vehicle) => areLicensePlatesEqual(vehicle.licensePlate, normalizedPlate)) ?? null;
   }
 
+  /**
+   * Xe này có đang thuộc một gói còn hiệu lực không? Nếu có thì lượt gửi được miễn phí.
+   *
+   * So sánh theo mốc 00:00 của ngày hiện tại để gói bắt đầu/kết thúc đúng ngày hôm nay vẫn
+   * được tính là còn hiệu lực (nếu so theo thời điểm hiện tại thì gói bắt đầu hôm nay lúc
+   * 00:00 vẫn qua, nhưng gói kết thúc hôm nay sẽ bị loại oan).
+   */
   private async hasActivePackage(vehicleId: number) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -50,6 +86,18 @@ export class ParkingService {
     return !!pkgCheck;
   }
 
+  /**
+   * Xử lý chung cho MỌI trường hợp xe ra — cả xe ra bình thường (`exit`) lẫn xe ra ngoại lệ
+   * (`exitException`). Gom vào một chỗ để hai luồng không bị lệch nghiệp vụ theo thời gian.
+   *
+   * Các bước thực hiện:
+   *   1. Đọc bản ghi đang đỗ (status = 'parked').
+   *   2. Tính thời gian gửi và tiền phí (feeCalculator), có xét gói của khách.
+   *   3. Áp dụng miễn/ghi đè phí nếu là trường hợp ngoại lệ.
+   *   4. Cập nhật bản ghi sang 'completed'.
+   *   5. Trả chỗ đỗ về trạng thái trống.
+   *   6. Sinh phiếu thanh toán nếu số tiền > 0.
+   */
   private async completeExit(params: {
     recordId: number;
     createdByUserId: number;
@@ -60,6 +108,8 @@ export class ParkingService {
     isException?: boolean;
     exceptionReason?: string;
   }) {
+    // Điều kiện status = 'parked' rất quan trọng: nếu chỉ tìm theo id thì bấm "Xe ra" hai lần
+    // (mạng chậm, người dùng bấm lại) sẽ tính phí và tạo phiếu thu lần thứ hai cho cùng một lượt.
     const record = await prisma.parkingRecord.findFirst({
       where: { id: params.recordId, status: 'parked' },
       include: {
@@ -80,6 +130,10 @@ export class ParkingService {
       hasPackage = await this.hasActivePackage(record.vehicleId);
     }
 
+    // Ưu tiên dùng giá ĐÃ CHỐT lúc xe vào (hourlyRateApplied / dailyRateApplied). Nhờ vậy nếu
+    // admin đổi bảng giá trong lúc xe đang đỗ thì khách vẫn trả theo giá lúc gửi — đúng cam kết
+    // với khách. Chỉ khi bản ghi cũ chưa có cột này (dữ liệu trước khi bổ sung tính năng chốt giá)
+    // mới lấy giá hiện hành của loại xe.
     const calc = calculateParkingFee(
       durationMs,
       {
@@ -89,13 +143,17 @@ export class ParkingService {
       { hasPackage }
     );
 
+    // Thứ tự ưu tiên khi quyết định số tiền cuối cùng: miễn phí > ghi đè thủ công > số máy tính ra.
     let fee = calc.fee;
     if (params.waiveFee || params.exceptionReason === 'fee_waiver') {
       fee = 0;
     } else if (typeof params.feeOverride === 'number' && Number.isFinite(params.feeOverride)) {
+      // Chặn số âm: nhân viên chỉ được giảm về 0, không được nhập số âm thành ra "trả tiền cho khách".
       fee = Math.max(0, params.feeOverride);
     }
 
+    // Nối thêm ghi chú ngoại lệ vào ghi chú cũ (không ghi đè, để không mất thông tin lúc xe vào).
+    // Cắt 500 ký tự cho khớp giới hạn độ dài của cột Notes trong DB.
     const mergedNotes = [record.notes, params.notesAppend].filter(Boolean).join('\n').slice(0, 500);
 
     await prisma.parkingRecord.update({
@@ -109,6 +167,8 @@ export class ParkingService {
       },
     });
 
+    // Trả chỗ đỗ về trạng thái trống để xe sau vào được. Không làm bước này thì chỗ sẽ bị
+    // "kẹt" ở trạng thái đang có xe dù xe đã rời bãi.
     if (record.parkingSpotId) {
       await prisma.parkingSpot.update({
         where: { id: record.parkingSpotId },
@@ -116,6 +176,8 @@ export class ParkingService {
       });
     }
 
+    // Chỉ sinh phiếu thu khi thực sự có tiền. Lượt miễn phí (khách có gói, hoặc được miễn) vẫn
+    // được ghi nhận đầy đủ trong ParkingRecord để báo cáo đếm lượt xe, chỉ là không có giao dịch thu.
     if (fee > 0) {
       await prisma.payment.create({
         data: {
@@ -146,6 +208,10 @@ export class ParkingService {
     };
   }
 
+  /**
+   * Danh sách lượt gửi xe, mặc định là các xe ĐANG đỗ trong bãi.
+   * Dùng cho màn hình Xe ra (chọn xe để cho ra) và bảng theo dõi ở Tổng quan.
+   */
   async findAll(params: {
     status?: string;
     search?: string;
@@ -155,6 +221,9 @@ export class ParkingService {
     to?: string;
   }) {
     const { status, search, zoneId, vehicleTypeId, from, to } = params;
+    // Cú pháp `...(dieu_kien ? { ... } : {})` là cách ghép điều kiện lọc động cho Prisma: bộ lọc
+    // nào người dùng không chọn thì không xuất hiện trong câu truy vấn, thay vì phải viết nhiều
+    // nhánh if để dựng câu lệnh.
     return prisma.parkingRecord.findMany({
       where: {
         status: status || 'parked',
@@ -200,7 +269,22 @@ export class ParkingService {
     });
   }
 
+  /**
+   * XE VÀO — ghi nhận một lượt gửi xe mới.
+   *
+   * Luồng: pages/ParkingEntry.tsx -> POST /api/parking/entry -> hàm này.
+   *
+   * Các bước kiểm tra trước khi cho vào:
+   *   1. Áp dụng bảng giá mới nếu đã đến ngày hiệu lực.
+   *   2. Xe này chưa đang đỗ trong bãi (chống ghi nhận trùng).
+   *   3. Loại xe có tồn tại.
+   *   4. Bãi còn chỗ phù hợp với loại xe đó.
+   *   5. Chỗ nhân viên chọn đang trống và vừa với loại xe.
+   * Qua hết mới tạo bản ghi và đánh dấu chỗ đỗ là đã có xe.
+   */
   async entry(data: ParkingEntryInput, createdByUserId: number) {
+    // Đồng bộ giá đến hạn ngay tại đây, vì bước dưới sẽ CHỐT giá vào bản ghi. Nếu bỏ qua, xe vào
+    // đúng ngày đổi giá sẽ bị chốt nhầm theo giá cũ và giữ giá sai đó cho tới lúc ra.
     await syncDueVehicleTypeRates();
 
     const normalizedPlate = normalizeLicensePlate(data.licensePlate);
@@ -211,10 +295,14 @@ export class ParkingService {
     });
     const alreadyParked = parkedRecords.find((record) => areLicensePlatesEqual(record.licensePlate, normalizedPlate));
 
+    // Chặn ghi nhận trùng: cùng một biển số không thể vừa đang đỗ vừa vào lần nữa. Nếu bỏ qua,
+    // xe sẽ chiếm hai chỗ và lúc cho ra không biết đóng lượt nào.
     if (alreadyParked) {
       throw { status: 400, message: 'Xe này đang đỗ trong bãi' };
     }
 
+    // Promise.all chạy 4 truy vấn ĐỒNG THỜI thay vì lần lượt: chúng độc lập nhau nên tổng thời
+    // gian chờ bằng truy vấn chậm nhất, không phải tổng của cả bốn.
     const [vehicle, requestedVehicleType, selectedSpot, availableSpots] = await Promise.all([
       this.findVehicleByNormalizedPlate(normalizedPlate),
       prisma.vehicleType.findUnique({
@@ -243,6 +331,8 @@ export class ParkingService {
       throw { status: 400, message: 'Loại xe không tồn tại' };
     }
 
+    // Nếu xe đã có trong danh mục thì tin loại xe đã đăng ký, không tin loại xe nhân viên chọn
+    // trên form — tránh việc chọn nhầm loại rẻ hơn cho một chiếc ô tô đã khai báo sẵn.
     const effectiveVehicleTypeId = vehicle?.vehicleTypeId ?? data.vehicleTypeId;
     const effectiveVehicleTypeName = vehicle?.vehicleType.name ?? requestedVehicleType.name;
     // Chốt giá tại thời điểm xe vào — không bị ảnh hưởng nếu admin đổi giá trong lúc xe đang đỗ.
@@ -252,6 +342,8 @@ export class ParkingService {
       isSpotCompatibleWithVehicleType(spot, effectiveVehicleTypeName)
     );
 
+    // Phân biệt hai thông báo lỗi: "hết chỗ phù hợp cho loại xe này" (bãi còn chỗ nhưng không
+    // vừa) khác với "chỗ vừa chọn đã có xe" — nhân viên biết ngay nên chọn lại hay báo khách quay xe.
     if (compatibleAvailableSpots.length === 0) {
       throw { status: 400, message: `Đã hết chỗ đỗ phù hợp cho loại xe ${effectiveVehicleTypeName}` };
     }
@@ -264,6 +356,8 @@ export class ParkingService {
       throw { status: 400, message: `Chỗ đỗ đã chọn không phù hợp với loại xe ${effectiveVehicleTypeName}` };
     }
 
+    // Ghi lại giá đang áp dụng vào chính bản ghi (hourlyRateApplied / dailyRateApplied). Đây là
+    // điểm mấu chốt để lúc xe ra tính đúng giá của thời điểm gửi, dù bảng giá đã thay đổi.
     const record = await prisma.parkingRecord.create({
       data: {
         vehicleId: vehicle?.id ?? null,
@@ -285,6 +379,7 @@ export class ParkingService {
     return { message: 'Ghi nhận xe vào thành công', id: record.id };
   }
 
+  /** XE RA thông thường: tính phí theo công thức, thu tiền, trả chỗ. */
   async exit(data: ParkingExitInput, createdByUserId: number) {
     return this.completeExit({
       recordId: data.parkingRecordId,
@@ -293,6 +388,13 @@ export class ParkingService {
     });
   }
 
+  /**
+   * XE RA NGOẠI LỆ — khách mất vé, vé hỏng, cần giải phóng chỗ, hoặc được miễn phí.
+   *
+   * Vẫn đi qua đúng `completeExit` như luồng thường, chỉ khác ở chỗ ghi thêm dòng ghi chú có
+   * gắn mã `[NGOAI_LE:<mã lý do>]`. Nhờ tiền tố này mà sau đó lọc ra được toàn bộ lượt ngoại lệ
+   * để đối soát (xem `plateHistory` và báo cáo).
+   */
   async exitException(data: ParkingExitExceptionInput, createdByUserId: number) {
     const reasonLabel = EXCEPTION_REASON_LABEL[data.exceptionReason] || data.exceptionReason;
     const noteLine = `[NGOAI_LE:${data.exceptionReason}] ${reasonLabel} — ${data.exceptionNote.trim()}`;
@@ -309,6 +411,14 @@ export class ParkingService {
     });
   }
 
+  /**
+   * XEM TRƯỚC số tiền phải trả mà CHƯA cho xe ra.
+   *
+   * Dùng ở màn hình Xe ra để nhân viên báo giá cho khách trước khi bấm xác nhận. Hàm này chỉ đọc
+   * dữ liệu, không cập nhật gì — bấm xem trước bao nhiêu lần cũng không ảnh hưởng.
+   *
+   * Trả kèm ngày hết hạn gói và số ngày còn lại để màn hình nhắc khách gia hạn đúng lúc.
+   */
   async preview(parkingRecordId: number) {
     const record = await prisma.parkingRecord.findFirst({
       where: { id: parkingRecordId, status: 'parked' },
@@ -370,6 +480,10 @@ export class ParkingService {
     };
   }
 
+  /**
+   * Lịch sử các lượt gửi xe ĐÃ HOÀN TẤT, có phân trang và nhiều bộ lọc.
+   * Dùng cho màn hình Lịch sử (pages/ParkingHistory.tsx).
+   */
   async history(params: {
     from?: string;
     to?: string;
@@ -382,6 +496,8 @@ export class ParkingService {
   }) {
     const { from, to, licensePlate, zoneId, vehicleTypeId, search } = params;
     const normalizedPlate = licensePlate ? normalizeLicensePlate(licensePlate) : '';
+    // Chặn hai đầu tham số phân trang do client gửi lên: trang nhỏ nhất là 1, và mỗi trang tối đa
+    // 200 bản ghi. Không chặn thì một request pageSize=1000000 có thể kéo cả bảng và làm treo server.
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 20));
 
@@ -421,6 +537,8 @@ export class ParkingService {
           : {}),
     };
 
+    // Lấy dữ liệu trang hiện tại và ĐẾM tổng số bản ghi cùng lúc. Tổng số là bắt buộc để giao
+    // diện vẽ đúng thanh phân trang; dùng chung biến `where` nên hai truy vấn luôn cùng bộ lọc.
     const [data, total] = await Promise.all([
       prisma.parkingRecord.findMany({
         where,
@@ -448,6 +566,10 @@ export class ParkingService {
     return { data, total, page, pageSize };
   }
 
+  /**
+   * Toàn bộ lịch sử ra/vào của MỘT biển số — dùng khi cần tra cứu một xe cụ thể.
+   * Trả kèm số liệu tổng hợp: tổng lượt, đang đỗ, đã hoàn tất, số lần ra ngoại lệ.
+   */
   async plateHistory(licensePlate: string) {
     const normalizedPlate = normalizeLicensePlate(licensePlate);
     if (!normalizedPlate) {
@@ -564,6 +686,8 @@ export class ParkingService {
       select: { entryTime: true },
     });
 
+    // Thời gian gửi trung bình (giờ), làm tròn 1 chữ số thập phân. Lọc bỏ bản ghi thiếu `duration`
+    // để một dòng dữ liệu lỗi không kéo trung bình về NaN.
     const durations = recentRecords
       .map((r) => r.duration)
       .filter((d): d is number => typeof d === 'number');
@@ -571,6 +695,8 @@ export class ParkingService {
       ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length / 60) * 10) / 10
       : null;
 
+    // Tìm khu vực khách hay đỗ nhất: đếm số lần theo tên khu trong 30 lượt gần đây rồi lấy khu
+    // có số lần cao nhất. Dùng để gợi ý đúng chỗ quen cho khách quen.
     const zoneCounts = new Map<string, number>();
     for (const r of recentRecords) {
       const zoneName = r.parkingSpot?.zone?.name;
@@ -591,6 +717,8 @@ export class ParkingService {
     let suggestedSpotId: number | null = null;
     let suggestedSpotLabel: string | null = null;
     let suggestedSpotNote: string | null = null;
+    // Ưu tiên gợi ý chỗ trống trong khu khách hay đỗ; khu đó hết chỗ thì lấy chỗ phù hợp bất kỳ
+    // và kèm ghi chú giải thích, để nhân viên nói được với khách vì sao hôm nay đổi khu.
     if (compatibleSpots.length > 0) {
       const inPreferred = preferredZone
         ? compatibleSpots.filter((s) => s.zone?.name === preferredZone)

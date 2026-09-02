@@ -1,13 +1,29 @@
+/**
+ * Nghiệp vụ quản lý KHU VỰC đỗ xe (Khu A, Khu B, Khu VIP...).
+ *
+ * Cấu trúc phân cấp của bãi: Khu vực (ParkingZone) -> nhiều Chỗ đỗ (ParkingSpot) -> mỗi lượt gửi
+ * xe chiếm một chỗ đỗ.
+ *
+ * Lưu ý nghiệp vụ: tên khu vực còn được dùng để suy ra khu này dành cho loại xe nào
+ * (xem getSpotCategory trong utils/businessRules.ts), nên đặt tên theo quy ước "Khu A - Xe máy"
+ * sẽ giúp hệ thống gợi ý chỗ chính xác hơn.
+ */
 import prisma from '../config/prisma';
 import { CreateParkingZoneInput, UpdateParkingZoneInput } from '../validators/parkingZone.validator';
 
 export class ParkingZoneService {
+  /**
+   * Danh sách khu vực kèm số liệu sức chứa: tổng chỗ, còn trống, đang có xe.
+   * Dùng cho sơ đồ bãi và các thẻ thống kê ở màn hình Tổng quan.
+   */
   async findAll() {
     const zones = await prisma.parkingZone.findMany({
       include: {
         _count: {
           select: { parkingSpots: true },
         },
+        // Chỉ lấy đúng cột `status` của các chỗ đỗ để đếm — không kéo toàn bộ thông tin chỗ đỗ
+        // về ứng dụng, vì ở màn hình này chỉ cần con số tổng hợp.
         parkingSpots: {
           select: { status: true },
         },
@@ -15,6 +31,8 @@ export class ParkingZoneService {
       orderBy: { id: 'asc' },
     });
 
+    // Chuyển dữ liệu thô của Prisma thành đúng hình dạng giao diện cần: gộp mảng trạng thái các
+    // chỗ đỗ thành ba con số. Nhờ vậy frontend chỉ việc hiển thị, không phải tự đếm.
     return zones.map((zone) => ({
       id: zone.id,
       name: zone.name,
@@ -26,6 +44,7 @@ export class ParkingZoneService {
     }));
   }
 
+  /** Thêm khu vực mới. Tên khu không được trùng vì đây là thứ người dùng nhìn để phân biệt. */
   async create(data: CreateParkingZoneInput) {
     const existingZone = await prisma.parkingZone.findFirst({
       where: { name: data.name },
@@ -46,6 +65,7 @@ export class ParkingZoneService {
     return { message: 'Thêm khu vực thành công', id: zone.id };
   }
 
+  /** Sửa khu vực. `NOT: { id }` để giữ nguyên tên cũ không bị báo trùng với chính nó. */
   async update(id: number, data: UpdateParkingZoneInput) {
     const [zone, duplicateZone] = await Promise.all([
       prisma.parkingZone.findUnique({
@@ -80,6 +100,12 @@ export class ParkingZoneService {
     return { message: 'Cập nhật thành công' };
   }
 
+  /**
+   * Xoá khu vực — ba lớp chặn, xét từ nghiêm trọng nhất xuống:
+   *   1. Đang có chỗ nào có xe -> xoá là mất dấu xe đang gửi.
+   *   2. Đã phát sinh lịch sử gửi xe -> xoá là mất dữ liệu báo cáo/doanh thu.
+   *   3. Vẫn còn chỗ đỗ trực thuộc -> yêu cầu dọn chỗ trước, tránh xoá dây chuyền ngoài ý muốn.
+   */
   async delete(id: number) {
     const [zone, spotsInZone, occupiedSpot, historyUsage] = await Promise.all([
       prisma.parkingZone.findUnique({
