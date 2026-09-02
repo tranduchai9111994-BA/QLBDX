@@ -1,3 +1,8 @@
+/**
+ * Controller nhật ký hoạt động (/api/activity-logs).
+ * Chỉ đọc — dữ liệu do middleware `activityLogger` tự ghi khi có thao tác thay đổi dữ liệu.
+ * Hiển thị ở màn hình Nhật ký hoạt động (pages/ActivityLogs.tsx).
+ */
 import { Request, Response } from 'express';
 import { activityLogService } from '../services/activityLog.service';
 

@@ -1,3 +1,8 @@
+/**
+ * Quy tắc kiểm tra dữ liệu khách hàng (Zod).
+ * Lưu ý: việc chống TRÙNG số điện thoại / CCCD không làm ở đây mà ở customer.service.ts,
+ * vì phải so sánh sau khi đã chuẩn hoá (bỏ khoảng trắng, dấu chấm) mới chính xác.
+ */
 import { z } from 'zod';
 
 export const createCustomerSchema = z.object({

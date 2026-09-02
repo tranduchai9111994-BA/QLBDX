@@ -1,3 +1,7 @@
+/**
+ * Định tuyến quản lý tài khoản. Tiền tố: /api/users
+ * Mọi route đều đi qua `auth` + `adminOnly` — nhân viên không truy cập được nhóm API này.
+ */
 import { Router } from 'express';
 import { userController } from '../controllers/user.controller';
 import { validate } from '../middlewares/validate';

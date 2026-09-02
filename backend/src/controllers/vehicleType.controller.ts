@@ -1,3 +1,7 @@
+/**
+ * Controller loại xe và bảng giá (/api/vehicle-types).
+ * Ngoài CRUD còn có API đặt lịch đổi giá và xem lịch sử giá — xem vehicleType.service.ts.
+ */
 import { Request, Response } from 'express';
 import { vehicleTypeService } from '../services/vehicleType.service';
 

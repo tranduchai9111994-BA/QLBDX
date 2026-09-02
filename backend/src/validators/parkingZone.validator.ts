@@ -1,3 +1,6 @@
+/**
+ * Quy tắc kiểm tra dữ liệu khu vực đỗ xe (Zod).
+ */
 import { z } from 'zod';
 
 export const createParkingZoneSchema = z.object({

@@ -1,3 +1,6 @@
+/**
+ * Định tuyến gói dịch vụ khách đã mua. Tiền tố: /api/customer-packages
+ */
 import { Router } from 'express';
 import { customerPackageController } from '../controllers/customerPackage.controller';
 import { validate } from '../middlewares/validate';

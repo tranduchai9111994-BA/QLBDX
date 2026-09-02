@@ -1,3 +1,7 @@
+/**
+ * Controller cấu hình chung cho cảnh báo (/api/alert-settings).
+ * Các tham số dùng chung mà report.service.ts đọc khi quét cảnh báo.
+ */
 import { Request, Response } from 'express';
 import { alertSettingsService } from '../services/alertSettings.service';
 

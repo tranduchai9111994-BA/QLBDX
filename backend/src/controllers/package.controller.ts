@@ -1,3 +1,7 @@
+/**
+ * Controller danh mục gói dịch vụ (/api/packages).
+ * Ngoài CRUD còn có API đặt lịch đổi giá và xem lịch sử giá — xem package.service.ts.
+ */
 import { Request, Response } from 'express';
 import { packageService } from '../services/package.service';
 

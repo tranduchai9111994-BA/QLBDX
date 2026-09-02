@@ -1,3 +1,10 @@
+/**
+ * Controller nhóm quyền (/api/permission-groups).
+ *
+ * Nhóm quyền là ma trận "màn hình x hành động (xem/thêm/sửa/xoá)" gán cho nhân viên.
+ * Việc chặn thật khi gọi API nằm ở middlewares/requirePermission.ts — dữ liệu ở đây chỉ là
+ * cấu hình mà middleware đó tra cứu.
+ */
 import { Request, Response } from 'express';
 import { permissionGroupService } from '../services/permissionGroup.service';
 

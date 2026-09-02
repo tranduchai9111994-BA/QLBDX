@@ -1,3 +1,18 @@
+/**
+ * Nghiệp vụ BÁO CÁO và CẢNH BÁO — file lớn nhất phía backend.
+ *
+ * Vị trí trong luồng:
+ *   pages/Reports.tsx   -> /api/reports/revenue, /vehicle-stats, /hourly, ...
+ *   pages/Alerts.tsx    -> /api/reports/alerts   -> getAlerts()
+ *   pages/dashboard/*   -> /api/reports/dashboard, /insights
+ *
+ * Điểm đáng chú ý: các NGƯỠNG cảnh báo (bao nhiêu giờ là "đỗ quá lâu", tỷ lệ lấp đầy bao nhiêu
+ * là "sắp đầy", số tiền nào là "bất thường") KHÔNG viết cứng trong file này. Chúng được đọc từ:
+ *   - alertSettings.service.ts  : cấu hình chung.
+ *   - alertRuleTier.service.ts  : các mốc phân mức Nguy hiểm / Cảnh báo / Thông tin.
+ *   - Hệ chuyên gia (expertSystem) : luật quyết định mức độ và nội dung thông báo.
+ * Nhờ vậy người quản trị đổi ngưỡng trên giao diện mà không cần lập trình viên sửa code.
+ */
 import prisma from '../config/prisma';
 import { alertSettingsService } from './alertSettings.service';
 import { alertRuleTierService } from './alertRuleTier.service';
@@ -5,6 +20,13 @@ import { formatDateTimeVN, formatDateVN } from '../utils/formatDate';
 import { evaluate, renderMessage } from '../expertSystem';
 
 export class ReportService {
+  /**
+   * Số liệu tổng quan cho màn hình Dashboard: xe đang đỗ, chỗ trống, lượt vào hôm nay,
+   * doanh thu hôm nay và doanh thu tháng này.
+   *
+   * Toàn bộ chạy trong một `Promise.all` — các con số độc lập nhau nên truy vấn song song,
+   * thời gian chờ bằng truy vấn chậm nhất thay vì tổng của tất cả.
+   */
   async getDashboard() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -56,6 +78,10 @@ export class ReportService {
     };
   }
 
+  /**
+   * Doanh thu theo thời gian, gộp theo ngày / tuần / tháng tuỳ tham số `groupBy`.
+   * Dùng cho biểu đồ đường ở màn hình Báo cáo.
+   */
   async getRevenue(from?: string, to?: string, groupBy?: string) {
     const where: any = { status: 'completed' };
     if (from) where.paidAt = { ...where.paidAt, gte: new Date(from) };
@@ -120,6 +146,7 @@ export class ReportService {
     }));
   }
 
+  /** Thống kê lượt gửi theo loại xe — biểu đồ tròn "cơ cấu phương tiện" ở màn hình Báo cáo. */
   async getVehicleStats(from?: string, to?: string) {
     const where: any = { status: 'completed' };
     if (from) where.entryTime = { ...where.entryTime, gte: new Date(from) };
@@ -153,6 +180,7 @@ export class ReportService {
       .sort((a, b) => b.totalRecords - a.totalRecords);
   }
 
+  /** Phân bố lượt xe theo GIỜ trong ngày — dùng để xác định giờ cao điểm và bố trí nhân sự. */
   async getHourlyStats(from?: string, to?: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -181,6 +209,7 @@ export class ReportService {
     }));
   }
 
+  /** Cơ cấu doanh thu theo phương thức thanh toán (tiền mặt / thẻ / chuyển khoản). */
   async getPaymentMethodStats(from?: string, to?: string) {
     const where: any = { status: 'completed' };
     if (from) where.paidAt = { ...where.paidAt, gte: new Date(from) };
@@ -246,6 +275,13 @@ export class ReportService {
     };
   }
 
+  /**
+   * Thống kê các lượt cho xe ra NGOẠI LỆ (mất vé, miễn phí, giải phóng chỗ...).
+   *
+   * Nhận diện bằng cách tìm tiền tố `[NGOAI_LE:` trong ghi chú của bản ghi — dấu vết do
+   * parking.service.exitException() ghi lại. Đây là số liệu để đối soát: ngoại lệ nhiều bất
+   * thường ở một nhân viên là dấu hiệu cần kiểm tra.
+   */
   async getExceptionStats(from?: string, to?: string) {
     // Exceptions được lưu trong notes với pattern [NGOAI_LE:reason]
     const where: any = { status: 'completed' };
@@ -329,6 +365,18 @@ export class ReportService {
     };
   }
 
+  /**
+   * SINH CẢNH BÁO cho toàn hệ thống — hàm lớn nhất của file, và là nơi HỆ CHUYÊN GIA quyết định
+   * mức độ nghiêm trọng của từng cảnh báo.
+   *
+   * Các loại cảnh báo được quét: gói sắp hết hạn, gói có trạng thái không nhất quán, khu vực sắp
+   * đầy / lệch tải, xe đỗ quá lâu, chỗ đỗ báo có xe nhưng không có bản ghi, giao dịch số tiền bất
+   * thường, thời gian gửi bất thường so với trung bình của loại xe, doanh thu giảm mạnh.
+   *
+   * Cách phối hợp với hệ chuyên gia: phần mã nguồn ở đây chỉ chịu trách nhiệm ĐO số liệu; còn
+   * "số liệu tới mức nào thì là Nguy hiểm / Cảnh báo / Thông tin" là do bộ luật quyết định —
+   * người quản trị cấu hình ở màn hình Cảnh báo -> Cấu hình mức độ, không phải sửa code.
+   */
   async getAlerts(longParkingHoursOverride?: number) {
     const settings = await alertSettingsService.get();
     const tiers = await alertRuleTierService.getAllGrouped();
@@ -728,18 +776,30 @@ export class ReportService {
   }
 
   /**
-   * Dashboard thông minh (DSS): so sánh tuần này vs tuần trước, giờ cao điểm,
-   * xu hướng 7 ngày, loại xe phổ biến nhất, và gợi ý hành động rule-based.
+   * DASHBOARD THÔNG MINH (Hệ hỗ trợ ra quyết định - DSS).
+   *
+   * Tổng hợp bức tranh vận hành: so sánh tuần này với tuần trước, giờ cao điểm, xu hướng 7 ngày,
+   * loại xe phổ biến nhất — rồi đưa các con số đó vào hệ chuyên gia (nhóm luật 'analytics' và
+   * 'report') để sinh ra GỢI Ý HÀNH ĐỘNG kèm lời giải thích.
+   *
+   * Khác biệt so với báo cáo thông thường: báo cáo chỉ trả về số, còn ở đây hệ thống đọc số và
+   * đề xuất nên làm gì tiếp theo (ví dụ "doanh thu giảm 30% so với tuần trước, cần xem lại giá").
    */
   async getInsights() {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=CN..6=T7
+    // JavaScript đánh số ngày trong tuần bắt đầu từ Chủ nhật (0=CN, 1=T2, ..., 6=T7), trong khi
+    // tuần làm việc ở Việt Nam bắt đầu từ Thứ 2. Phép `(dayOfWeek + 6) % 7` quy đổi sang số ngày
+    // đã trôi qua kể từ Thứ 2: T2->0, T3->1, ..., CN->6.
+    const dayOfWeek = now.getDay();
     const daysSinceMonday = (dayOfWeek + 6) % 7;
     const thisWeekStart = new Date(now);
     thisWeekStart.setDate(thisWeekStart.getDate() - daysSinceMonday);
     thisWeekStart.setHours(0, 0, 0, 0);
     const lastWeekStart = new Date(thisWeekStart);
     lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    // So sánh tuần này với tuần trước tính tới CÙNG MỐC THỜI GIAN (thứ mấy, mấy giờ), không phải
+    // với trọn tuần trước. Nếu so với cả tuần thì sáng thứ Ba tuần này lúc nào cũng "giảm mạnh"
+    // so với 7 ngày đầy đủ của tuần trước — một kết luận sai.
     const lastWeekSameTime = new Date(now);
     lastWeekSameTime.setDate(lastWeekSameTime.getDate() - 7);
 

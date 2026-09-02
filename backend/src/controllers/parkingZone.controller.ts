@@ -1,3 +1,7 @@
+/**
+ * Controller khu vực đỗ xe (/api/parking-zones).
+ * Danh sách trả về kèm số liệu sức chứa (tổng chỗ / còn trống / đang dùng) của từng khu.
+ */
 import { Request, Response } from 'express';
 import { parkingZoneService } from '../services/parkingZone.service';
 

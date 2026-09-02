@@ -1,3 +1,6 @@
+/**
+ * Quy tắc kiểm tra dữ liệu nhóm quyền (Zod).
+ */
 import { z } from 'zod';
 import { CONFIGURABLE_SCREEN_KEYS } from '../config/screens';
 

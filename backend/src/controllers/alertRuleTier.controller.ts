@@ -1,3 +1,10 @@
+/**
+ * Controller cấu hình MỨC ĐỘ cảnh báo (/api/alert-rule-tiers).
+ *
+ * Mỗi loại cảnh báo (xe đỗ quá lâu, khu sắp đầy, giao dịch bất thường...) có nhiều mốc ngưỡng,
+ * mỗi mốc gắn một mức độ: Nguy hiểm / Cảnh báo / Thông tin. Người quản trị chỉnh các mốc này ở
+ * tab "Cấu hình mức độ" trong màn hình Cảnh báo, thay vì phải sửa mã nguồn.
+ */
 import { Request, Response } from 'express';
 import { alertRuleTierService, RULE_TYPES } from '../services/alertRuleTier.service';
 

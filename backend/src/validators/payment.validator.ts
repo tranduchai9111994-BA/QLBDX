@@ -1,3 +1,6 @@
+/**
+ * Quy tắc kiểm tra dữ liệu sửa giao dịch thanh toán (Zod).
+ */
 import { z } from 'zod';
 
 export const updatePaymentSchema = z.object({

@@ -1,3 +1,17 @@
+/**
+ * Nghiệp vụ GÓI DỊCH VỤ CỦA KHÁCH (khách đã mua gói nào, hiệu lực từ ngày nào tới ngày nào).
+ *
+ * Phân biệt hai khái niệm dễ nhầm:
+ *   - ParkingPackage  (package.service.ts)      = gói trong DANH MỤC, ví dụ "Gói tháng xe máy".
+ *   - CustomerPackage (file này)                = một lần khách MUA gói đó, có thời hạn cụ thể.
+ *
+ * Vị trí trong luồng:
+ *   pages/CustomerPackages.tsx -> /api/customer-packages -> file này
+ *   Khi xe vào/ra, parking.service.ts tra bảng này để biết lượt gửi có được miễn phí không.
+ *
+ * Hàm đáng chú ý nhất: `getPackageRecommendation` — dùng HỆ CHUYÊN GIA để gợi ý khách nên mua
+ * gói nào dựa trên tần suất gửi xe thực tế.
+ */
 import prisma from '../config/prisma';
 import { CreateCustomerPackageInput } from '../validators/customerPackage.validator';
 import { getPackageLifecycleStatus } from '../utils/businessRules';
@@ -5,6 +19,14 @@ import { syncDuePackagePrices } from './pricing.service';
 import { evaluate } from '../expertSystem';
 
 export class CustomerPackageService {
+  /**
+   * Đánh dấu 'expired' cho các gói đã qua ngày kết thúc.
+   *
+   * Vì sao cần: cột `status` trong DB không tự đổi theo thời gian. Nếu chỉ tính trạng thái lúc
+   * hiển thị thì các truy vấn lọc theo `status` (báo cáo, thống kê) vẫn thấy gói cũ là 'active'.
+   * Hàm này được gọi ở đầu các thao tác đọc/ghi quan trọng, thay cho việc phải cài một tác vụ
+   * chạy nền hằng đêm.
+   */
   private async syncExpiredStatuses(now = new Date()) {
     await prisma.customerPackage.updateMany({
       where: {
@@ -15,10 +37,24 @@ export class CustomerPackageService {
     });
   }
 
+  /** Trạng thái thật tại thời điểm hiện tại (xem getPackageLifecycleStatus ở utils/businessRules.ts). */
   private getRuntimeStatus(pkg: { status: string; startDate: Date; endDate: Date }, now = new Date()) {
     return getPackageLifecycleStatus(pkg.status, pkg.startDate, pkg.endDate, now);
   }
 
+  /**
+   * Kiểm tra toàn bộ điều kiện trước khi bán một gói cho khách. Gom vào một chỗ để hàm `create`
+   * đọc gọn và để không bỏ sót điều kiện nào.
+   *
+   * Bảy điều kiện, theo thứ tự kiểm tra:
+   *   1. Khách hàng tồn tại và đang hoạt động.
+   *   2. Phương tiện tồn tại.
+   *   3. Phương tiện đúng là của khách hàng đó (không bán gói cho xe người khác).
+   *   4. Gói dịch vụ tồn tại và còn áp dụng.
+   *   5. Đang trong thời gian mở bán của gói (validFrom / validTo).
+   *   6. Loại xe của phương tiện khớp với loại xe của gói (giá gói tính theo loại xe).
+   *   7. Xe chưa có gói nào trùng khoảng thời gian — chống mua chồng gói.
+   */
   private async ensurePackageCreateValidity(data: CreateCustomerPackageInput, startDate: Date, endDate: Date) {
     const [customer, vehicle, pkg, overlappingPackage] = await Promise.all([
       prisma.customer.findFirst({
@@ -32,6 +68,9 @@ export class CustomerPackageService {
       prisma.parkingPackage.findUnique({
         where: { id: data.packageId },
       }),
+      // Phát hiện gói trùng khoảng thời gian. Điều kiện giao nhau của hai đoạn [A1,A2] và [B1,B2]
+      // là: A1 <= B2 VÀ A2 >= B1 — nên chỉ cần hai phép so sánh, không phải liệt kê các trường hợp.
+      // Gói đã huỷ không tính vào đây, khách được mua lại cho đúng khoảng thời gian đó.
       prisma.customerPackage.findFirst({
         where: {
           vehicleId: data.vehicleId,
@@ -362,6 +401,19 @@ export class CustomerPackageService {
    * Gợi ý gói dịch vụ theo tần suất đỗ xe 30 ngày gần nhất (rule-based).
    * Ngưỡng: >=20 lần/tháng → gói năm, >=12 → gói quý, >=5 → gói tháng, còn lại → không gợi ý.
    */
+  /**
+   * GỢI Ý GÓI DỊCH VỤ cho khách — nơi HỆ CHUYÊN GIA được áp dụng vào nghiệp vụ.
+   *
+   * Cách hoạt động:
+   *   1. Đo DỮ KIỆN từ dữ liệu thật: số lần khách gửi xe trong 30 ngày gần nhất (`frequency`).
+   *   2. Đưa dữ kiện vào máy suy diễn với nhóm luật 'package' — `evaluate({ frequency }, 'package')`.
+   *   3. Luật nào thoả sẽ cho biết nên gợi ý mức gói nào (tháng / quý / năm) và mức tiết kiệm.
+   *   4. Tra ra gói cụ thể trong danh mục khớp loại xe khách hay gửi và số ngày của mức gói đó.
+   *
+   * Điểm quan trọng: các ngưỡng "gửi bao nhiêu lần thì gợi ý gói nào" KHÔNG nằm trong mã nguồn
+   * này. Chúng là dữ liệu trong bảng ExpertRules, người quản trị sửa được trên giao diện
+   * (Cảnh báo -> Cấu hình nâng cao) mà không cần lập trình viên can thiệp.
+   */
   async getPackageRecommendation(customerId: number) {
     await this.syncExpiredStatuses();
     await syncDuePackagePrices();
@@ -396,6 +448,7 @@ export class CustomerPackageService {
     const frequency = records.length;
     const totalSpent = records.reduce((sum, r) => sum + Number(r.fee || 0), 0);
 
+    // Khách đang có gói thì không gợi ý mua thêm — tránh làm phiền và tránh bán chồng gói.
     if (activePkg) {
       return {
         recommendation: 'none' as const,
@@ -406,8 +459,13 @@ export class CustomerPackageService {
       };
     }
 
+    // Gọi máy suy diễn. Ở đây chỉ truyền một dữ kiện là `frequency`; muốn thêm tiêu chí mới
+    // (ví dụ tổng tiền đã chi) thì bổ sung vào object này rồi tạo luật dùng dữ kiện đó.
     const evalResult = await evaluate({ frequency }, 'package');
-    const fired = evalResult.firedRules[0]; // priority thấp nhất trong các rule khớp = ưu tiên cao nhất
+    // Lấy luật cháy ĐẦU TIÊN. Cơ sở tri thức đã sắp xếp theo priority tăng dần, mà priority nhỏ
+    // hơn nghĩa là ưu tiên cao hơn — nên nếu khách vừa đủ điều kiện gói tháng, gói quý và gói năm
+    // thì luật gói năm (priority nhỏ nhất) được chọn.
+    const fired = evalResult.firedRules[0];
 
     if (!fired) {
       return {
@@ -426,7 +484,8 @@ export class CustomerPackageService {
     const savings: string | null = params.savings;
     const durationDays: number | null = params.durationDays;
 
-    // Loại xe đỗ nhiều nhất trong 30 ngày qua -> dùng để tìm gói phù hợp
+    // Một khách có thể có nhiều xe khác loại. Chọn loại xe khách gửi NHIỀU NHẤT trong 30 ngày
+    // để tra đúng gói — vì mỗi gói chỉ áp dụng cho một loại xe và giá khác nhau theo loại.
     const typeCounts = new Map<number, number>();
     for (const r of records) typeCounts.set(r.vehicleTypeId, (typeCounts.get(r.vehicleTypeId) || 0) + 1);
     let dominantTypeId = records[0].vehicleTypeId;
@@ -455,6 +514,9 @@ export class CustomerPackageService {
       frequency,
       totalSpent,
       reason: reasonByLevel[recommendation],
+      // Trả kèm `explanation` do máy suy diễn sinh ra (ví dụ "frequency = 12 >= 5 -> đúng").
+      // Đây là tính GIẢI THÍCH ĐƯỢC của hệ chuyên gia: nhân viên nói được với khách vì sao hệ
+      // thống đề xuất gói này, thay vì đưa ra một con số không rõ nguồn gốc.
       explanation: fired.explanation,
       packageId: matchingPackage?.id ?? null,
       packageName: matchingPackage?.name ?? null,

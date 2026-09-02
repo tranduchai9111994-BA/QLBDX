@@ -1,3 +1,6 @@
+/**
+ * Định tuyến phân tích vận hành. Tiền tố: /api/analytics
+ */
 import { Router } from 'express';
 import { analyticsController } from '../controllers/analytics.controller';
 import { auth, adminOnly } from '../middlewares/auth';

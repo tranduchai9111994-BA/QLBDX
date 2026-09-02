@@ -1,3 +1,7 @@
+/**
+ * Controller quản lý tài khoản (/api/users) — toàn bộ chỉ admin gọi được.
+ * Không bao giờ trả cột mật khẩu băm ra ngoài (xem user.service.ts).
+ */
 import { Request, Response } from 'express';
 import { userService } from '../services/user.service';
 

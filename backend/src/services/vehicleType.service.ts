@@ -1,9 +1,20 @@
+/**
+ * Nghiệp vụ LOẠI XE và BẢNG GIÁ (xe máy, ô tô con, xe tải...).
+ *
+ * Đây là nơi khai báo đơn giá — mọi phép tính tiền gửi xe đều bắt nguồn từ đây:
+ *   VehicleType.hourlyRate / dailyRate -> parking.service.entry() chốt vào bản ghi
+ *     -> feeCalculator.calculateParkingFee() -> số tiền khách trả
+ *
+ * Cùng cơ chế giá hai lớp như gói dịch vụ: cột giá trên bảng VehicleTypes là giá hiện hành,
+ * bảng VehicleTypeRateHistory lưu toàn bộ lần đổi kèm ngày hiệu lực (xem pricing.service.ts).
+ */
 import prisma from '../config/prisma';
 import { CreateVehicleTypeInput, ScheduleRateChangeInput, UpdateVehicleTypeInput } from '../validators/vehicleType.validator';
 import { syncDueVehicleTypeRates } from './pricing.service';
 import { formatDateVN } from '../utils/formatDate';
 
 export class VehicleTypeService {
+  /** Danh sách loại xe kèm bảng giá hiện hành (đã đồng bộ các lịch đổi giá tới hạn). */
   async findAll() {
     await syncDueVehicleTypeRates();
     return prisma.vehicleType.findMany({
@@ -11,6 +22,7 @@ export class VehicleTypeService {
     });
   }
 
+  /** Thêm loại xe mới. Tên loại xe phải duy nhất vì nó còn dùng để suy ra nhóm kích thước xe. */
   async create(data: CreateVehicleTypeInput) {
     const duplicateType = await prisma.vehicleType.findFirst({
       where: { name: data.name },
@@ -34,6 +46,12 @@ export class VehicleTypeService {
     return { message: 'Thêm loại xe thành công', id: vehicleType.id };
   }
 
+  /**
+   * Sửa loại xe. Đổi giá ở đây áp dụng NGAY và được ghi vào lịch sử giá.
+   *
+   * Lưu ý nghiệp vụ: đổi giá KHÔNG ảnh hưởng những xe đang gửi trong bãi, vì lượt gửi đã chốt
+   * giá vào bản ghi ngay lúc xe vào (xem parking.service.ts -> entry).
+   */
   async update(id: number, data: UpdateVehicleTypeInput, changedBy?: number) {
     await syncDueVehicleTypeRates();
 
@@ -99,6 +117,10 @@ export class VehicleTypeService {
   }
 
   /** Đặt lịch đổi giá — effectiveFrom có thể ở tương lai, hệ thống tự áp dụng đúng ngày. */
+  /**
+   * Đặt lịch đổi bảng giá cho loại xe — cùng cơ chế với gói dịch vụ: chỉ ghi thêm một dòng vào
+   * bảng lịch sử, `syncDueVehicleTypeRates()` sẽ áp dụng khi tới ngày.
+   */
   async scheduleRateChange(id: number, data: ScheduleRateChangeInput, changedBy?: number) {
     const vehicleType = await prisma.vehicleType.findUnique({ where: { id }, select: { id: true } });
     if (!vehicleType) {
@@ -130,6 +152,7 @@ export class VehicleTypeService {
     };
   }
 
+  /** Lịch sử đổi giá của loại xe, mới nhất lên đầu, kèm tên người đổi. */
   async getRateHistory(id: number) {
     return prisma.vehicleTypeRateHistory.findMany({
       where: { vehicleTypeId: id },
@@ -138,6 +161,7 @@ export class VehicleTypeService {
     });
   }
 
+  /** Xoá loại xe. Chặn nếu đã có phương tiện, gói dịch vụ hoặc lượt gửi nào dùng loại xe này. */
   async delete(id: number) {
     const vehicles = await prisma.vehicle.findMany({ where: { vehicleTypeId: id } });
     if (vehicles.length > 0) {

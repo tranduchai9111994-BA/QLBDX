@@ -1,3 +1,7 @@
+/**
+ * Controller khách hàng (/api/customers).
+ * Nhận request, ép kiểu tham số rồi gọi customer.service.ts. Không chứa nghiệp vụ.
+ */
 import { Request, Response } from 'express';
 import { customerService } from '../services/customer.service';
 

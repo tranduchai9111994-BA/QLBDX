@@ -1,3 +1,6 @@
+/**
+ * Controller phương tiện (/api/vehicles).
+ */
 import { Request, Response } from 'express';
 import { vehicleService } from '../services/vehicle.service';
 

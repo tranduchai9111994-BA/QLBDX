@@ -1,3 +1,6 @@
+/**
+ * Định tuyến danh mục gói dịch vụ. Tiền tố: /api/packages
+ */
 import { Router } from 'express';
 import { packageController } from '../controllers/package.controller';
 import { validate } from '../middlewares/validate';

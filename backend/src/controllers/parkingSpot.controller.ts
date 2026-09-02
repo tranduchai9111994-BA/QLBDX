@@ -1,3 +1,6 @@
+/**
+ * Controller chỗ đỗ (/api/parking-spots) — dữ liệu vẽ sơ đồ bãi ở màn hình Bãi đỗ xe.
+ */
 import { Request, Response } from 'express';
 import { parkingSpotService } from '../services/parkingSpot.service';
 

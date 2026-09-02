@@ -1,3 +1,7 @@
+/**
+ * Controller phân tích vận hành (/api/analytics).
+ * Trả về các nhận định hỗ trợ ra quyết định do hệ chuyên gia sinh ra — xem analytics.service.ts.
+ */
 import { Request, Response } from 'express';
 import { analyticsService } from '../services/analytics.service';
 

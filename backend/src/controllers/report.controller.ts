@@ -1,3 +1,8 @@
+/**
+ * Controller báo cáo và cảnh báo (/api/reports).
+ * Gồm số liệu tổng quan, doanh thu, thống kê theo loại xe / theo giờ / theo phương thức thanh
+ * toán, thống kê lượt ra ngoại lệ, danh sách cảnh báo và dashboard thông minh.
+ */
 import { Request, Response } from 'express';
 import { reportService } from '../services/report.service';
 

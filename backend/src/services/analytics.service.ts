@@ -1,3 +1,12 @@
+/**
+ * Nghiệp vụ PHÂN TÍCH VẬN HÀNH (Decision Support System - hỗ trợ ra quyết định).
+ *
+ * Vị trí trong luồng:
+ *   pages/Analytics.tsx -> /api/analytics/insights -> file này -> hệ chuyên gia (nhóm 'analytics')
+ *
+ * Khác với report.service.ts (trả số liệu thô để vẽ biểu đồ), file này trả về các NHẬN ĐỊNH:
+ * hệ thống đọc số liệu, đối chiếu với bộ luật rồi đề xuất hành động kèm lý do.
+ */
 import prisma from '../config/prisma';
 import { evaluate, renderMessage } from '../expertSystem';
 
@@ -7,6 +16,13 @@ const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 type Period = 'month' | 'quarter' | 'year';
 
+/**
+ * Quy đổi kỳ phân tích thành khoảng ngày cụ thể, tính LÙI từ hôm nay:
+ *   month = 30 ngày gần nhất, quarter = 90 ngày, year = 365 ngày.
+ *
+ * Cố ý dùng "N ngày gần nhất" thay vì "tháng/quý theo lịch": đầu tháng mà so theo lịch thì kỳ
+ * hiện tại chỉ có vài ngày dữ liệu, đối chiếu với kỳ trước sẽ ra kết luận sai lệch.
+ */
 function rangeForPeriod(period: Period): { start: Date; end: Date; label: string } {
   const end = new Date();
   const start = new Date(end);
@@ -23,6 +39,16 @@ function rangeForPeriod(period: Period): { start: Date; end: Date; label: string
 }
 
 export class AnalyticsService {
+  /**
+   * Phân tích chuyên sâu cho màn hình Phân tích (pages/Analytics.tsx).
+   *
+   * Quy trình: đo các chỉ số vận hành trong kỳ (lượt xe theo ngày trong tuần, tỷ lệ lấp đầy theo
+   * khu, doanh thu, tỷ lệ khách dùng gói) -> đưa vào hệ chuyên gia với nhóm luật 'analytics'
+   * -> nhận về các khối "hỗ trợ ra quyết định" kèm lời giải thích vì sao hệ thống kết luận vậy.
+   *
+   * `renderMessage` thay các biến trong nội dung luật bằng số liệu thật, ví dụ mẫu câu
+   * "Khu {zone} đã lấp đầy {rate}%" trở thành "Khu B đã lấp đầy 92%".
+   */
   async getInsights(period: Period = 'month') {
     const { start, end, label } = rangeForPeriod(period);
     const daysInRange = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));

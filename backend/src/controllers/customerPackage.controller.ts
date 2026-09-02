@@ -1,3 +1,8 @@
+/**
+ * Controller gói dịch vụ khách đã mua (/api/customer-packages).
+ * Bao gồm cả API gợi ý gói cho khách — kết quả do hệ chuyên gia quyết định
+ * (xem customerPackage.service.ts -> getPackageRecommendation).
+ */
 import { Request, Response } from 'express';
 import { customerPackageService } from '../services/customerPackage.service';
 

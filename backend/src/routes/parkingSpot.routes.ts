@@ -1,3 +1,6 @@
+/**
+ * Định tuyến chỗ đỗ. Tiền tố: /api/parking-spots
+ */
 import { Router } from 'express';
 import { parkingSpotController } from '../controllers/parkingSpot.controller';
 import { validate } from '../middlewares/validate';
