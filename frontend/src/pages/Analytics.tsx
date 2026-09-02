@@ -1,3 +1,10 @@
+/**
+ * Màn hình PHÂN TÍCH (chỉ admin) — hệ hỗ trợ ra quyết định.
+ *
+ * Gọi /api/analytics/insights; backend đo các chỉ số vận hành rồi đưa qua hệ chuyên gia (nhóm luật
+ * 'analytics') để sinh ra nhận định kèm LỜI GIẢI THÍCH vì sao có kết luận đó.
+ * Khác với màn hình Báo cáo vốn chỉ hiển thị số liệu thô.
+ */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Segmented, Table, Progress, Collapse, Tag, message, Spin, Empty } from 'antd';
 import { BulbOutlined, WarningOutlined } from '@ant-design/icons';

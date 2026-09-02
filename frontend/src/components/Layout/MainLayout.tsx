@@ -1,3 +1,18 @@
+/**
+ * KHUNG GIAO DIỆN chung của toàn ứng dụng: menu bên trái + thanh tiêu đề + vùng nội dung.
+ *
+ * Mọi trang sau khi đăng nhập đều hiển thị bên trong khung này (xem <Outlet /> — chỗ React Router
+ * chèn trang con vào, khai báo ở App.tsx).
+ *
+ * Nhiệm vụ chính: dựng menu ĐÚNG THEO QUYỀN của người đang đăng nhập. Hàm `canSee` chia màn hình
+ * thành ba nhóm:
+ *   - ALWAYS_STAFF_KEYS  : nhân viên nào cũng thấy (Tổng quan, Xe vào, Xe ra, Lịch sử).
+ *   - CONFIGURABLE_KEYS  : thấy hay không tuỳ nhóm quyền admin cấp.
+ *   - Còn lại            : chỉ admin (Người dùng, Nhật ký, Phân tích).
+ *
+ * Ẩn menu chỉ để giao diện gọn, KHÔNG phải là bảo mật — backend vẫn chặn độc lập ở
+ * middlewares/requirePermission.ts.
+ */
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Dropdown, MenuProps, Segmented, Tooltip, Button, Badge } from 'antd';

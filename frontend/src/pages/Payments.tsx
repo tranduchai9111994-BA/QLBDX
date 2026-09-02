@@ -1,3 +1,10 @@
+/**
+ * Màn hình THANH TOÁN — tra cứu các giao dịch đã thu.
+ *
+ * Giao dịch được sinh TỰ ĐỘNG khi cho xe ra hoặc khi khách mua gói; màn hình này không tạo giao
+ * dịch mới. Admin sửa được giao dịch ghi nhầm nhưng KHÔNG xoá được — dữ liệu thu tiền phải giữ
+ * vết để đối soát.
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Card, DatePicker, Select, Tag, Button, message, Input, InputNumber, Space, Modal, Form } from 'antd';
 import { DownloadOutlined, EditOutlined } from '@ant-design/icons';

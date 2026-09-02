@@ -1,3 +1,6 @@
+/**
+ * Cấu hình phân trang dùng chung cho các bảng dữ liệu, để mọi màn hình có cùng kiểu hiển thị.
+ */
 import type { TablePaginationConfig } from 'antd/es/table';
 
 /**

@@ -1,3 +1,9 @@
+/**
+ * TỔNG QUAN góc nhìn VẬN HÀNH — dành cho nhân viên trực quầy.
+ *
+ * Tập trung vào việc đang diễn ra ngay lúc này: xe đang đỗ, chỗ còn trống theo khu, xe đỗ quá lâu,
+ * gói sắp hết hạn và tiền đã thu trong ca của chính mình.
+ */
 import React, { useMemo } from 'react';
 import {
   Row, Col, Card, Statistic, Spin, Empty, Alert, List, Tag, Progress,

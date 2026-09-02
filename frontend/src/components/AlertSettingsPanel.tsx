@@ -1,3 +1,10 @@
+/**
+ * Bảng cấu hình CẢNH BÁO (tab "Cấu hình mức độ" trong màn hình Cảnh báo).
+ *
+ * Cho phép người quản trị đặt các mốc ngưỡng và mức độ tương ứng (Nguy hiểm / Cảnh báo / Thông tin)
+ * cho từng loại cảnh báo — thay cho việc sửa ngưỡng trong mã nguồn rồi biên dịch lại.
+ * Dữ liệu lưu ở /api/alert-rule-tiers và /api/alert-settings, được report.service.ts đọc khi quét.
+ */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Form, InputNumber, Select, Button, Row, Col, message, Divider, Alert,

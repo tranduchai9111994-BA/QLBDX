@@ -1,3 +1,8 @@
+/**
+ * Màn hình LỊCH SỬ gửi xe — các lượt đã hoàn tất, có phân trang và nhiều bộ lọc.
+ * Phân trang thực hiện ở BACKEND (/api/parking/history), không tải hết dữ liệu về rồi cắt ở
+ * trình duyệt, để màn hình vẫn nhẹ khi dữ liệu lớn dần theo thời gian.
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Card, DatePicker, Input, Tag, Button, Select, Space, message, Modal, Statistic, Row, Col, Alert } from 'antd';
 import { SearchOutlined, HistoryOutlined } from '@ant-design/icons';

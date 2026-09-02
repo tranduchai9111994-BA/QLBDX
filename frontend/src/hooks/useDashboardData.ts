@@ -1,3 +1,12 @@
+/**
+ * Hook gom toàn bộ việc gọi API cho màn hình Tổng quan.
+ *
+ * Dùng chung cho hai giao diện: OpsDashboard (nhân viên vận hành) và MgmtDashboard (quản trị).
+ * Tách ra thành hook để hai màn hình không phải chép lại cùng một đoạn gọi API và cùng một cơ chế
+ * tự làm mới định kỳ.
+ *
+ * Tham số `isAdmin` quyết định có gọi thêm các API chỉ admin xem được hay không.
+ */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { message } from 'antd';
 import api from '../api/axios';

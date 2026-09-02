@@ -1,3 +1,9 @@
+/**
+ * Ghi nhớ admin đang xem Tổng quan ở góc nhìn nào: "Quản lý" hay "Vận hành".
+ *
+ * Dùng Context vì nút chuyển đổi nằm ở thanh tiêu đề (MainLayout) nhưng nơi đọc giá trị lại là
+ * trang Dashboard — hai component không có quan hệ cha con nên không truyền props được.
+ */
 import React, { createContext, useContext, useState } from 'react';
 
 export type DashboardAdminView = 'mgmt' | 'ops';

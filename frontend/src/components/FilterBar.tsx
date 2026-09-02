@@ -1,3 +1,6 @@
+/**
+ * Thanh bộ lọc dùng chung, giữ bố cục các ô lọc đồng nhất giữa các màn hình danh sách.
+ */
 import React, { ReactNode } from 'react';
 import { Card, Space, Button } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';

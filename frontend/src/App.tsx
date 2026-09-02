@@ -1,3 +1,14 @@
+/**
+ * Component gốc của ứng dụng — khai báo BẢN ĐỒ ĐƯỜNG DẪN và bọc các provider dùng chung.
+ *
+ * Đây là chỗ nên mở đầu tiên khi muốn biết "màn hình này ứng với file nào": mỗi thẻ <Route>
+ * nối một đường dẫn trên trình duyệt với một component trong thư mục pages/.
+ *
+ * Ba mức bảo vệ route, từ nhẹ tới chặt:
+ *   PrivateRoute     — chỉ cần đã đăng nhập.
+ *   PermissionRoute  — phải có quyền trên màn hình đó theo nhóm quyền.
+ *   AdminRoute       — chỉ admin.
+ */
 import React, { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
@@ -31,6 +42,13 @@ interface PrivateRouteProps {
   children: ReactNode;
 }
 
+/**
+ * Chặn route theo ĐĂNG NHẬP: chưa đăng nhập thì đẩy về /login.
+ *
+ * `if (loading) return null` rất quan trọng: lúc mới mở ứng dụng, AuthContext còn đang gọi
+ * /auth/me để xác thực token. Nếu không chờ, `user` tạm thời là null và người dùng đang đăng
+ * nhập hợp lệ vẫn bị đá ra màn hình đăng nhập.
+ */
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -41,6 +59,7 @@ interface AdminRouteProps {
   children: ReactNode;
 }
 
+/** Chặn route theo VAI TRÒ: chỉ admin vào được (Người dùng, Phân tích, Nhật ký hoạt động). */
 const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -54,9 +73,17 @@ interface PermissionRouteProps {
   screenKey: string;
 }
 
-/** Thay AdminRoute cho các màn nằm trong ma trận phân quyền (Thanh toán/Cảnh báo/Báo cáo) — admin
- * luôn vào được, staff vào được nếu nhóm quyền của họ có dòng cấu hình cho đúng screenKey này
- * (admin phải chủ động tick ít nhất 1 quyền Thêm/Sửa/Xóa ở trang Nhóm quyền thì mới có dòng đó). */
+/**
+ * Chặn route theo NHÓM QUYỀN — dùng cho các màn hình nằm trong ma trận phân quyền
+ * (Thanh toán / Cảnh báo / Báo cáo).
+ *
+ * Admin luôn vào được. Nhân viên vào được nếu nhóm quyền của họ có dòng cấu hình cho đúng
+ * `screenKey` này — admin phải tick ít nhất một quyền Thêm/Sửa/Xoá ở trang Nhóm quyền thì dòng
+ * đó mới tồn tại.
+ *
+ * Lưu ý: đây chỉ là lớp chặn ĐIỀU HƯỚNG cho trải nghiệm người dùng. Lớp chặn thật nằm ở backend
+ * (middlewares/requirePermission.ts) — gõ thẳng URL hay gọi API trực tiếp vẫn bị backend từ chối.
+ */
 const PermissionRoute: React.FC<PermissionRouteProps> = ({ children, screenKey }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -67,6 +94,12 @@ const PermissionRoute: React.FC<PermissionRouteProps> = ({ children, screenKey }
   return <>{children}</>;
 };
 
+/**
+ * Phần thân ứng dụng: khai báo toàn bộ bản đồ đường dẫn (routing).
+ *
+ * Tách riêng khỏi `App` bên dưới vì component này cần đọc ngôn ngữ và giao diện sáng/tối bằng
+ * hook — mà hook chỉ dùng được BÊN TRONG provider tương ứng.
+ */
 const AppInner: React.FC = () => {
   const { lang } = useLanguage();
   const { mode } = useTheme();
@@ -77,6 +110,9 @@ const AppInner: React.FC = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            {/* Mọi trang bên trong đều nằm trong MainLayout (menu trái + thanh tiêu đề) và đều
+                phải đăng nhập. Route con nào cần quyền cao hơn thì bọc thêm AdminRoute hoặc
+                PermissionRoute như bên dưới. */}
             <Route path="/" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
               <Route index element={<Dashboard />} />
               <Route path="parking/entry" element={<ParkingEntry />} />
@@ -103,6 +139,10 @@ const AppInner: React.FC = () => {
   );
 };
 
+/**
+ * Thứ tự lồng các provider có ý nghĩa: provider ngoài cung cấp dữ liệu cho provider trong.
+ *   ThemeProvider (sáng/tối) -> LanguageProvider (Việt/Anh) -> AppInner -> AuthProvider (đăng nhập)
+ */
 const App: React.FC = () => (
   <ThemeProvider>
     <LanguageProvider>

@@ -1,3 +1,10 @@
+/**
+ * Màn hình ĐĂNG KÝ GÓI — ghi nhận khách hàng mua gói cho một xe cụ thể, trong khoảng thời gian
+ * cụ thể.
+ *
+ * Xe đang thuộc gói còn hiệu lực sẽ được MIỄN PHÍ khi ra khỏi bãi (kiểm tra ở parking.service.ts).
+ * Backend chặn mua chồng gói trùng thời gian cho cùng một xe.
+ */
 import React, { useState, useEffect } from 'react';
 import {
   Table, Button, Card, Modal, Form, Select, DatePicker,

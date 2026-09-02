@@ -1,3 +1,9 @@
+/**
+ * Màn hình THÔNG TIN CÁ NHÂN — người dùng tự xem và sửa hồ sơ, đổi mật khẩu.
+ *
+ * Gọi GET/PUT /api/auth/me. Backend lấy id từ token chứ không nhận từ client, nên không thể
+ * sửa hồ sơ người khác qua màn hình này.
+ */
 import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, Button, message, Descriptions, Tag, Divider } from 'antd';
 import { SaveOutlined, LockOutlined } from '@ant-design/icons';

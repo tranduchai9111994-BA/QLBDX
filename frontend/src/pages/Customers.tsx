@@ -1,3 +1,9 @@
+/**
+ * Màn hình KHÁCH HÀNG (chủ phương tiện).
+ *
+ * Khách hàng chỉ được NGỪNG HOẠT ĐỘNG chứ không xoá hẳn, vì dữ liệu gửi xe và doanh thu đều
+ * tham chiếu tới khách (xem backend/src/services/customer.service.ts).
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, message, Popconfirm, Select, Tag, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';

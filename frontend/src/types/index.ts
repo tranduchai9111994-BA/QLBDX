@@ -1,3 +1,10 @@
+/**
+ * Khai báo KIỂU DỮ LIỆU dùng chung cho toàn frontend.
+ *
+ * Các kiểu ở đây phản chiếu dữ liệu backend trả về (bám theo backend/prisma/schema.prisma).
+ * Nhờ vậy khi gọi API bằng `api.get<Vehicle[]>(...)`, TypeScript kiểm tra ngay lúc biên dịch nếu
+ * dùng sai tên thuộc tính — không phải chạy lên mới phát hiện.
+ */
 // User & Authentication
 export interface GroupPermission {
   id: number;

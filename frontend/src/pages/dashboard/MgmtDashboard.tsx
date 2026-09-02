@@ -1,3 +1,10 @@
+/**
+ * TỔNG QUAN góc nhìn QUẢN LÝ — dành cho admin.
+ *
+ * Tập trung vào xu hướng và hiệu quả kinh doanh: doanh thu theo thời gian, so sánh với kỳ trước,
+ * giờ cao điểm, cơ cấu loại xe, cùng các gợi ý hành động do hệ chuyên gia sinh ra
+ * (/api/reports/insights).
+ */
 import React, { useMemo } from 'react';
 import {
   Row, Col, Card, Statistic, Spin, Empty, Alert, List, Tag, Progress,

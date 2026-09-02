@@ -1,3 +1,7 @@
+/**
+ * Quản lý chế độ giao diện SÁNG / TỐI dùng chung toàn ứng dụng.
+ * Lựa chọn được lưu vào localStorage để giữ nguyên ở lần mở sau.
+ */
 import React, { createContext, useContext, useLayoutEffect, useState } from 'react';
 
 export type ThemeMode = 'light' | 'dark';

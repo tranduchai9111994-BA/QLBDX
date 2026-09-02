@@ -1,3 +1,9 @@
+/**
+ * Màn hình DANH MỤC GÓI DỊCH VỤ (gói tháng / quý / năm theo từng loại xe).
+ *
+ * Phân biệt với màn hình "Đăng ký gói": ở đây khai báo gói để bán, còn bên kia là ghi nhận khách
+ * nào đã mua gói nào.
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, InputNumber, Select, DatePicker, message, Tag, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, StopOutlined, CheckCircleOutlined, ClockCircleOutlined, HistoryOutlined, UploadOutlined } from '@ant-design/icons';

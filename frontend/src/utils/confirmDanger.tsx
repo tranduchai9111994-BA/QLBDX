@@ -1,3 +1,8 @@
+/**
+ * Hộp thoại xác nhận cho các thao tác NGUY HIỂM (xoá, ngừng hoạt động).
+ * Gom về một chỗ để mọi thao tác xoá trong hệ thống đều phải xác nhận theo cùng một cách,
+ * tránh chỗ nhớ hỏi chỗ quên.
+ */
 import React from 'react';
 import { Modal, message } from 'antd';
 import { ExclamationCircleFilled } from '@ant-design/icons';

@@ -1,3 +1,6 @@
+/**
+ * Hàm định dạng ngày giờ theo chuẩn Việt Nam (dd/MM/yyyy), dùng chung cho mọi màn hình.
+ */
 import dayjs, { Dayjs } from 'dayjs';
 
 type DateInput = string | number | Date | Dayjs | null | undefined;

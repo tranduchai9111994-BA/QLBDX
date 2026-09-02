@@ -1,3 +1,7 @@
+/**
+ * Sinh cấu hình chủ đề (màu sắc, bo góc, cỡ chữ) cho thư viện giao diện Ant Design theo chế độ
+ * sáng / tối đang chọn. Nhờ vậy toàn bộ component dùng chung một bảng màu thống nhất.
+ */
 import { useMemo } from 'react';
 import type { ThemeConfig } from 'antd';
 

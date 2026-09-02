@@ -1,3 +1,9 @@
+/**
+ * Màn hình BÃI ĐỖ XE — sơ đồ các khu vực và chỗ đỗ, hiển thị chỗ nào trống, chỗ nào đang có xe.
+ *
+ * Trạng thái chỗ đỗ do luồng xe vào / xe ra tự cập nhật, không sửa tay được từ giao diện này
+ * (backend chặn — xem parkingSpot.service.ts).
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Card, Tag, Select, Row, Col, Badge, Button, Modal, Form, Input, message, Tabs, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';

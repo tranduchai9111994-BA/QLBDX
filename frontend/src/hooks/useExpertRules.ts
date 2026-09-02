@@ -1,3 +1,10 @@
+/**
+ * Hook quản lý bộ luật của hệ chuyên gia — cầu nối giữa ExpertRulesPanel và API /api/expert-rules.
+ *
+ * Gom toàn bộ việc gọi API (danh sách, thêm, sửa, bật/tắt, xoá, test luật) vào một chỗ, để
+ * component giao diện chỉ lo hiển thị. Sau mỗi thao tác ghi đều tải lại danh sách nên màn hình
+ * luôn khớp với dữ liệu trong cơ sở dữ liệu.
+ */
 import { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
 

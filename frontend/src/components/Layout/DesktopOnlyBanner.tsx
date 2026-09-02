@@ -1,3 +1,8 @@
+/**
+ * Dải thông báo hiện khi mở trên màn hình hẹp.
+ * Hệ thống hướng tới máy tính tại quầy trực; các bảng dữ liệu nhiều cột không hiển thị tốt trên
+ * điện thoại nên báo trước cho người dùng thay vì để họ gặp giao diện vỡ.
+ */
 import React, { useEffect, useState } from 'react';
 import { Alert } from 'antd';
 import { DesktopOutlined } from '@ant-design/icons';

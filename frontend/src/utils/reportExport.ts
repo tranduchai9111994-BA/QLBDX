@@ -1,3 +1,9 @@
+/**
+ * Xuất dữ liệu báo cáo ra file Excel và CSV.
+ *
+ * Việc xuất file thực hiện ngay trên TRÌNH DUYỆT (tự dựng nội dung file rồi tải xuống), không gửi
+ * yêu cầu lên máy chủ — dữ liệu đã có sẵn trên màn hình nên không cần tải lại lần nữa.
+ */
 import * as XLSX from 'xlsx';
 import dayjs, { Dayjs } from 'dayjs';
 import {

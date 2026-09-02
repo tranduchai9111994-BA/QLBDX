@@ -1,3 +1,7 @@
+/**
+ * Hook trả về thời gian hiện tại, tự cập nhật theo nhịp — dùng cho đồng hồ trên thanh tiêu đề và
+ * các chỗ hiển thị "thời gian đỗ tính tới bây giờ".
+ */
 import { useEffect, useState } from 'react';
 
 /**

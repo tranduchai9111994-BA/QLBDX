@@ -1,3 +1,15 @@
+/**
+ * Bảng QUẢN TRỊ BỘ LUẬT của hệ chuyên gia — giao diện để người quản trị tự thêm/sửa/bật/tắt luật
+ * mà không cần lập trình viên.
+ *
+ * Vị trí trong luồng:
+ *   Màn hình Cảnh báo -> tab "Cấu hình nâng cao" -> component này
+ *     -> /api/expert-rules (CRUD luật) + /api/expert-rules/form-spec (khuôn form nhập)
+ *     -> bảng ExpertRules -> hệ chuyên gia nạp lại và áp dụng ngay
+ *
+ * Khuôn form nhập luật được BACKEND mô tả (form-spec) chứ không viết cứng ở đây, nên các lựa chọn
+ * trên giao diện luôn khớp với giá trị mà backend chấp nhận.
+ */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Table, Tag, Space, Button, Select, Modal, Form, Input, InputNumber,

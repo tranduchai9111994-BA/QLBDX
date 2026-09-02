@@ -1,3 +1,9 @@
+/**
+ * Màn hình NHẬT KÝ HOẠT ĐỘNG (chỉ admin) — ai đã thêm/sửa/xoá cái gì, lúc nào, từ IP nào.
+ *
+ * Dữ liệu do middleware `activityLogger` phía backend tự ghi khi có thao tác thay đổi dữ liệu,
+ * kèm cả lần đăng nhập thành công và thất bại. Màn hình này chỉ đọc, không sửa được nhật ký.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Card, DatePicker, Select, Input, Tag, Tooltip, Button, Row, Col, Statistic, Space,

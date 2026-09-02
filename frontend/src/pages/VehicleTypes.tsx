@@ -1,3 +1,10 @@
+/**
+ * Màn hình LOẠI XE & BẢNG GIÁ (danh mục).
+ *
+ * Đây là nơi khai báo đơn giá theo giờ / ngày / tháng cho từng loại xe — gốc của mọi phép tính
+ * tiền gửi xe. Ngoài sửa giá áp dụng ngay, còn đặt được LỊCH đổi giá cho ngày trong tương lai và
+ * xem lại lịch sử giá (xem backend/src/services/vehicleType.service.ts).
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, InputNumber, DatePicker, message, Popconfirm, Space, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ClockCircleOutlined, HistoryOutlined } from '@ant-design/icons';

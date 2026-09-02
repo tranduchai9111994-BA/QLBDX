@@ -1,3 +1,7 @@
+/**
+ * Hook phát hiện đã có phiên bản giao diện mới được triển khai và mời người dùng tải lại trang.
+ * Cần thiết vì nhân viên thường mở ứng dụng suốt ca làm việc, không tự tải lại bao giờ.
+ */
 import { useEffect, useState } from 'react';
 
 const CHECK_INTERVAL_MS = 60_000;

@@ -1,3 +1,7 @@
+/**
+ * Màn hình PHƯƠNG TIỆN — danh sách xe của khách, kèm trạng thái đang trong bãi hay đã ra ngoài.
+ * Mỗi xe gắn với một khách hàng và một loại xe; loại xe quyết định bảng giá áp dụng.
+ */
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, Select, message, Popconfirm, Tag, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';

@@ -1,3 +1,7 @@
+/**
+ * Component tiêu đề trang dùng chung: tiêu đề + mô tả + khu vực nút hành động.
+ * Dùng lại ở mọi trang để bố cục và khoảng cách thống nhất.
+ */
 import React, { ReactNode } from 'react';
 import { Breadcrumb, Space } from 'antd';
 import { HomeOutlined } from '@ant-design/icons';

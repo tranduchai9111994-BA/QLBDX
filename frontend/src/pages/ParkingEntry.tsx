@@ -1,3 +1,18 @@
+/**
+ * Màn hình XE VÀO — nghiệp vụ chính hằng ngày của nhân viên.
+ *
+ * Vị trí trong luồng:
+ *   Nhập biển số -> GET /api/parking/smart-lookup/:plate (tự điền loại xe, gợi ý chỗ đỗ)
+ *     -> chọn chỗ -> POST /api/parking/entry
+ *     -> backend kiểm tra và chốt giá -> chỗ đỗ chuyển sang trạng thái có xe
+ *
+ * LƯU Ý QUAN TRỌNG về đoạn mã trùng lặp ở đầu file:
+ * Ba hàm `getVehicleCategory`, `getSpotCategory`, `isSpotCompatible` là bản sao của logic trong
+ * backend/src/utils/businessRules.ts. Trùng lặp có chủ đích, để lọc danh sách chỗ đỗ ngay trên
+ * trình duyệt cho phản hồi tức thì thay vì gọi API mỗi lần đổi loại xe.
+ * Danh sách hiển thị ở đây chỉ mang tính GỢI Ý — quyết định cuối cùng luôn do backend kiểm tra
+ * lại khi bấm lưu, nên dù bản sao này có lệch thì dữ liệu vẫn không sai.
+ */
 import React, { useMemo, useState, useEffect } from 'react';
 import { Form, Input, Select, Button, Card, message, Row, Col, Tag, Table, Alert } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
@@ -7,6 +22,7 @@ import { VehicleType, ParkingSpot, Vehicle, ParkingEntryForm, ParkingRecord, Pac
 import { useLanguage } from '../context/LanguageContext';
 import { formatDateTime, formatDate } from '../utils/dateFormat';
 
+/** Bỏ dấu tiếng Việt và chuyển chữ thường — để so khớp tên khu / tên loại xe không phụ thuộc cách gõ. */
 const normalizeText = (value?: string) =>
   (value || '')
     .normalize('NFD')
@@ -64,8 +80,10 @@ const ParkingEntry: React.FC = () => {
   const [parkedRecords, setParkedRecords] = useState<ParkingRecord[]>([]);
   const selectedVehicleTypeId = Form.useWatch('vehicleTypeId', form);
 
+  /** Tải dữ liệu nền cho màn hình: loại xe, chỗ đỗ và danh sách xe đang trong bãi. */
   const fetchData = async () => {
     try {
+      // Ba API độc lập nhau -> gọi song song để màn hình hiện nhanh hơn.
       const [vtRes, spRes, prRes] = await Promise.all([
         api.get<VehicleType[]>('/vehicle-types'),
         api.get<ParkingSpot[]>('/parking-spots'),
@@ -85,11 +103,14 @@ const ParkingEntry: React.FC = () => {
     [selectedVehicleTypeId, vehicleInfo, vehicleTypes]
   );
 
+  // `useMemo` để chỉ tính lại khi dữ liệu nguồn đổi. Mỗi lần gõ một ký tự vào ô biển số là
+  // component vẽ lại; không có useMemo thì các phép lọc dưới đây chạy lại toàn bộ mỗi lần gõ.
   const availableSpots = useMemo(
     () => spots.filter((spot) => spot.status === 'available'),
     [spots]
   );
 
+  // Danh sách chỗ thực sự chọn được: vừa còn trống, vừa phù hợp loại xe đang chọn.
   const compatibleAvailableSpots = useMemo(
     () => availableSpots.filter((spot) => isSpotCompatible(spot, selectedVehicleTypeName)),
     [availableSpots, selectedVehicleTypeName]
@@ -100,6 +121,8 @@ const ParkingEntry: React.FC = () => {
     [spots, selectedVehicleTypeName]
   );
 
+  // Người dùng chọn chỗ trước rồi mới đổi loại xe -> chỗ đã chọn có thể không còn phù hợp.
+  // Tự xoá lựa chọn cũ để không gửi lên một chỗ sai và bị backend từ chối sau khi đã điền hết form.
   useEffect(() => {
     const currentSpotId = form.getFieldValue('parkingSpotId');
     if (currentSpotId && !compatibleAvailableSpots.some((spot) => spot.id === currentSpotId)) {
@@ -109,6 +132,13 @@ const ParkingEntry: React.FC = () => {
 
   const normalizePlate = (val: string) => val.replace(/[-\s.]/g, '').toUpperCase();
 
+  /**
+   * TRA CỨU THÔNG MINH — chạy khi nhân viên nhập xong biển số.
+   *
+   * Gọi /api/parking/smart-lookup và tự điền giúp: loại xe đã đăng ký, chỗ đỗ gợi ý (ưu tiên khu
+   * khách hay đỗ), đồng thời hiện thông tin khách và tình trạng gói. Nhờ vậy với khách quen, nhân
+   * viên chỉ cần gõ biển số rồi bấm lưu.
+   */
   const lookupPlate = async () => {
     const raw = form.getFieldValue('licensePlate');
     if (!raw) return;
@@ -138,12 +168,15 @@ const ParkingEntry: React.FC = () => {
         setPackageCheck(null);
       }
     } catch {
+      // Không tìm thấy xe (khách vãng lai) không phải là lỗi — chỉ dọn sạch thông tin gợi ý để
+      // nhân viên nhập tay, không hiện thông báo lỗi gây hiểu nhầm.
       setVehicleInfo(null);
       setPackageCheck(null);
       setSmartInsights(null);
     }
   };
 
+  /** Gửi form Xe vào. Chuẩn hoá lại biển số lần cuối trước khi gửi để khớp định dạng backend chờ. */
   const onFinish = async (values: ParkingEntryForm) => {
     setLoading(true);
     try {

@@ -1,3 +1,7 @@
+/**
+ * Nhãn trạng thái có màu dùng chung (đang đỗ / hoàn tất / còn hiệu lực / hết hạn...).
+ * Gom về một chỗ để cùng một trạng thái luôn hiện cùng một màu ở mọi màn hình.
+ */
 import React from 'react';
 import { Tag } from 'antd';
 

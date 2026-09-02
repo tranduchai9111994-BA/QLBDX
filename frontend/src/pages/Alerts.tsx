@@ -1,3 +1,12 @@
+/**
+ * Màn hình CẢNH BÁO HỆ THỐNG — gồm ba tab:
+ *   1. Danh sách cảnh báo   : kết quả quét từ /api/reports/alerts (report.service.ts -> getAlerts).
+ *   2. Cấu hình mức độ      : đặt ngưỡng cho từng loại cảnh báo (AlertSettingsPanel).
+ *   3. Cấu hình nâng cao    : quản trị bộ luật của hệ chuyên gia (ExpertRulesPanel).
+ *
+ * Điểm đáng nói khi trình bày: toàn bộ ngưỡng cảnh báo là DỮ LIỆU cấu hình được, không phải câu
+ * lệnh if/else viết cứng trong mã nguồn.
+ */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Table, Tag, Button, Select, InputNumber, Row, Col, Statistic, Space, message, Dropdown, Segmented, DatePicker, Tooltip, Tabs } from 'antd';
 import {

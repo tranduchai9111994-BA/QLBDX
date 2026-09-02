@@ -1,3 +1,9 @@
+/**
+ * Hook tải cấu hình mức độ cảnh báo từ /api/alert-rule-tiers.
+ *
+ * Nhờ hook này mà giao diện tô màu cảnh báo theo ĐÚNG ngưỡng admin đã cấu hình, thay vì viết cứng
+ * "quá 24 giờ thì đỏ" trong mã nguồn.
+ */
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
 

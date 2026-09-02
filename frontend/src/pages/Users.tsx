@@ -1,3 +1,10 @@
+/**
+ * Màn hình NGƯỜI DÙNG & PHÂN QUYỀN (chỉ admin).
+ *
+ * Hai phần: quản lý tài khoản, và cấu hình nhóm quyền — ma trận "màn hình x hành động
+ * (xem/thêm/sửa/xoá)" gán cho nhân viên. Nhóm quyền cấu hình ở đây chính là dữ liệu mà backend
+ * tra cứu để chặn API (middlewares/requirePermission.ts).
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Card, Modal, Form, Input, Select, message, Tag,

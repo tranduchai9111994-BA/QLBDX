@@ -1,3 +1,12 @@
+/**
+ * Màn hình BÁO CÁO — biểu đồ và bảng số liệu, kèm chức năng xuất Excel/CSV.
+ *
+ * Nguồn dữ liệu (/api/reports/...):
+ *   doanh thu theo thời gian, cơ cấu theo loại xe, phân bố theo giờ,
+ *   cơ cấu theo phương thức thanh toán, thống kê lượt ra ngoại lệ.
+ *
+ * Phần xuất file dùng frontend/src/utils/reportExport.ts.
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card, DatePicker, Row, Col, Table, message, Select, Statistic,

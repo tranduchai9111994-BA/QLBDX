@@ -1,3 +1,12 @@
+/**
+ * Màn hình ĐĂNG NHẬP — cửa vào của hệ thống, cũng là trang duy nhất không cần token.
+ *
+ * Vị trí trong luồng:
+ *   Người dùng nhập tài khoản -> AuthContext.login() -> POST /api/auth/login
+ *     -> backend so khớp mật khẩu bcrypt, cấp JWT -> lưu token -> chuyển về trang Tổng quan
+ *
+ * Tài khoản demo (xem docs/demo_accounts.md): admin/admin123, nhanvien1/staff123.
+ */
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, message, Segmented } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
@@ -17,6 +26,13 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(false);
 
+  /**
+   * Xử lý khi bấm nút Đăng nhập.
+   *
+   * `login()` của AuthContext lo phần gọi API và lưu phiên; ở đây chỉ quản lý trạng thái nút và
+   * hiển thị thông báo. Backend cố tình trả cùng một câu lỗi cho cả trường hợp sai tài khoản lẫn
+   * sai mật khẩu, nên thông báo hiển thị ở đây cũng chỉ có một mức chung.
+   */
   const onFinish = async (values: LoginFormValues) => {
     setLoading(true);
     try {
@@ -27,6 +43,8 @@ const Login: React.FC = () => {
       const error = err as AxiosError<{ message: string }>;
       message.error(error.response?.data?.message || (lang === 'en' ? 'Login failed' : 'Đăng nhập thất bại'));
     } finally {
+      // Đặt trong `finally` để nút luôn thoát trạng thái chờ, kể cả khi đăng nhập lỗi — nếu để
+      // trong nhánh try thì đăng nhập sai một lần là nút kẹt quay vòng mãi.
       setLoading(false);
     }
   };

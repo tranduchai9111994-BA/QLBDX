@@ -1,3 +1,16 @@
+/**
+ * Màn hình XE RA — chốt lượt gửi, tính tiền, thu tiền và in biên nhận.
+ *
+ * Vị trí trong luồng:
+ *   Chọn xe trong bãi -> GET /api/parking/:id/preview   (báo giá trước, CHƯA chốt)
+ *     -> khách đồng ý -> POST /api/parking/exit          (chốt lượt, sinh phiếu thu)
+ *     -> in biên nhận
+ *     -> GET /api/customer-packages/recommend/:customerId (hệ chuyên gia gợi ý bán gói)
+ *
+ * Hai chế độ cho xe ra:
+ *   - Thường:  tính đúng công thức phí.
+ *   - Ngoại lệ: khách mất vé / miễn phí / cần giải phóng chỗ — bắt buộc ghi chú lý do để đối soát.
+ */
 import React, { useState, useEffect } from 'react';
 import {
   Table, Button, Card, message, Modal, Select, Tag, Input, Alert, Space,
@@ -108,14 +121,24 @@ const ParkingExit: React.FC = () => {
   const [waiveFee, setWaiveFee] = useState(false);
   const [overrideFee, setOverrideFee] = useState<number | null>(null);
 
+  /** Đổi số phút sang dạng dễ đọc: 135 -> "2h 15p", 45 -> "45p". */
   const formatDuration = (durationMinutes: number) =>
     Math.floor(durationMinutes / 60) > 0
       ? `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}p`
       : `${durationMinutes}p`;
 
+  /**
+   * IN BIÊN NHẬN cho khách.
+   *
+   * Cách làm: mở một cửa sổ trình duyệt mới, ghi vào đó một trang HTML hoàn chỉnh (kèm CSS riêng)
+   * rồi gọi lệnh in. Chọn cách này thay vì in trực tiếp trang hiện tại để biên nhận chỉ có đúng
+   * nội dung cần in — không dính menu, nút bấm hay bảng danh sách.
+   */
   const printReceipt = (receipt: ReceiptData) => {
     const paymentMethodLabel =
       receipt.paymentMethod === 'cash' ? 'Tiền mặt' : receipt.paymentMethod === 'transfer' ? 'Chuyển khoản' : 'Thẻ';
+    // Trình duyệt có thể chặn cửa sổ bật lên -> window.open trả null. Báo rõ cho người dùng
+    // thay vì im lặng không in ra gì.
     const printWindow = window.open('', '_blank', 'width=900,height=900');
     if (!printWindow) {
       message.error('Trình duyệt đang chặn cửa sổ in biên nhận');
@@ -165,6 +188,10 @@ const ParkingExit: React.FC = () => {
     printWindow.print();
   };
 
+  /**
+   * Tải danh sách xe đang trong bãi kèm dữ liệu phụ trợ (khu vực, loại xe, gói còn hiệu lực).
+   * Bộ lọc được gửi lên backend xử lý, không lọc ở trình duyệt, để không phải tải hết dữ liệu về.
+   */
   const fetchRecords = async () => {
     setLoading(true);
     try {
@@ -183,6 +210,8 @@ const ParkingExit: React.FC = () => {
       setZones(zonesRes.data);
       setVehicleTypes(vehicleTypesRes.data);
 
+      // Chuyển danh sách gói thành Map tra theo vehicleId. Nhờ vậy khi vẽ mỗi dòng của bảng, việc
+      // kiểm tra "xe này có gói không" chỉ tốn một phép tra khoá, thay vì duyệt lại cả mảng gói.
       const pkgMap = new Map<number, CustomerPackage>();
       packagesRes.data.forEach((pkg) => {
         if (pkg.vehicleId) pkgMap.set(pkg.vehicleId, pkg);
@@ -195,6 +224,8 @@ const ParkingExit: React.FC = () => {
     }
   };
 
+  // Đổi bộ lọc -> gọi lại API. Mảng phụ thuộc là [filters] nên mỗi lần người dùng đổi ô lọc là
+  // dữ liệu tự tải lại, không cần bấm nút "Tìm".
   useEffect(() => { fetchRecords(); }, [filters]);
 
   const resetExceptionForm = () => {
@@ -205,6 +236,17 @@ const ParkingExit: React.FC = () => {
     setOverrideFee(null);
   };
 
+  /**
+   * XÁC NHẬN CHO XE RA — hành động quan trọng nhất của màn hình này.
+   *
+   * Các bước:
+   *   1. Nếu là chế độ ngoại lệ thì bắt buộc có ghi chú (kiểm tra ở đây cho người dùng biết ngay,
+   *      backend vẫn kiểm tra lại lần nữa).
+   *   2. Gọi /parking/exit hoặc /parking/exit-exception tuỳ chế độ.
+   *   3. Dựng dữ liệu biên nhận từ phản hồi của backend.
+   *   4. Tải lại danh sách xe trong bãi.
+   *   5. Hỏi hệ chuyên gia xem có nên gợi ý khách mua gói không.
+   */
   const handleExit = async () => {
     if (!exitModal) return;
 
@@ -236,6 +278,9 @@ const ParkingExit: React.FC = () => {
           : `Xe ra thành công! Phí: ${Number(res.data.data.fee).toLocaleString()}đ`
       );
 
+      // Dựng biên nhận từ dữ liệu BACKEND TRẢ VỀ (giờ vào, giờ ra, số phút, số tiền), không tính
+      // lại ở trình duyệt. Nếu tính lại thì giờ máy trạm lệch một chút là biên nhận in ra sẽ khác
+      // với số tiền đã ghi vào cơ sở dữ liệu.
       const reasonLabel = EXCEPTION_REASONS.find((r) => r.value === exceptionReason)?.label;
       setReceiptData({
         licensePlate: exitModal.licensePlate,
@@ -264,7 +309,8 @@ const ParkingExit: React.FC = () => {
             setPackageSuggestion(recRes.data);
           }
         } catch {
-          // Bỏ qua lỗi gợi ý — không ảnh hưởng luồng checkout chính
+          // Bỏ qua lỗi gợi ý — xe đã ra và tiền đã thu xong, việc gợi ý bán gói chỉ là phần thêm.
+          // Không được để lỗi ở bước phụ này hiện ra như thể nghiệp vụ chính đã thất bại.
         }
       }
     } catch (err) {
@@ -346,6 +392,13 @@ const ParkingExit: React.FC = () => {
     },
   ];
 
+  /**
+   * Mở hộp thoại xác nhận và gọi API BÁO GIÁ TRƯỚC (/parking/:id/preview).
+   *
+   * Báo giá là API chỉ đọc, không đóng lượt gửi — nhân viên xem số tiền, đọc cho khách, khách
+   * đồng ý rồi mới bấm xác nhận. Nếu tính tiền ngay lúc mở hộp thoại thì bấm nhầm là xe đã bị
+   * cho ra khỏi hệ thống.
+   */
   const openExitModal = async (record: ParkingRecord) => {
     setExitModal(record);
     setPreviewFee(null);
@@ -363,6 +416,11 @@ const ParkingExit: React.FC = () => {
     }
   };
 
+  /**
+   * Số tiền hiển thị trên hộp thoại, theo đúng THỨ TỰ ƯU TIÊN mà backend áp dụng khi chốt:
+   *   miễn phí > số tiền nhập tay (ghi đè) > số tiền hệ thống tính.
+   * Giữ đúng thứ tự này để con số nhân viên nhìn thấy trước khi bấm luôn khớp với số thực thu.
+   */
   const displayFee = (() => {
     if (!previewFee) return null;
     if (exceptionMode && (waiveFee || exceptionReason === 'fee_waiver')) return 0;
