@@ -1,5 +1,9 @@
 # Cập nhật mới nhất — tổng hợp & hướng dẫn kiểm chứng
 
+> ⚠️ **Có đợt cập nhật mới hơn file này (05/09/2026 — chống tranh chấp đồng thời khi giành chỗ đỗ,
+> CÓ migration DB).** Xem [SUA_LOI_RACE_CONDITION_CHO_DO.md](SUA_LOI_RACE_CONDITION_CHO_DO.md).
+> Nội dung bên dưới là đợt 01/09/2026, vẫn còn hiệu lực.
+
 > **Đọc file này trước.** Đây là bản tóm tắt những gì vừa sửa, kèm **cách tự kiểm chứng từng thay
 > đổi** (bấm ở đâu, gõ gì, phải thấy gì). Cần chi tiết kỹ thuật thì theo đường dẫn ở mục 6.
 >

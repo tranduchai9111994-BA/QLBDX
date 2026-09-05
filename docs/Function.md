@@ -615,6 +615,7 @@ Cảnh báo / Validation:
 
 Mô tả:
 Tạo bản ghi vào bãi, kiểm tra trùng biển số, kiểm tra chỗ đỗ và kiểm tra dung lượng bãi.
+Việc chốt chỗ đỗ và tạo bản ghi chạy trong cùng một transaction, chống hai nhân viên giành cùng một chỗ.
 
 Cảnh báo / Validation:
 - licensePlate không được bỏ trống và phải đúng định dạng
@@ -623,6 +624,18 @@ Cảnh báo / Validation:
 - chỗ đỗ phải tồn tại và đang available
 - không cho phép xe đã đang parked vào thêm
 - nếu đã có chỗ nhưng không có chỗ available thì từ chối
+- chỗ đỗ được chốt bằng lệnh ghi có điều kiện (`UPDATE ... WHERE Id=? AND Status='available'`); nếu chỗ vừa bị người khác lấy thì trả 409
+- ràng buộc ở CSDL: mỗi chỗ đỗ tối đa 1 lượt `parked` (`UX_ParkingRecords_ActiveSpot`), mỗi biển số tối đa 1 lượt `parked` (`UX_ParkingRecords_ActivePlate`)
+
+Mã lỗi:
+
+| Mã | Trường hợp | Thông báo |
+|---|---|---|
+| 400 | Chỗ đỗ không tồn tại | "Chỗ đỗ không tồn tại" |
+| 400 | Chỗ đỗ đang bảo trì / khoá | "Chỗ đỗ đang không khả dụng (bảo trì hoặc đã khoá)" |
+| 400 | Xe đang đỗ trong bãi | "Xe này đang đỗ trong bãi" |
+| 400 | Hết chỗ phù hợp loại xe | "Đã hết chỗ đỗ phù hợp cho loại xe {tên loại}" |
+| 409 | Chỗ vừa bị nhân viên khác lấy (tranh chấp đồng thời) | "Chỗ đỗ vừa được nhân viên khác sử dụng, vui lòng chọn chỗ khác" |
 
 | Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
 |------------|------------|----------|------|
@@ -637,12 +650,21 @@ Cảnh báo / Validation:
 
 Mô tả:
 Cập nhật bản ghi ra bãi, tính phí theo giờ/ngày hoặc miễn phí nếu có gói active, tạo bản ghi thanh toán nếu có phí.
+Ba việc (đóng bản ghi, trả chỗ đỗ về available, sinh phiếu thu) chạy trong cùng một transaction.
 
 Cảnh báo / Validation:
 - parkingRecordId phải là số nguyên dương
 - bản ghi phải tồn tại và đang có status parked
 - tính toán thời gian và phí chính xác
 - nếu có gói active thì không tính phí
+- bản ghi được đóng bằng lệnh ghi có điều kiện (`status = 'parked'`); bấm "Xe ra" hai lần hoặc hai quầy cùng chốt thì chỉ lệnh đầu tính phí và sinh phiếu thu
+
+Mã lỗi:
+
+| Mã | Trường hợp | Thông báo |
+|---|---|---|
+| 404 | Không có bản ghi với ID này | "Không tìm thấy bản ghi" |
+| 409 | Bản ghi tồn tại nhưng đã kết thúc (bấm hai lần / tranh chấp đồng thời) | "Lượt gửi này vừa được kết thúc bởi thao tác khác" |
 
 | Thành phần | Kiểu dữ liệu | Bắt buộc | Mô tả |
 |------------|------------|----------|------|

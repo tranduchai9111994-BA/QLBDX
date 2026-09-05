@@ -260,6 +260,14 @@ model ParkingRecord {
 
   // Bảng lớn nhất hệ thống (tăng nhanh theo thời gian) — mọi query Dashboard/Báo cáo/
   // Phân tích đều loc theo status/entryTime/exitTime, nên các index nay la bat buoc.
+  //
+  // NGOÀI các index khai báo ở đây, bảng này còn 2 CHỈ MỤC UNIQUE CÓ ĐIỀU KIỆN tạo bằng SQL tay
+  // ở migration 20260905000000_add_active_parking_unique_indexes:
+  //   - UX_ParkingRecords_ActiveSpot  : UNIQUE(ParkingSpotId) WHERE Status='parked'
+  //   - UX_ParkingRecords_ActivePlate : UNIQUE(LicensePlate)  WHERE Status='parked'
+  // Đây là chốt chặn cuối cho race condition (hai nhân viên cùng chọn một chỗ đỗ). Prisma chưa
+  // mô tả được chỉ mục lọc, nên `prisma migrate dev` sẽ báo lệch và đề nghị xoá chúng —
+  // KHÔNG chấp nhận đề nghị đó, phải giữ nguyên 2 chỉ mục này.
   @@index([status, entryTime])
   @@index([entryTime])
   @@index([exitTime])

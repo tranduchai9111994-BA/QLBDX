@@ -96,13 +96,17 @@ Năm bước kiểm tra trong `entry()`:
 4. Bãi còn chỗ **phù hợp với loại xe** đó.
 5. Chỗ nhân viên chọn đang trống và vừa với xe.
 
+Năm bước trên chỉ để **báo lỗi cho dễ hiểu** — chúng đọc dữ liệu trước rồi mới ghi, nên không tự
+mình bảo đảm được tính đúng đắn khi hai nhân viên bấm cùng lúc. Việc chốt chỗ thật nằm ở bước 6:
+`claimSpotOrThrow()` chạy trong `prisma.$transaction`, xem mục 2.4.
+
 ### 2.2. Xe ra
 
 | # | File | Việc làm |
 |---|---|---|
 | 1 | [pages/ParkingExit.tsx](../frontend/src/pages/ParkingExit.tsx) → `openExitModal` | `GET /parking/:id/preview` — **báo giá trước, chưa chốt** |
 | 2 | `handleExit` | `POST /parking/exit` — chốt lượt |
-| 3 | [parking.service.ts](../backend/src/services/parking.service.ts) → `completeExit()` | Tính phí → cập nhật bản ghi → trả chỗ → sinh phiếu thu |
+| 3 | [parking.service.ts](../backend/src/services/parking.service.ts) → `completeExit()` | Tính phí → (trong 1 transaction) đóng bản ghi → trả chỗ → sinh phiếu thu |
 | 4 | [utils/feeCalculator.ts](../backend/src/utils/feeCalculator.ts) | Công thức tính tiền |
 | 5 | `printReceipt` | In biên nhận |
 
@@ -129,7 +133,45 @@ Có gói còn hạn / gửi 0 giây : phí = 0
   ([utils/feeCalculator.test.ts](../backend/src/utils/feeCalculator.test.ts)). Hàm thuần nên test được
   trực tiếp, không cần dựng cơ sở dữ liệu.
 
-### 2.4. Xe ra ngoại lệ
+### 2.4. Hai nhân viên thao tác cùng lúc — phần dễ bị hỏi vặn
+
+**Câu hỏi:** *"Nếu hai nhân viên cùng chọn một chỗ đỗ đúng cùng lúc thì sao?"*
+
+**Trả lời ngắn:** chỉ một người vào được, người kia nhận mã 409 và màn hình tự tải lại sơ đồ chỗ trống.
+
+**Trả lời đầy đủ — vì sao kiểm tra thông thường là chưa đủ.** Mẫu code "đọc trạng thái, thấy trống thì
+ghi" (check-then-act) có một khoảng trễ giữa lúc đọc và lúc ghi. Hai request lọt vào khoảng trễ đó thì
+cả hai đều đọc thấy "còn trống" và cả hai đều ghi được:
+
+```
+Nhân viên A                        Nhân viên B
+────────────────────────────       ────────────────────────────
+đọc chỗ #12 -> 'available'
+                                   đọc chỗ #12 -> 'available'   ← vẫn thấy trống
+tạo bản ghi (xe A)
+                                   tạo bản ghi (xe B)           ← chỗ #12 có 2 xe
+```
+
+Đây không phải giả thuyết: đo bằng test tự động trước khi sửa, **5/5 lệnh song song đều thành công**.
+
+**Ba lớp chặn hiện tại** (đọc [parking.service.ts](../backend/src/services/parking.service.ts)):
+
+| Lớp | Ở đâu | Làm gì |
+|---|---|---|
+| 1 | `entry()` — 5 bước kiểm tra | Báo lỗi dễ hiểu cho tình huống thường gặp. Không đảm bảo đúng đắn. |
+| 2 | `claimSpotOrThrow()` | Gộp điều kiện vào chính câu lệnh ghi: `UPDATE ... WHERE Id=? AND Status='available'`. Khoảng trễ biến mất vì DB khoá dòng rồi mới xét điều kiện → chỉ một lệnh đổi được trạng thái. |
+| 3 | Chỉ mục UNIQUE có điều kiện ở DB | `UX_ParkingRecords_ActiveSpot` + `UX_ParkingRecords_ActivePlate`. Chốt chặn cuối, không phụ thuộc code ứng dụng. |
+
+Luồng **xe ra** dùng cùng kỹ thuật ở lớp 2: `completeExit()` đóng bản ghi bằng `updateMany` kèm điều
+kiện `status: 'parked'`, nên bấm "Xe ra" hai lần không sinh phiếu thu lần hai. Cả cụm đóng bản ghi +
+trả chỗ + sinh phiếu thu nằm chung một transaction.
+
+*"Kiểm chứng thế nào?"* → `cd backend && npm run test:concurrency`
+([parking.concurrency.test.ts](../backend/src/services/parking.concurrency.test.ts)). Test này chạy
+trên cơ sở dữ liệu thật vì lỗi tranh chấp **chỉ xuất hiện ở tầng DB** — không thể tái hiện bằng
+unit test hàm thuần như `feeCalculator`.
+
+### 2.5. Xe ra ngoại lệ
 
 Khách mất vé / vé hỏng / cần giải phóng chỗ / được miễn phí → `POST /parking/exit-exception`.
 
@@ -336,4 +378,5 @@ Comment kiểu `// tăng i lên 1` là thứ **không** có trong mã nguồn n�
 - [CAU_TRUC_CODE_TINH_NANG_THONG_MINH.md](CAU_TRUC_CODE_TINH_NANG_THONG_MINH.md) — các tính năng thông minh
 - [SMART_FEATURES_DEEP_DIVE.md](SMART_FEATURES_DEEP_DIVE.md) — phân tích sâu hệ chuyên gia
 - [SUA_LOI_PARTIAL_UPDATE_EXPERT_RULE.md](SUA_LOI_PARTIAL_UPDATE_EXPERT_RULE.md) — ví dụ một lần sửa lỗi có phân tích đầy đủ
+- [SUA_LOI_RACE_CONDITION_CHO_DO.md](SUA_LOI_RACE_CONDITION_CHO_DO.md) — chống tranh chấp đồng thời (mục 2.4 ở trên là bản rút gọn)
 - [demo_accounts.md](demo_accounts.md) — tài khoản demo

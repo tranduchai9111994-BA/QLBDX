@@ -798,8 +798,8 @@ cd frontend && npm install && npm start
 | # | Vấn đề | Vị trí | Ảnh hưởng |
 |---|---|---|---|
 | 1 | **Nạp toàn bộ bảng vào RAM để so khớp biển số** | `parking.service.ts` → `findVehicleByNormalizedPlate` gọi `vehicle.findMany()` không điều kiện; `entry()` cũng `findMany` toàn bộ record `parked` | Chậm dần khi dữ liệu lớn. Cách sửa: lưu thêm cột `NormalizedPlate` có index. |
-| 2 | **Xe vào / xe ra không chạy trong transaction** | `entry()`, `completeExit()` — nhiều lệnh `update`/`create` tuần tự | Lỗi giữa chừng → chỗ đỗ hoặc thanh toán lệch trạng thái. Đây chính là nguồn của cảnh báo "chỗ đỗ ma". |
-| 3 | **Race condition khi giành chỗ đỗ** | Kiểm tra `status === 'available'` rồi mới `update` | Hai nhân viên đặt cùng chỗ cùng lúc → ghi đè nhau. Cần transaction + điều kiện update. |
+| 2 | ~~**Xe vào / xe ra không chạy trong transaction**~~ **[ĐÃ SỬA]** | `entry()`, `completeExit()` | Cả hai nay bọc `prisma.$transaction`: xe vào = chốt chỗ + tạo bản ghi; xe ra = đóng bản ghi + trả chỗ + sinh phiếu thu. Đứt giữa chừng thì rollback toàn bộ, không còn "chỗ đỗ ma". |
+| 3 | ~~**Race condition khi giành chỗ đỗ**~~ **[ĐÃ SỬA]** | `claimSpotOrThrow()` + chỉ mục `UX_ParkingRecords_ActiveSpot` / `UX_ParkingRecords_ActivePlate` | Chốt chỗ bằng `updateMany` kèm điều kiện `status:'available'` (compare-and-set) trong transaction, thêm 2 chỉ mục UNIQUE có điều kiện ở DB làm chốt chặn cuối. Xem mục 12.4. |
 | 4 | **Ngoại lệ lưu bằng chuỗi trong `Notes`** | `[NGOAI_LE:reason]`, parse ngược bằng regex | Dữ liệu không có cấu trúc, không index được, dễ hỏng nếu nhân viên sửa notes. Nên tách cột/bảng riêng. |
 | 5 | **Tương thích chỗ đỗ dựa trên heuristic chuỗi** | `businessRules.ts` → `getSpotCategory` khớp cả `startsWith('a')`, `startsWith('b')`… | Đặt tên khu mới hoặc số chỗ bắt đầu bằng chữ khác sẽ rơi về `any`, mất kiểm soát. Nên có cột phân hạng tường minh. |
 | 6 | **Báo cáo gom nhóm trong RAM** | `report.service.ts` — `getRevenue`, `getVehicleStats`… `findMany` rồi `Map` | Khoảng thời gian rộng → tốn bộ nhớ, chậm. Nên dùng `$queryRaw` với `GROUP BY`. |
@@ -810,18 +810,63 @@ cd frontend && npm install && npm start
 | 11 | **Token lưu trong `localStorage`** | `AuthContext` | Nhạy cảm với XSS. Cân nhắc httpOnly cookie. |
 | 12 | ~~Cấu hình quyền staff nằm ở localStorage~~ **[ĐÃ SỬA]** | `PermissionGroup`/`GroupPermission` (DB) + `requirePermission` middleware | Chuyển hẳn xuống DB, backend enforce thật qua `requirePermission(screenKey, action)` cho 9 màn cấu hình được — xem mục 8.5. |
 | 13 | **Không có global error handler** | `server.ts` | Lỗi ngoài dự kiến trong controller có thể rò stack trace hoặc treo request. |
-| 14 | **Test chỉ phủ `feeCalculator`** | `utils/feeCalculator.test.ts` | Các luồng entry/exit/gói chưa có test tự động. |
+| 14 | **Test còn mỏng** | `utils/feeCalculator.test.ts` (9 case, không cần DB), `services/parking.concurrency.test.ts` (3 case, chạy trên DB thật) | Đã phủ tính phí và tranh chấp đồng thời của entry/exit. Luồng gói dịch vụ, báo cáo, phân quyền vẫn chưa có test tự động. |
 | 15 | **`Decimal` phải `Number()` thủ công khắp nơi** | mọi service | Rủi ro sai số nếu quên; số tiền lớn có thể mất chính xác. |
 
 ### 12.3 Thứ tự ưu tiên khắc phục đề xuất
 
-1. **Bọc transaction** cho `entry()` và `completeExit()` — sửa gốc rủi ro #2, #3, giảm cảnh báo "chỗ đỗ ma".
+1. ~~**Bọc transaction** cho `entry()` và `completeExit()`~~ — **đã làm** (#2, #3), xem mục 12.4.
 2. **Thêm cột `NormalizedPlate` + index** — sửa #1, cải thiện hiệu năng rõ rệt.
 3. **Đưa `baseURL` và `JWT_SECRET` ra biến môi trường** — điều kiện cần để deploy (#8, #9, #10).
 4. **Phân trang cho các API list lớn** (`/parking/history`, `/activity-logs`, `/payments`) — #7.
 5. **Tách lý do ngoại lệ thành cột riêng**, giữ `Notes` cho ghi chú tự do — #4.
 6. **Chuyển aggregate báo cáo xuống SQL** — #6.
 7. **Đưa cấu hình quyền staff xuống DB** kèm API — #12.
+
+### 12.4 Kiểm soát tranh chấp đồng thời (concurrency control)
+
+Ba tình huống hai nhân viên thao tác cùng lúc có thể làm hỏng dữ liệu, và cách hệ thống chặn từng cái.
+
+**Vấn đề gốc — mẫu "kiểm tra rồi mới ghi" (check-then-act).** Code cũ đọc trạng thái chỗ đỗ, thấy `available` thì mới tạo bản ghi rồi cập nhật chỗ. Giữa hai bước có `await`, nên hai request xen kẽ nhau như sau:
+
+```
+Request A                          Request B
+─────────────────────────────      ─────────────────────────────
+đọc chỗ #12 -> 'available'
+                                   đọc chỗ #12 -> 'available'   ← vẫn thấy trống
+tạo ParkingRecord (xe A)
+                                   tạo ParkingRecord (xe B)     ← chỗ #12 giờ có 2 xe
+cập nhật chỗ #12 -> 'occupied'
+                                   cập nhật chỗ #12 -> 'occupied'
+```
+
+Kết quả đo được **trước khi sửa** (5 lệnh song song vào cùng một chỗ): **5/5 lệnh đều thành công**, chỗ đỗ có 5 xe.
+
+**Giải pháp — ba lớp phòng thủ.**
+
+| Lớp | Vị trí | Cơ chế |
+|---|---|---|
+| 1. Kiểm tra sớm | `entry()` | Đọc trước để báo lỗi dễ hiểu ("hết chỗ phù hợp cho loại xe X", "chỗ đang bảo trì"). **Không** đảm bảo tính đúng đắn, chỉ để trải nghiệm tốt. |
+| 2. Compare-and-set trong transaction | `claimSpotOrThrow()` | `updateMany({ where: { id, status: 'available' }, data: { status: 'occupied' } })` → đúng một câu `UPDATE ... WHERE Id=? AND Status='available'`. SQL Server khoá dòng rồi mới xét lại điều kiện, nên trong hai lệnh đồng thời chỉ một lệnh có `count = 1`; lệnh kia `count = 0` → ném 409. |
+| 3. Ràng buộc bất biến ở DB | migration `20260905000000_add_active_parking_unique_indexes` | 2 chỉ mục UNIQUE **có điều kiện**:<br>`UX_ParkingRecords_ActiveSpot`: `UNIQUE(ParkingSpotId) WHERE Status='parked'`<br>`UX_ParkingRecords_ActivePlate`: `UNIQUE(LicensePlate) WHERE Status='parked'` |
+
+Vì sao lớp 3 phải là chỉ mục **có điều kiện** chứ không phải `UNIQUE` thường: bảng `ParkingRecords` giữ cả lịch sử, một chỗ đỗ có hàng nghìn lượt `completed` là bình thường — chỉ các lượt **đang gửi** mới phải duy nhất.
+
+**Luồng xe ra** dùng cùng kỹ thuật: `completeExit()` đóng bản ghi bằng `updateMany({ where: { id, status: 'parked' } })`. Nhân viên bấm hai lần hoặc hai quầy cùng chốt thì chỉ lệnh đầu có `count = 1`; lệnh sau dừng ngay, **không** tính phí và **không** sinh phiếu thu lần hai. Ba việc (đóng bản ghi, trả chỗ, sinh phiếu thu) nằm chung một `$transaction` nên không còn trạng thái nửa vời.
+
+**Mã lỗi trả về.** Xung đột đồng thời trả **409 Conflict** (không phải 400) — frontend dựa vào mã này để phân biệt "nhân viên nhập sai" với "vừa bị người khác giành mất": màn Xe vào tự xoá ô chọn chỗ và tải lại sơ đồ chỗ trống, màn Xe ra đóng modal và tải lại danh sách, thay vì hiện lỗi đỏ khiến người dùng tưởng hệ thống hỏng.
+
+**Kiểm chứng.** `backend/src/services/parking.concurrency.test.ts` (`npm run test:concurrency`) chạy trên DB thật, tự tạo khu `ZZ_TEST_CONCURRENCY` rồi tự dọn:
+
+| Kịch bản | Trước khi sửa | Sau khi sửa |
+|---|---|---|
+| 5 lệnh Xe vào song song cùng 1 chỗ | 5 bản ghi `parked` trên 1 chỗ | 1 thành công, 4 nhận 409 |
+| 5 lệnh Xe vào song song cùng 1 biển số | 4 lượt gửi mở cho 1 xe | 1 thành công, 4 bị từ chối |
+| 5 lệnh Xe ra song song cùng 1 lượt | tính phí và thu tiền nhiều lần | 1 phiếu thu, 4 nhận 409 |
+
+Đã kiểm chứng thêm qua HTTP thật (5 request `POST /api/parking/entry` song song từ tiến trình riêng): 1 × `201`, 4 × `409`.
+
+> **Lưu ý khi bảo trì:** Prisma chưa mô tả được chỉ mục có điều kiện trong `schema.prisma`, nên 2 chỉ mục này viết SQL tay trong migration. Chạy `prisma migrate dev` sau này sẽ báo lệch (drift) và **đề nghị xoá chúng — không được chấp nhận đề nghị đó**. Ghi chú tương ứng đã đặt ngay tại model `ParkingRecord` trong `schema.prisma`.
 
 ---
 

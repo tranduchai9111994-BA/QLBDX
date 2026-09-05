@@ -189,7 +189,17 @@ const ParkingEntry: React.FC = () => {
       fetchData();
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
-      message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+
+      // 409 (Conflict) = chỗ đỗ vừa bị nhân viên khác lấy mất trong lúc đang nhập form, hoặc xe
+      // vừa được quầy khác ghi nhận. Đây không phải lỗi nhập liệu nên xử lý khác lỗi thường:
+      // tải lại sơ đồ chỗ trống và xoá ô "Chỗ đỗ" để nhân viên chọn lại ngay, không phải F5.
+      if (error.response?.status === 409) {
+        message.warning(error.response.data?.message || 'Chỗ đỗ vừa bị người khác chọn, vui lòng chọn lại');
+        form.setFieldValue('parkingSpotId', undefined);
+        fetchData();
+      } else {
+        message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      }
     } finally {
       setLoading(false);
     }

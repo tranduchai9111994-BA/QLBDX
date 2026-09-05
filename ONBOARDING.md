@@ -180,6 +180,7 @@ QLBDX/
 - [ ] Vào **Báo cáo** → chọn "Toàn bộ" → thấy dữ liệu trải nhiều tháng/năm, không phải chỉ 1-2 ngày
 - [ ] Đăng nhập `nhanvien1` → menu bị ẩn bớt (không thấy Báo cáo, Thanh toán, Người dùng...) — nếu thấy **trống trơn cả Khách hàng/Phương tiện** thì bạn chưa chạy `npm run prisma:seed-permission-groups`
 - [ ] Vào **Người dùng → Nhóm quyền** (bằng `admin`) → thấy nhóm "Nhân viên tiêu chuẩn" với 3 nhân viên
+- [ ] `cd backend && npm test` → 9/9 PASS · `npm run test:concurrency` → 3/3 PASS (test thứ hai cần SQL Server đang chạy)
 
 ---
 
@@ -189,13 +190,17 @@ QLBDX/
 
 | Chức năng | Mô tả |
 |---|---|
-| **Xe vào** | Nhập biển số → chọn loại xe + chỗ đỗ → ghi nhận. Nếu xe đã đăng ký trước, hệ thống tự nhận diện. |
+| **Xe vào** | Nhập biển số → chọn loại xe + chỗ đỗ → ghi nhận. Nếu xe đã đăng ký trước, hệ thống tự nhận diện. Hai nhân viên chọn trùng chỗ cùng lúc thì chỉ một người vào được, người kia thấy cảnh báo và sơ đồ chỗ trống tự tải lại. |
 | **Xe ra** | Chọn xe đang đỗ → xem trước phí → xác nhận → in biên nhận. Có gói dịch vụ thì miễn phí. |
 | **Checkout ngoại lệ** | Dùng khi khách mất vé, vé hỏng, cần giải phóng chỗ bắt buộc, hoặc miễn phí đặc biệt — ghi chú lý do bắt buộc. |
 | **Lịch sử đỗ xe** | Tra cứu toàn bộ lượt xe đã hoàn tất, lọc theo ngày/khu/loại xe/biển số. |
 | **Tra cứu theo biển số** | Xem toàn bộ lịch sử ra/vào của 1 biển số cụ thể. |
 
 **Công thức tính phí**: `≤24h → min(số giờ × giá/giờ, giá/ngày)` · `>24h → số ngày × giá/ngày` · có gói active → **miễn phí**.
+
+**Chống thao tác trùng**: mỗi chỗ đỗ tối đa 1 xe đang gửi, mỗi biển số tối đa 1 lượt đang gửi, mỗi lượt gửi
+tối đa 1 phiếu thu — ràng buộc bằng transaction ở tầng ứng dụng **và** chỉ mục UNIQUE ở cơ sở dữ liệu.
+Kiểm chứng: `cd backend && npm run test:concurrency`.
 
 ### 8.2 Danh mục & hạ tầng
 
@@ -285,6 +290,7 @@ Mỗi cảnh báo Smart đều kèm dòng "💡 Gợi ý: ..." nói rõ nên là
 | [KIEN_TRUC_TONG_QUAN.md](docs/KIEN_TRUC_TONG_QUAN.md) | Kiến trúc tóm tắt, dễ đọc |
 | [Function.md](docs/Function.md) | Đặc tả chi tiết từng chức năng/API |
 | [SMART_FEATURES_DEEP_DIVE.md](docs/SMART_FEATURES_DEEP_DIVE.md) | Giải thích kỹ thuật chi tiết 5 tính năng thông minh + đường dẫn UI để tự kiểm tra |
+| [SUA_LOI_RACE_CONDITION_CHO_DO.md](docs/SUA_LOI_RACE_CONDITION_CHO_DO.md) | Chống tranh chấp đồng thời khi hai nhân viên cùng thao tác — phân tích, cách sửa, log kiểm thử |
 | [demo_accounts.md](docs/demo_accounts.md) | Đầy đủ tài khoản demo + kịch bản demo gợi ý |
 | [database/README.md](database/README.md) | Chi tiết setup database + mô tả từng script seed |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Lịch sử thay đổi hệ thống |

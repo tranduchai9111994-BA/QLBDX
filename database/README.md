@@ -43,6 +43,7 @@ migrations, chạy toàn bộ seed theo đúng thứ tự, rồi in ra số bả
 | `ParkingPackages.ValidFrom` / `ValidTo` | Khoảng thời gian bán gói dịch vụ |
 | `ParkingRecords.HourlyRateApplied` / `DailyRateApplied` | Chốt giá tại thời điểm xe vào |
 | `VehicleTypeRateHistory`, `PackagePriceHistory` | Lịch sử giá / đặt lịch đổi giá |
+| Chỉ mục `UX_ParkingRecords_ActiveSpot`, `UX_ParkingRecords_ActivePlate` | Chống hai xe cùng một chỗ đỗ / một biển số vào bãi hai lần (migration `20260905000000_add_active_parking_unique_indexes`) |
 
 Chạy các file đó sẽ ra **schema sai** và app không hoạt động đúng.
 **Nguồn sự thật duy nhất của schema là Prisma migrations** trong `backend/prisma/migrations/`.

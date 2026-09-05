@@ -1048,7 +1048,7 @@ chứ không thay thế nó, vì tính giải thích được vẫn phải giữ
 # PHỤ LỤC — Slide dự phòng cho phần phản biện
 
 > Đặt sau slide 30, **không trình bày**, chỉ mở khi được hỏi đúng câu đó.
-> Đề nghị Claude Chat dựng thêm 6 slide này, đánh số P1–P6, dùng bố cục tối giản: 1 câu hỏi lớn
+> Đề nghị Claude Chat dựng thêm 7 slide này, đánh số P1–P7, dùng bố cục tối giản: 1 câu hỏi lớn
 > ở trên, câu trả lời gạch đầu dòng ở dưới.
 
 | # | Câu hỏi dự kiến | Ý chính để trả lời |
@@ -1059,6 +1059,7 @@ chứ không thay thế nó, vì tính giải thích được vẫn phải giữ
 | P4 | "Nếu hai luật mâu thuẫn thì sao?" | Cơ chế `priority` (slide 7 + 17). Với nhóm 'alert' thì dùng mốc chặt nhất (slide 20). Không có tình huống hệ thống bị "kẹt". |
 | P5 | "Hiệu năng thế nào khi luật nhiều?" | Luật nạp vào bộ nhớ một lần, `JSON.parse` một lần lúc nạp (slide 9). Một lượt suy diễn chỉ là vòng lặp trên mảng đã lọc theo nhóm — độ phức tạp tuyến tính theo số luật của nhóm đó, thực tế vài chục luật. |
 | P6 | "Bảo mật ra sao?" | Ba lớp (slide 27) + mật khẩu băm bcrypt có muối riêng + đọc lại tài khoản mỗi request + nguyên tắc từ chối mặc định + ghi nhật ký cả lần đăng nhập thất bại. |
+| P7 | "Hai nhân viên cùng chọn một chỗ đỗ đúng cùng lúc thì sao?" | Chỉ một người vào được. **Ba lớp**: (1) kiểm tra sớm để báo lỗi dễ hiểu; (2) chốt chỗ nguyên tử `UPDATE ... WHERE Id=? AND Status='available'` trong transaction — DB khoá dòng rồi mới xét điều kiện nên chỉ một lệnh thắng; (3) chỉ mục UNIQUE có điều kiện ở DB làm chốt chặn cuối. Nhấn: kiểm tra "đọc rồi ghi" một mình là **chưa đủ** vì có khoảng trễ giữa hai bước — đo thực tế trước khi sửa: 5/5 lệnh song song đều lọt. Kiểm chứng: `npm run test:concurrency`. |
 
 ---
 

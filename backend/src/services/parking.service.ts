@@ -14,6 +14,7 @@
  *   3. Mọi trường hợp cho xe ra đều đi qua cùng một hàm `completeExit`, để luồng thường và
  *      luồng ngoại lệ không bị lệch nghiệp vụ.
  */
+import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import prisma from '../config/prisma';
 import {
@@ -34,6 +35,50 @@ import { syncDueVehicleTypeRates } from './pricing.service';
  * (khách mất vé, vé hỏng, cần giải phóng chỗ gấp, miễn phí...). Mã lý do được ghi vào ghi chú
  * của bản ghi để sau này lọc và thống kê được.
  */
+/**
+ * Kiểu của đối tượng prisma bên trong một giao dịch (`prisma.$transaction(async (tx) => ...)`).
+ * Giống PrismaClient nhưng không có $transaction/$connect — mọi lệnh ghi qua `tx` cùng nằm
+ * trong một giao dịch, hoặc thành công hết hoặc rollback hết.
+ */
+type PrismaTransaction = Prisma.TransactionClient;
+
+/**
+ * Tên hai chỉ mục UNIQUE có điều kiện ở tầng DB (migration 20260905000000). Đây là chốt chặn
+ * cuối cùng cho race condition; khi chúng chặn thì Prisma ném lỗi P2002 với tên chỉ mục,
+ * và `rethrowActiveParkingConflict` dịch sang thông báo nghiệp vụ dễ hiểu cho nhân viên.
+ */
+const ACTIVE_SPOT_INDEX = 'UX_ParkingRecords_ActiveSpot';
+const ACTIVE_PLATE_INDEX = 'UX_ParkingRecords_ActivePlate';
+
+/** Thông báo dùng chung để hai nơi (chốt chỗ ở app và chỉ mục ở DB) nói cùng một câu. */
+const SPOT_TAKEN_MESSAGE = 'Chỗ đỗ vừa được nhân viên khác sử dụng, vui lòng chọn chỗ khác';
+
+/**
+ * Dịch lỗi vi phạm chỉ mục UNIQUE của DB thành lỗi nghiệp vụ.
+ *
+ * Vì sao cần: nếu để nguyên, nhân viên sẽ thấy "Unique constraint failed on the constraint:
+ * UX_ParkingRecords_ActiveSpot" — đúng về kỹ thuật nhưng vô nghĩa với người dùng cuối. Ở đây
+ * đổi thành câu tiếng Việt kèm mã HTTP 409 (Conflict) để frontend biết mà tải lại danh sách chỗ trống.
+ *
+ * Lỗi không phải P2002 thì ném lại nguyên trạng — không nuốt lỗi lạ.
+ */
+function rethrowActiveParkingConflict(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    const target = JSON.stringify((error.meta as { target?: unknown } | undefined)?.target ?? '');
+
+    if (target.includes(ACTIVE_PLATE_INDEX)) {
+      throw { status: 409, message: 'Xe này đang đỗ trong bãi', code: 'VEHICLE_ALREADY_PARKED' };
+    }
+    if (target.includes(ACTIVE_SPOT_INDEX)) {
+      throw { status: 409, message: SPOT_TAKEN_MESSAGE, code: 'SPOT_TAKEN' };
+    }
+    // Trường hợp không đọc được tên chỉ mục (khác phiên bản driver): vẫn báo là xung đột đồng thời
+    // thay vì để lỗi kỹ thuật lọt ra màn hình.
+    throw { status: 409, message: 'Thao tác vừa bị trùng với nhân viên khác, vui lòng thử lại', code: 'CONFLICT' };
+  }
+  throw error;
+}
+
 const EXCEPTION_REASON_LABEL: Record<string, string> = {
   lost_ticket: 'Mất vé / mất phiếu',
   damaged_ticket: 'Vé hỏng / không quét được',
@@ -118,6 +163,20 @@ export class ParkingService {
     });
 
     if (!record) {
+      // Phân biệt "không có bản ghi này" với "có nhưng đã kết thúc rồi". Trường hợp thứ hai xảy ra
+      // khi nhân viên bấm "Xe ra" hai lần hoặc hai quầy cùng chốt một lượt — trả 409 để màn hình
+      // đóng modal và tải lại danh sách, thay vì báo 404 khiến người dùng tưởng mất dữ liệu.
+      const alreadyClosed = await prisma.parkingRecord.findUnique({
+        where: { id: params.recordId },
+        select: { id: true },
+      });
+      if (alreadyClosed) {
+        throw {
+          status: 409,
+          message: 'Lượt gửi này vừa được kết thúc bởi thao tác khác',
+          code: 'RECORD_ALREADY_CLOSED',
+        };
+      }
       throw { status: 404, message: 'Không tìm thấy bản ghi' };
     }
 
@@ -156,42 +215,62 @@ export class ParkingService {
     // Cắt 500 ký tự cho khớp giới hạn độ dài của cột Notes trong DB.
     const mergedNotes = [record.notes, params.notesAppend].filter(Boolean).join('\n').slice(0, 500);
 
-    await prisma.parkingRecord.update({
-      where: { id: params.recordId },
-      data: {
-        exitTime,
-        duration: calc.durationMinutes,
-        fee: new Decimal(fee),
-        status: 'completed',
-        ...(mergedNotes ? { notes: mergedNotes } : {}),
-      },
-    });
+    // ---- VÙNG TRANH CHẤP ----------------------------------------------------------------
+    // Ba việc dưới đây (đóng lượt gửi, trả chỗ, sinh phiếu thu) phải cùng thành công hoặc cùng
+    // huỷ. Trước đây chúng là ba lệnh rời: nếu đứt kết nối ở giữa thì lượt gửi đã đóng nhưng chỗ
+    // vẫn kẹt "có xe", hoặc đã thu tiền mà bản ghi chưa đóng.
+    await prisma
+      .$transaction(async (tx) => {
+        // Đóng lượt gửi có kèm điều kiện `status: 'parked'` ngay trong lệnh ghi — cùng kỹ thuật
+        // như `claimSpotOrThrow`. Nhân viên bấm "Xe ra" hai lần (mạng chậm), hoặc hai nhân viên
+        // cùng chốt một lượt, thì chỉ MỘT lệnh đổi được trạng thái; lệnh còn lại count = 0 và
+        // dừng tại đây, không tính phí và không sinh phiếu thu lần hai.
+        const closed = await tx.parkingRecord.updateMany({
+          where: { id: params.recordId, status: 'parked' },
+          data: {
+            exitTime,
+            duration: calc.durationMinutes,
+            fee: new Decimal(fee),
+            status: 'completed',
+            ...(mergedNotes ? { notes: mergedNotes } : {}),
+          },
+        });
 
-    // Trả chỗ đỗ về trạng thái trống để xe sau vào được. Không làm bước này thì chỗ sẽ bị
-    // "kẹt" ở trạng thái đang có xe dù xe đã rời bãi.
-    if (record.parkingSpotId) {
-      await prisma.parkingSpot.update({
-        where: { id: record.parkingSpotId },
-        data: { status: 'available' },
-      });
-    }
+        if (closed.count === 0) {
+          throw {
+            status: 409,
+            message: 'Lượt gửi này vừa được kết thúc bởi thao tác khác',
+            code: 'RECORD_ALREADY_CLOSED',
+          };
+        }
 
-    // Chỉ sinh phiếu thu khi thực sự có tiền. Lượt miễn phí (khách có gói, hoặc được miễn) vẫn
-    // được ghi nhận đầy đủ trong ParkingRecord để báo cáo đếm lượt xe, chỉ là không có giao dịch thu.
-    if (fee > 0) {
-      await prisma.payment.create({
-        data: {
-          parkingRecordId: params.recordId,
-          amount: new Decimal(fee),
-          paymentMethod: params.paymentMethod || 'cash',
-          paymentType: 'parking',
-          createdBy: params.createdByUserId,
-          notes: params.isException
-            ? `Checkout ngoại lệ: ${EXCEPTION_REASON_LABEL[params.exceptionReason || 'other'] || params.exceptionReason}`
-            : null,
-        },
-      });
-    }
+        // Trả chỗ đỗ về trạng thái trống để xe sau vào được. Không làm bước này thì chỗ sẽ bị
+        // "kẹt" ở trạng thái đang có xe dù xe đã rời bãi.
+        if (record.parkingSpotId) {
+          await tx.parkingSpot.update({
+            where: { id: record.parkingSpotId },
+            data: { status: 'available' },
+          });
+        }
+
+        // Chỉ sinh phiếu thu khi thực sự có tiền. Lượt miễn phí (khách có gói, hoặc được miễn) vẫn
+        // được ghi nhận đầy đủ trong ParkingRecord để báo cáo đếm lượt xe, chỉ là không có giao dịch thu.
+        if (fee > 0) {
+          await tx.payment.create({
+            data: {
+              parkingRecordId: params.recordId,
+              amount: new Decimal(fee),
+              paymentMethod: params.paymentMethod || 'cash',
+              paymentType: 'parking',
+              createdBy: params.createdByUserId,
+              notes: params.isException
+                ? `Checkout ngoại lệ: ${EXCEPTION_REASON_LABEL[params.exceptionReason || 'other'] || params.exceptionReason}`
+                : null,
+            },
+          });
+        }
+      })
+      .catch(rethrowActiveParkingConflict);
 
     return {
       message: params.isException ? 'Checkout ngoại lệ thành công' : 'Ghi nhận xe ra thành công',
@@ -348,35 +427,75 @@ export class ParkingService {
       throw { status: 400, message: `Đã hết chỗ đỗ phù hợp cho loại xe ${effectiveVehicleTypeName}` };
     }
 
-    if (!selectedSpot || selectedSpot.status !== 'available') {
-      throw { status: 400, message: 'Chỗ đỗ đã được sử dụng hoặc không khả dụng' };
+    // Tách ba tình huống thay vì gộp một câu chung, vì cách xử lý ở màn hình khác hẳn nhau:
+    //   - Không tồn tại  -> dữ liệu hỏng / form cũ, nhân viên phải tải lại trang (400).
+    //   - Đã có xe       -> XUNG ĐỘT ĐỒNG THỜI: chỗ vừa bị quầy khác lấy. Trả 409 để frontend tự
+    //                       tải lại sơ đồ chỗ trống và xoá ô chọn chỗ, thay vì báo lỗi đỏ vô nghĩa.
+    //   - Trạng thái khác (bảo trì...) -> lỗi nhập liệu thật sự (400).
+    if (!selectedSpot) {
+      throw { status: 400, message: 'Chỗ đỗ không tồn tại' };
+    }
+    if (selectedSpot.status === 'occupied') {
+      throw { status: 409, message: SPOT_TAKEN_MESSAGE, code: 'SPOT_TAKEN' };
+    }
+    if (selectedSpot.status !== 'available') {
+      throw { status: 400, message: 'Chỗ đỗ đang không khả dụng (bảo trì hoặc đã khoá)' };
     }
 
     if (!isSpotCompatibleWithVehicleType(selectedSpot, effectiveVehicleTypeName)) {
       throw { status: 400, message: `Chỗ đỗ đã chọn không phù hợp với loại xe ${effectiveVehicleTypeName}` };
     }
 
-    // Ghi lại giá đang áp dụng vào chính bản ghi (hourlyRateApplied / dailyRateApplied). Đây là
-    // điểm mấu chốt để lúc xe ra tính đúng giá của thời điểm gửi, dù bảng giá đã thay đổi.
-    const record = await prisma.parkingRecord.create({
-      data: {
-        vehicleId: vehicle?.id ?? null,
-        licensePlate: normalizedPlate,
-        vehicleTypeId: effectiveVehicleTypeId,
-        parkingSpotId: data.parkingSpotId,
-        notes: data.notes ?? null,
-        createdBy: createdByUserId,
-        hourlyRateApplied: effectiveHourlyRate,
-        dailyRateApplied: effectiveDailyRate,
-      },
-    });
+    // ---- VÙNG TRANH CHẤP ----------------------------------------------------------------
+    // Toàn bộ kiểm tra ở trên chỉ lọc sớm để báo lỗi cho dễ hiểu; chúng KHÔNG bảo đảm được
+    // tính đúng đắn khi hai nhân viên bấm cùng lúc, vì giữa lúc đọc và lúc ghi có khoảng trễ.
+    // Việc chốt chỗ phải làm nguyên tử trong một giao dịch (xem `claimSpotOrThrow`).
+    const record = await prisma.$transaction(async (tx) => {
+      await this.claimSpotOrThrow(tx, data.parkingSpotId);
 
-    await prisma.parkingSpot.update({
-      where: { id: data.parkingSpotId },
+      // Ghi lại giá đang áp dụng vào chính bản ghi (hourlyRateApplied / dailyRateApplied). Đây là
+      // điểm mấu chốt để lúc xe ra tính đúng giá của thời điểm gửi, dù bảng giá đã thay đổi.
+      return tx.parkingRecord.create({
+        data: {
+          vehicleId: vehicle?.id ?? null,
+          licensePlate: normalizedPlate,
+          vehicleTypeId: effectiveVehicleTypeId,
+          parkingSpotId: data.parkingSpotId,
+          notes: data.notes ?? null,
+          createdBy: createdByUserId,
+          hourlyRateApplied: effectiveHourlyRate,
+          dailyRateApplied: effectiveDailyRate,
+        },
+      });
+    }).catch(rethrowActiveParkingConflict);
+
+    return { message: 'Ghi nhận xe vào thành công', id: record.id };
+  }
+
+  /**
+   * CHỐT CHỖ ĐỖ một cách nguyên tử — mấu chốt chống tranh chấp khi hai nhân viên cùng chọn
+   * một chỗ.
+   *
+   * Cách làm: dùng `updateMany` kèm điều kiện `status: 'available'` ngay trong câu lệnh ghi.
+   * Nó dịch ra đúng một câu UPDATE ... WHERE Id=? AND Status='available'. SQL Server khoá dòng
+   * đó rồi mới xét lại điều kiện, nên trong hai yêu cầu đồng thời chỉ MỘT yêu cầu đổi được
+   * trạng thái (count = 1), yêu cầu còn lại nhận count = 0 và bị từ chối.
+   *
+   * So với cách cũ (`findUnique` kiểm tra status rồi `update`): hai bước tách rời có khoảng trễ
+   * ở giữa nên cả hai đều đọc thấy "còn trống" và đều ghi đè được — đó chính là lỗi race condition.
+   *
+   * Trả về 409 (Conflict) chứ không phải 400: đây không phải nhân viên nhập sai, mà là chỗ vừa
+   * bị người khác lấy mất trong tích tắc — frontend dựa vào mã này để tự tải lại sơ đồ chỗ trống.
+   */
+  private async claimSpotOrThrow(tx: PrismaTransaction, parkingSpotId: number) {
+    const claimed = await tx.parkingSpot.updateMany({
+      where: { id: parkingSpotId, status: 'available' },
       data: { status: 'occupied' },
     });
 
-    return { message: 'Ghi nhận xe vào thành công', id: record.id };
+    if (claimed.count === 0) {
+      throw { status: 409, message: SPOT_TAKEN_MESSAGE, code: 'SPOT_TAKEN' };
+    }
   }
 
   /** XE RA thông thường: tính phí theo công thức, thu tiền, trả chỗ. */

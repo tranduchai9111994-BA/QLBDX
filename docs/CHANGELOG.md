@@ -2,6 +2,30 @@
 
 ---
 
+## 05/09/2026 — Chống tranh chấp đồng thời ở nghiệp vụ xe vào / xe ra
+
+**Có migration DB** (`20260905000000_add_active_parking_unique_indexes`) — sau khi `git pull` phải
+chạy `cd backend && npx prisma migrate deploy` rồi mới restart backend.
+
+Trả lời dứt điểm câu hỏi "hai nhân viên cùng chọn một chỗ đỗ đúng cùng lúc thì sao?". Trước đợt này
+service chỉ *kiểm tra rồi mới ghi*, đo thực tế cho thấy 5 lệnh song song vào cùng một chỗ thì **cả 5
+đều thành công** — một chỗ đỗ có 5 xe.
+
+| Nhóm | Thay đổi |
+|---|---|
+| Sửa lỗi | **Race condition khi giành chỗ đỗ.** `entry()` chốt chỗ bằng `updateMany` kèm điều kiện `status:'available'` (compare-and-set) bên trong `prisma.$transaction`, thay cho `findUnique` kiểm tra rồi `update`. |
+| Sửa lỗi | **Race condition khi cho xe ra.** `completeExit()` đóng bản ghi bằng `updateMany` kèm điều kiện `status:'parked'` — bấm "Xe ra" hai lần không còn tính phí và sinh phiếu thu lần hai. |
+| Sửa lỗi | **Xe vào / xe ra chạy trong transaction.** Đóng bản ghi + trả chỗ đỗ + sinh phiếu thu nay hoặc thành công cả cụm hoặc rollback cả cụm — hết trạng thái nửa vời ("chỗ đỗ ma"). |
+| Mới | Hai chỉ mục UNIQUE có điều kiện ở DB làm chốt chặn cuối: `UX_ParkingRecords_ActiveSpot` (mỗi chỗ đỗ tối đa 1 lượt đang gửi) và `UX_ParkingRecords_ActivePlate` (mỗi biển số tối đa 1 lượt đang gửi). |
+| Mới | Mã lỗi **409 Conflict** cho xung đột đồng thời, tách khỏi 400 (nhập sai). Màn Xe vào tự xoá ô chọn chỗ + tải lại sơ đồ chỗ trống; màn Xe ra đóng modal + tải lại danh sách. |
+| Mới | Test tự động `npm run test:concurrency` — 3 kịch bản chạy trên DB thật, tự tạo và tự dọn dữ liệu test. |
+| Sửa lỗi | Thông báo lỗi chọn chỗ tách làm ba: "không tồn tại" (400) / "vừa bị người khác lấy" (409) / "đang bảo trì" (400), thay cho một câu chung "đã được sử dụng hoặc không khả dụng". |
+
+Chi tiết kỹ thuật + log kiểm thử trước/sau: [SUA_LOI_RACE_CONDITION_CHO_DO.md](SUA_LOI_RACE_CONDITION_CHO_DO.md).
+Tóm tắt kiến trúc: [KIEN_TRUC_CHI_TIET.md](KIEN_TRUC_CHI_TIET.md) mục 12.4.
+
+---
+
 ## 01/09/2026 — Sửa logic `enabled` của luật & validate luật theo domain
 
 **Không có thay đổi schema, không cần chạy migration.** Chỉ cần `git pull` rồi restart backend —

@@ -92,6 +92,7 @@ Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn.
 | **Xe vào / Xe ra** | Ghi nhận, tính phí theo giờ/ngày, checkout ngoại lệ (mất vé...) |
 | **Tính phí** | ≤24h: min(giờ×rate, daily); >24h: ngày × dailyRate; có gói → miễn phí |
 | **Test tính phí** | `cd backend && npm test` (9 test cases: 0p, qua đêm, mốc cap, có gói) |
+| **Chống tranh chấp đồng thời** | Hai nhân viên cùng chọn một chỗ đỗ → chỉ 1 xe vào được. Transaction + compare-and-set + 2 chỉ mục UNIQUE có điều kiện ở DB. Test: `npm run test:concurrency` |
 | **Bãi đỗ xe** | Quản lý khu/chỗ theo loại xe, trạng thái available/occupied/maintenance |
 | **Khách hàng & Phương tiện** | CRUD đầy đủ, validate trùng biển số/SĐT/CCCD |
 | **Gói dịch vụ** | Vé tháng/quý/năm, kiểm tra chồng gói, deactivate/reactivate |
@@ -118,9 +119,11 @@ Mọi seed script đều **idempotent** — chạy lại nhiều lần an toàn.
 > kèm hướng dẫn tự kiểm chứng từng cái.
 >
 > Xem chi tiết thiết kế tại [SMART_UPGRADE_PLAN.md](docs/archive/SMART_UPGRADE_PLAN.md),
-> đợt chuyển sang hệ chuyên gia tại [NANG_CAP_NANG_CAO.md](docs/NANG_CAP_NANG_CAO.md), và đợt sửa
+> đợt chuyển sang hệ chuyên gia tại [NANG_CAP_NANG_CAO.md](docs/NANG_CAP_NANG_CAO.md), đợt sửa
 > logic bật/tắt luật + validate theo domain tại
-> [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](docs/SUA_LOI_ENABLED_VA_VALIDATE_RULE.md).
+> [SUA_LOI_ENABLED_VA_VALIDATE_RULE.md](docs/SUA_LOI_ENABLED_VA_VALIDATE_RULE.md), và đợt chống
+> tranh chấp đồng thời khi giành chỗ đỗ tại
+> [SUA_LOI_RACE_CONDITION_CHO_DO.md](docs/SUA_LOI_RACE_CONDITION_CHO_DO.md).
 
 ---
 
@@ -133,6 +136,7 @@ QLBDX/
 │   │   ├── config/          # DB, JWT config
 │   │   ├── controllers/     # Nhận request → gọi service (gồm analytics.controller.ts mới)
 │   │   ├── services/        # Nghiệp vụ chính (gồm analytics.service.ts — Phân tích & Gợi ý DSS)
+│   │   │   └── parking.concurrency.test.ts  # Test tranh chấp đồng thời (chạy trên DB thật)
 │   │   ├── expertSystem/    # Hệ chuyên gia: Knowledge Base + Inference Engine
 │   │   │                    #   knowledgeBase.ts (nạp luật enabled=true từ DB)
 │   │   │                    #   inferenceEngine.ts (AND-match + explanation)
@@ -143,7 +147,7 @@ QLBDX/
 │   │   ├── validators/      # Zod schema
 │   │   └── utils/
 │   │       ├── feeCalculator.ts       # Thuật toán tính phí (pure)
-│   │       ├── feeCalculator.test.ts  # Unit tests
+│   │       ├── feeCalculator.test.ts  # Unit tests (không cần DB)
 │   │       └── businessRules.ts       # Rule loại xe / biển số
 │   ├── prisma/
 │   │   ├── schema.prisma          # Data model — NGUỒN SỰ THẬT của schema
@@ -185,6 +189,7 @@ QLBDX/
 │   ├── CAU_TRUC_CODE_TINH_NANG_THONG_MINH.md # Code mẫu có chú thích từng dòng
 │   ├── NANG_CAP_NANG_CAO.md        # Đợt chuyển sang Rule-based Expert System
 │   ├── SUA_LOI_ENABLED_VA_VALIDATE_RULE.md # Sửa logic enabled + validate rule theo domain
+│   ├── SUA_LOI_RACE_CONDITION_CHO_DO.md    # Chống tranh chấp đồng thời khi giành chỗ đỗ
 │   ├── demo_accounts.md            # Tài khoản demo chi tiết
 │   ├── CHANGELOG.md                # Lịch sử thay đổi
 │   └── archive/                    # Tài liệu kế hoạch/audit đã hoàn thành
@@ -207,9 +212,14 @@ QLBDX/
 
 ```bash
 cd backend
-npm test        # Unit test thuật toán tính phí (9 cases)
-npm run build   # TypeScript build check
+npm test                  # Unit test thuật toán tính phí (9 cases) — không cần DB
+npm run test:concurrency  # Test tranh chấp đồng thời xe vào/xe ra (3 cases) — CẦN SQL Server
+npm run build             # TypeScript build check
 ```
+
+`test:concurrency` chạy trên **cơ sở dữ liệu thật**: nó tự tạo khu `ZZ_TEST_CONCURRENCY` với các chỗ
+đỗ riêng, bắn 5 lệnh song song vào cùng một chỗ, đối chiếu số bản ghi thực tế rồi tự xoá sạch dữ liệu
+test. Không đụng vào dữ liệu nghiệp vụ có sẵn.
 
 ---
 

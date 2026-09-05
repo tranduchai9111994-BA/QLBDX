@@ -514,7 +514,21 @@ Vì Prisma giúp thao tác dữ liệu theo model TypeScript, include quan hệ 
 
 ### 5. Nếu 2 người cùng chọn 1 chỗ đỗ thì sao?
 
-Hiện tại service xe vào có kiểm tra chỗ đỗ còn `available` trước khi tạo bản ghi, rồi cập nhật chỗ đó thành `occupied`. Cách này xử lý tốt đa số tình huống thường gặp, nhưng nếu 2 request đến gần như đồng thời thì vẫn có rủi ro race condition vì chưa thấy khóa transaction chặt ở mức DB cho nghiệp vụ này. Đây là một điểm có thể nêu như hướng cải tiến.
+Chỉ đúng một người vào được, người còn lại nhận mã 409 kèm câu "Chỗ đỗ vừa được nhân viên khác sử dụng, vui lòng chọn chỗ khác" và màn hình tự tải lại sơ đồ chỗ trống.
+
+Hệ thống chặn ở **ba lớp**, mỗi lớp giải quyết một mức độ khác nhau:
+
+| Lớp | Cách làm | Chặn được gì |
+|---|---|---|
+| 1. Kiểm tra sớm | `entry()` đọc trạng thái chỗ đỗ trước, báo lỗi dễ hiểu | Trường hợp thường gặp: chỗ đã có xe từ trước |
+| 2. Chốt chỗ nguyên tử | `claimSpotOrThrow()` — `UPDATE ParkingSpots SET Status='occupied' WHERE Id=? AND Status='available'` bên trong `prisma.$transaction` | Hai request đến **gần như đồng thời**: SQL Server khoá dòng rồi mới xét lại điều kiện nên chỉ một lệnh đổi được trạng thái |
+| 3. Ràng buộc ở DB | Chỉ mục UNIQUE có điều kiện `UX_ParkingRecords_ActiveSpot` (`UNIQUE(ParkingSpotId) WHERE Status='parked'`) | Chốt chặn cuối: kể cả code sai hoặc ai đó ghi thẳng vào DB, SQL Server vẫn từ chối |
+
+Vì sao lớp 1 một mình là chưa đủ: giữa lúc *đọc* "chỗ còn trống" và lúc *ghi* bản ghi có một khoảng trễ (`await`). Hai request cùng lọt qua khoảng trễ đó thì cả hai đều đọc thấy "còn trống" và cả hai đều ghi được — đây đúng là lỗi race condition. Lớp 2 xoá bỏ khoảng trễ bằng cách gộp điều kiện vào chính câu lệnh ghi; lớp 3 là ràng buộc bất biến ở tầng dữ liệu, không phụ thuộc vào code ứng dụng.
+
+Cùng cơ chế đó áp cho hai tình huống tranh chấp còn lại: **cùng một biển số vào bãi hai lần** (chỉ mục `UX_ParkingRecords_ActivePlate`) và **bấm "Xe ra" hai lần trên cùng một lượt gửi** (`completeExit` đóng bản ghi bằng `updateMany` kèm điều kiện `status: 'parked'`, nên chỉ sinh đúng một phiếu thu).
+
+Kiểm chứng bằng test tự động chạy trên DB thật: `cd backend && npm run test:concurrency` — bắn 5 lệnh song song vào cùng một chỗ đỗ rồi đối chiếu số bản ghi thực tế trong cơ sở dữ liệu.
 
 ### 6. Tính phí xe ra được xử lý thế nào?
 

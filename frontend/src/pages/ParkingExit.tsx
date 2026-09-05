@@ -315,7 +315,18 @@ const ParkingExit: React.FC = () => {
       }
     } catch (err) {
       const error = err as AxiosError<{ message: string }>;
-      message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+
+      // 409 (Conflict) = lượt gửi này vừa được quầy khác chốt xong (hoặc chính nhân viên bấm hai
+      // lần do mạng chậm). Tiền đã thu đúng MỘT lần ở lệnh thắng, nên ở đây chỉ cần đóng modal và
+      // tải lại danh sách để bảng không còn hiển thị xe đã ra — báo lỗi đỏ sẽ gây hiểu nhầm là hỏng.
+      if (error.response?.status === 409) {
+        message.warning(error.response.data?.message || 'Lượt gửi này vừa được kết thúc bởi thao tác khác');
+        setExitModal(null);
+        resetExceptionForm();
+        fetchRecords();
+      } else {
+        message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      }
     }
   };
 
