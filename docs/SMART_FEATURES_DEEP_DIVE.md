@@ -170,27 +170,60 @@ Khác với cảnh báo thông thường chỉ có 1 dòng text, mỗi cảnh b�
 
 | Vai trò | File |
 |---|---|
-| Logic | `ParkingService.smartLookup()` — `backend/src/services/parking.service.ts` (~dòng 501–619) |
+| Thuật toán | `backend/src/utils/smartParkingAlgorithms.ts` — SAW + Exponential Decay, hàm thuần tuý không chạm DB |
+| Logic nghiệp vụ | `ParkingService.smartLookup()` — `backend/src/services/parking.service.ts` (~dòng 763–947) |
+| Đọc trọng số | `ParkingService.getSawConfig()` — `parking.service.ts` (~dòng 949) |
+| Cấu hình trọng số | Luật `PARKING_REC_WEIGHTS`, domain `parking_recommendation` — `backend/src/expertSystem/` |
 | Endpoint | `GET /api/parking/smart-lookup/:plate` — `backend/src/routes/parking.routes.ts` |
 | Hiển thị + auto-select | `frontend/src/pages/ParkingEntry.tsx` |
+| Kiểm thử | `backend/src/utils/smartParkingAlgorithms.test.ts` — `npm run test:saw` (23 ca) |
 
-### Cách hoạt động — 5 bước suy luận từ 1 biển số
+### Cách hoạt động — 6 bước suy luận từ 1 biển số
 
 Khi nhân viên gõ xong biển số ở màn Xe vào, hệ thống gọi `smartLookup()` và tính đồng thời (Promise.all, không tuần tự — tối ưu độ trễ):
 
 1. **Tần suất ghé 30 ngày** (`visitCount30Days`) — đếm `ParkingRecord` của đúng xe đó trong 30 ngày.
 2. **Thời gian đỗ trung bình** (`avgDurationHours`) — trung bình `duration` của 30 lượt gần nhất.
-3. **Khu vực ưa thích** (`preferredZone`) — duyệt 30 lượt đỗ gần nhất, đếm tần suất theo `zone.name`, chọn khu có tần suất cao nhất (thuật toán "mode" đơn giản trên 1 trường categorical):
+3. **Mức ưa thích chỗ đỗ** (`preferredZone` + điểm từng chỗ) — không đếm tần suất đơn thuần nữa mà dùng
+   **Exponential Decay Weighting** (Holt 1957): lượt đỗ càng gần đây trọng số càng lớn, `weight(i) = α(1-α)^i`
+   với α = 0.3. Nhờ vậy khách đổi thói quen sang khu khác thì hệ thống bám theo sau vài lượt, thay vì phải đợi
+   đủ đa số trong 30 lượt.
+
+   Điểm được chấm ở **hai mức rồi cộng lại** — điểm của khu + điểm của đúng chỗ đó:
    ```ts
-   const zoneCounts = new Map<string, number>();
-   for (const r of recentRecords) {
-     const zoneName = r.parkingSpot?.zone?.name;
-     if (zoneName) zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1);
-   }
-   // → chọn key có value lớn nhất
+   zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
    ```
+   Phải có thành phần "đúng chỗ" thì thuật toán mới phân biệt được các chỗ trong cùng một khu — lý do đầy đủ
+   xem `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
 4. **Gói dịch vụ đang hiệu lực** (`hasActivePackage`, `packageExpiry`) — tra `CustomerPackage` còn hạn.
-5. **Gợi ý chỗ đỗ cụ thể** (`suggestedSpotId`) — đây là bước "thông minh" nhất: lọc toàn bộ chỗ trống **tương thích với loại xe** (`isSpotCompatibleWithVehicleType`), ưu tiên chỗ nằm trong khu vực ưa thích của khách; nếu khu ưa thích đã hết chỗ phù hợp, tự động chọn chỗ ở khu khác **và giải thích lý do** (`suggestedSpotNote: "Khu A đã hết chỗ phù hợp, gợi ý Khu B thay thế"`) — không âm thầm đổi khu khiến nhân viên/khách hoang mang.
+5. **Gợi ý chỗ đỗ cụ thể** (`suggestedSpotId`) — đây là bước "thông minh" nhất, và là nơi chạy thuật toán
+   ra quyết định đa tiêu chí **SAW (Simple Additive Weighting)** — Fishburn 1967; Hwang & Yoon 1981.
+
+   Sau khi lọc chỗ trống **tương thích loại xe** (`isSpotCompatibleWithVehicleType`), mọi chỗ còn lại được
+   chấm điểm trên **5 tiêu chí** có trọng số:
+
+   | Tiêu chí | Chiều | Trọng số |
+   |---|---|---|
+   | C1 — Mức ưa thích chỗ đỗ (khu + đúng chỗ, theo Decay) | Benefit | 0.35 |
+   | C2 — Tỷ lệ còn trống của khu | Benefit | 0.25 |
+   | C3 — Độ tương thích loại xe | Benefit | 0.20 |
+   | C4 — Phù hợp khung giờ quen | Benefit | 0.10 |
+   | C5 — Mức độ đông đúc của khu | Cost | 0.10 |
+
+   Công thức: chuẩn hoá mọi tiêu chí về [0,1] (benefit chia cho max, cost lấy min chia cho giá trị), rồi
+   `Score = Σ (wⱼ × rᵢⱼ)`. Chỗ điểm cao nhất được gợi ý.
+
+   Mỗi kết quả kèm **câu giải thích** sinh tự động, nêu 2 tiêu chí đóng góp nhiều điểm nhất:
+   `"Điểm 1.00 — yếu tố chính: Mức ưa thích chỗ đỗ (35%), Tỷ lệ còn trống (25%)"`. Nếu khu quen đã hết chỗ,
+   câu giải thích nói rõ (`"Khu A đã hết chỗ phù hợp — ..."`) — không âm thầm đổi khu khiến nhân viên/khách
+   hoang mang. Nếu nhiều chỗ hoà điểm (khách mới hoàn toàn), hệ thống cũng nói thẳng
+   (`"27 chỗ trống cùng mức điểm cao nhất, chọn chỗ đầu danh sách"`) thay vì vờ có căn cứ riêng.
+
+6. **Trọng số cấu hình được qua Hệ chuyên gia** — 5 trọng số và hệ số α không viết cứng trong code mà lưu ở
+   luật `PARKING_REC_WEIGHTS` (domain `parking_recommendation`). Admin sửa trên màn **Cảnh báo → Cấu hình
+   nâng cao**, hệ thống áp dụng ngay không cần khởi động lại. Hệ thống chặn lưu nếu tổng 5 trọng số khác 1.0.
+   Luật hỏng hoặc bị tắt thì rơi về bộ mặc định — tính năng này chạy mỗi lần nhân viên gõ biển số, không được
+   phép chết vì một dòng cấu hình sai.
 
 ### Ở phía frontend — hệ thống thực sự "thay đổi những gì người dùng thấy"
 

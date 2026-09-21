@@ -5,6 +5,7 @@ import {
   PACKAGE_LEVELS,
   REPORT_SUGGESTION_TYPES,
   RULE_TYPES,
+  SAW_WEIGHT_KEYS,
   VALID_SEVERITIES,
 } from './domainSpecs';
 
@@ -89,6 +90,27 @@ const DOMAIN_VALIDATORS: Record<string, (params: Record<string, any>, conditions
     requireOneOf(params.id, ANALYTICS_DECISION_IDS, 'Mã quyết định (params.id)');
     if (!params.message && !params.recommendation) {
       throw ruleError('Luật hỗ trợ quyết định phải có params.message hoặc params.recommendation');
+    }
+  },
+
+  // Gợi ý chỗ đỗ — parking.service.ts đọc 5 trọng số SAW + hệ số decay từ params.
+  // Bắt tổng trọng số = 1.0 ngay lúc lưu, vì nếu lệch thì điểm SAW không còn nằm trong thang
+  // [0,1] và câu giải thích "điểm 0.76/1.00" hiển thị cho nhân viên sẽ sai.
+  parking_recommendation(params) {
+    let sum = 0;
+    for (const key of SAW_WEIGHT_KEYS) {
+      const value = params[key];
+      if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
+        throw ruleError(`Trọng số "${key}" phải là số trong khoảng 0 đến 1`);
+      }
+      sum += value;
+    }
+    if (Math.abs(sum - 1) > 0.001) {
+      throw ruleError(`Tổng 5 trọng số phải bằng 1.0 (hiện tại là ${sum.toFixed(3)})`);
+    }
+    const alpha = params.decayAlpha;
+    if (typeof alpha !== 'number' || !(alpha > 0 && alpha < 1)) {
+      throw ruleError('Hệ số suy giảm decayAlpha phải là số lớn hơn 0 và nhỏ hơn 1');
     }
   },
 

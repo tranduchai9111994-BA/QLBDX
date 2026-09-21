@@ -28,6 +28,18 @@ import {
   normalizeLicensePlate,
 } from '../utils/businessRules';
 import { calculateParkingFee } from '../utils/feeCalculator';
+import {
+  calcHourlyPattern,
+  calcSpotPreference,
+  calcTypeMatch,
+  calcZonePreference,
+  calcZoneStats,
+  scoreSAW,
+  DEFAULT_DECAY_ALPHA,
+  DEFAULT_SAW_WEIGHTS,
+  SpotCandidate,
+} from '../utils/smartParkingAlgorithms';
+import { knowledgeBase, SAW_WEIGHT_KEYS } from '../expertSystem';
 import { syncDueVehicleTypeRates } from './pricing.service';
 
 /**
@@ -774,7 +786,7 @@ export class ParkingService {
     since30.setDate(since30.getDate() - 30);
     const now = new Date();
 
-    const [visitCount30Days, recentRecords, activePkg, availableSpots] = await Promise.all([
+    const [visitCount30Days, recentRecords, activePkg, allSpots] = await Promise.all([
       prisma.parkingRecord.count({ where: { vehicleId: fullVehicle.id, entryTime: { gte: since30 } } }),
       prisma.parkingRecord.findMany({
         where: { vehicleId: fullVehicle.id, status: 'completed' },
@@ -792,12 +804,15 @@ export class ParkingService {
         include: { parkingPackage: { select: { name: true } } },
         orderBy: { endDate: 'asc' },
       }),
+      // Lấy TOÀN BỘ chỗ đỗ (không lọc theo trạng thái) vì thuật toán SAW cần tổng số chỗ của
+      // mỗi khu làm mẫu số để tính tỷ lệ còn trống (C2) và mức độ đông đúc (C5). Chỗ trống được
+      // lọc ra từ mảng này ngay bên dưới, nên không phát sinh thêm query.
       prisma.parkingSpot.findMany({
-        where: { status: 'available' },
         include: { zone: { select: { name: true, description: true } } },
         orderBy: [{ zoneId: 'asc' }, { spotNumber: 'asc' }],
       }),
     ]);
+    const availableSpots = allSpots.filter((s) => s.status === 'available');
 
     const lastVisitRecord = await prisma.parkingRecord.findFirst({
       where: { vehicleId: fullVehicle.id },
@@ -814,39 +829,69 @@ export class ParkingService {
       ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length / 60) * 10) / 10
       : null;
 
-    // Tìm khu vực khách hay đỗ nhất: đếm số lần theo tên khu trong 30 lượt gần đây rồi lấy khu
-    // có số lần cao nhất. Dùng để gợi ý đúng chỗ quen cho khách quen.
-    const zoneCounts = new Map<string, number>();
-    for (const r of recentRecords) {
-      const zoneName = r.parkingSpot?.zone?.name;
-      if (zoneName) zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1);
-    }
+    // Chấm điểm và xếp hạng các chỗ đỗ trống bằng SAW (Simple Additive Weighting) — thuật toán
+    // ra quyết định đa tiêu chí, xem utils/smartParkingAlgorithms.ts và tài liệu thiết kế
+    // docs/DE_XUAT_THUAT_TOAN_GOI_Y_CHO_DO_THONG_MINH.md.
+    const { weights, alpha } = await this.getSawConfig();
+
+    // Tiêu chí C1 — mức ưa thích chỗ đỗ, có trọng số suy giảm theo thời gian (Exponential
+    // Decay) nên lượt đỗ gần đây ảnh hưởng mạnh hơn lượt cũ.
+    //
+    // Chấm ở HAI mức rồi cộng lại: điểm của khu + điểm của đúng chỗ đó. Bốn tiêu chí còn lại
+    // đều là thuộc tính của khu, trong khi bộ lọc loại xe gần như luôn chỉ chừa lại một khu —
+    // nếu C1 cũng chỉ ở mức khu thì mọi ứng viên bằng điểm nhau và thuật toán vô nghĩa
+    // (xem phần giải thích ở calcSpotPreference).
+    const zonePreferences = calcZonePreference(recentRecords, alpha);
+    const spotPreferences = calcSpotPreference(recentRecords, alpha);
     let preferredZone: string | null = null;
-    let maxCount = 0;
-    for (const [zone, count] of zoneCounts) {
-      if (count > maxCount) {
-        maxCount = count;
+    let maxPreference = 0;
+    for (const [zone, score] of zonePreferences) {
+      if (score > maxPreference) {
+        maxPreference = score;
         preferredZone = zone;
       }
     }
 
+    const zoneStats = calcZoneStats(allSpots);
+    const hourlyPattern = calcHourlyPattern(recentRecords, now.getHours());
+
     const compatibleSpots = availableSpots.filter((s) =>
       isSpotCompatibleWithVehicleType(s, fullVehicle.vehicleType.name)
     );
+
+    const candidates: SpotCandidate[] = compatibleSpots.map((spot) => {
+      const zoneName = spot.zone?.name || '';
+      const stats = zoneStats.get(zoneName);
+      return {
+        spotId: spot.id,
+        spotNumber: spot.spotNumber,
+        zoneName,
+        zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
+        zoneAvailability: stats?.availability ?? 0,
+        typeMatchScore: calcTypeMatch(spot, fullVehicle.vehicleType.name),
+        // Khu chưa từng xuất hiện trong lịch sử của xe này thì không có căn cứ để nói hợp hay
+        // không hợp khung giờ — cho điểm trung tính 0.5 thay vì 0 để không phạt oan khu mới.
+        peakHourFit: hourlyPattern.get(zoneName) ?? 0.5,
+        currentOccupancy: stats?.occupancy ?? 0,
+      };
+    });
+
+    const sawResults = scoreSAW(candidates, weights);
+    const bestSpot = sawResults[0] ?? null;
+
     let suggestedSpotId: number | null = null;
     let suggestedSpotLabel: string | null = null;
     let suggestedSpotNote: string | null = null;
-    // Ưu tiên gợi ý chỗ trống trong khu khách hay đỗ; khu đó hết chỗ thì lấy chỗ phù hợp bất kỳ
-    // và kèm ghi chú giải thích, để nhân viên nói được với khách vì sao hôm nay đổi khu.
-    if (compatibleSpots.length > 0) {
-      const inPreferred = preferredZone
-        ? compatibleSpots.filter((s) => s.zone?.name === preferredZone)
-        : [];
-      const chosen = inPreferred[0] || compatibleSpots[0];
-      suggestedSpotId = chosen.id;
-      suggestedSpotLabel = `${chosen.zone?.name} — ${chosen.spotNumber}`;
-      if (preferredZone && inPreferred.length === 0) {
-        suggestedSpotNote = `${preferredZone} đã hết chỗ phù hợp, gợi ý ${chosen.zone?.name} thay thế`;
+    if (bestSpot) {
+      suggestedSpotId = bestSpot.spotId;
+      suggestedSpotLabel = `${bestSpot.zoneName} — ${bestSpot.spotNumber}`;
+      suggestedSpotNote = bestSpot.explanation;
+      // Khu quen hết chỗ thì nói rõ ra, để nhân viên giải thích được với khách vì sao đổi khu.
+      if (preferredZone && bestSpot.zoneName !== preferredZone) {
+        const preferredStillFree = compatibleSpots.some((s) => s.zone?.name === preferredZone);
+        if (!preferredStillFree) {
+          suggestedSpotNote = `${preferredZone} đã hết chỗ phù hợp — ${bestSpot.explanation}`;
+        }
       }
     }
 
@@ -865,8 +910,60 @@ export class ParkingService {
         suggestedSpotId,
         suggestedSpotLabel,
         suggestedSpotNote,
+        // Phần "giải thích được" (explainability) của thuật toán: nêu rõ đang dùng thuật toán
+        // nào, trọng số bao nhiêu, và 3 chỗ đỗ đứng đầu bảng xếp hạng cùng điểm số.
+        scoringDetails: {
+          algorithm: 'SAW — Simple Additive Weighting',
+          references: [
+            'Fishburn, P.C. (1967). Operations Research, 15(3), 537–542',
+            'Hwang, C.L. & Yoon, K. (1981). Multiple Attribute Decision Making. Springer-Verlag',
+          ],
+          weights: {
+            zonePreference: weights[0],
+            zoneAvailability: weights[1],
+            typeMatch: weights[2],
+            peakHourFit: weights[3],
+            occupancy: weights[4],
+          },
+          decayAlpha: alpha,
+          candidateCount: sawResults.length,
+          topCandidates: sawResults.slice(0, 3).map((r) => ({
+            spotId: r.spotId,
+            spotNumber: r.spotNumber,
+            zone: r.zoneName,
+            score: Math.round(r.totalScore * 1000) / 1000,
+            explanation: r.explanation,
+          })),
+        },
       },
     };
+  }
+
+  /**
+   * Đọc tham số thuật toán SAW từ hệ chuyên gia (domain `parking_recommendation`), để admin
+   * chỉnh trọng số trên giao diện mà không phải sửa code.
+   *
+   * Luật hỏng/thiếu/bị tắt thì rơi về bộ mặc định — gợi ý chỗ đỗ là chức năng chạy mỗi lần
+   * nhân viên nhập biển số, không được phép chết vì một dòng cấu hình sai.
+   */
+  private async getSawConfig(): Promise<{ weights: number[]; alpha: number }> {
+    const fallback = { weights: DEFAULT_SAW_WEIGHTS, alpha: DEFAULT_DECAY_ALPHA };
+    try {
+      const rules = await knowledgeBase.getRulesByDomain('parking_recommendation');
+      const params = rules.find((r) => r.code === 'PARKING_REC_WEIGHTS')?.actions[0]?.params;
+      if (!params) return fallback;
+
+      const weights = SAW_WEIGHT_KEYS.map((key) => params[key]);
+      if (weights.some((w) => typeof w !== 'number' || Number.isNaN(w))) return fallback;
+
+      const alpha = params.decayAlpha;
+      return {
+        weights: weights as number[],
+        alpha: typeof alpha === 'number' && alpha > 0 && alpha < 1 ? alpha : DEFAULT_DECAY_ALPHA,
+      };
+    } catch {
+      return fallback;
+    }
   }
 }
 

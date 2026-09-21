@@ -40,6 +40,7 @@ export {
   REPORT_SUGGESTION_TYPES,
   DOMAIN_ACTION_TYPE,
   DOMAIN_FORM_SPEC,
+  SAW_WEIGHT_KEYS,
 } from './domainSpecs';
 export type { RuleType, DomainFormSpec, RuleFormField } from './domainSpecs';
 

@@ -154,4 +154,31 @@ export const DEFAULT_RULES = [
       },
     ]),
   },
+
+  // --- Domain: parking_recommendation (parking.service.ts → smartLookup) ---
+  // Luật này KHÔNG đi qua máy suy diễn: nó chỉ là nơi lưu tham số của thuật toán SAW để admin
+  // chỉnh trọng số trên giao diện mà không phải sửa code. Điều kiện `configOnly >= 0` là chỗ
+  // giữ chỗ cho đúng khuôn một luật (validateShape bắt buộc có tối thiểu 1 điều kiện).
+  {
+    code: 'PARKING_REC_WEIGHTS',
+    domain: 'parking_recommendation',
+    name: 'Trọng số thuật toán gợi ý chỗ đỗ (SAW)',
+    description:
+      'Tham số của thuật toán SAW dùng để chấm điểm và xếp hạng các chỗ đỗ trống. Tổng 5 trọng số phải bằng 1.0.',
+    priority: 1,
+    conditions: JSON.stringify([{ fact: 'configOnly', operator: 'gte', value: 0 }]),
+    actions: JSON.stringify([
+      {
+        type: 'config',
+        params: {
+          zonePreference: 0.35,
+          zoneAvailability: 0.25,
+          typeMatch: 0.2,
+          peakHourFit: 0.1,
+          occupancy: 0.1,
+          decayAlpha: 0.3,
+        },
+      },
+    ]),
+  },
 ];

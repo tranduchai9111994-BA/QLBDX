@@ -4,6 +4,30 @@
  *
  * Xe đang thuộc gói còn hiệu lực sẽ được MIỄN PHÍ khi ra khỏi bãi (kiểm tra ở parking.service.ts).
  * Backend chặn mua chồng gói trùng thời gian cho cùng một xe.
+ *
+ * ===========================================================================================
+ * ĐÂY LÀ "VÉ ĐÃ BÁN", còn Packages.tsx là "BẢNG GIÁ". Đọc phần đầu Packages.tsx nếu chưa rõ.
+ *
+ * LIÊN KẾT VỚI NGHIỆP VỤ CỐT LÕI: khi xe ra, parking.service.ts gọi hasActivePackage() để tra
+ * bảng này. Xe thuộc gói còn hiệu lực -> phí = 0. Tức là dữ liệu tạo ra ở màn hình này trực
+ * tiếp quyết định khách có phải trả tiền hay không.
+ *
+ * BẢY ĐIỀU KIỆN TRƯỚC KHI BÁN GÓI nằm ở backend (customerPackage.service.ts ->
+ * ensurePackageCreateValidity). Đáng chú ý nhất là điều kiện thứ 7: chống mua CHỒNG GÓI trùng
+ * thời gian cho cùng một xe. Cách kiểm tra hai khoảng thời gian có giao nhau hay không:
+ *       A1 <= B2 && A2 >= B1
+ * (Đây là câu hỏi hội đồng hay hỏi — nhớ công thức này.)
+ *
+ * BỐN MODAL, mỗi cái một việc:
+ *   `modal`      - Đăng ký gói mới
+ *   `editModal`  - Sửa gói đã bán (admin)
+ *   `renewModal` - Gia hạn: TẠO GÓI MỚI, không sửa gói cũ (xem giải thích ở hàm openRenew)
+ *   `importOpen` - Nhập hàng loạt từ Excel
+ *
+ * PHẦN KHÓ NHẤT của file là chuỗi ba ô Select phụ thuộc nhau:
+ *       chọn KHÁCH -> lọc ra XE của khách đó -> lọc ra GÓI hợp loại xe đó
+ * Xem KHỐI 3.
+ * ===========================================================================================
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -25,7 +49,15 @@ import PermissionGate from '../components/PermissionGate';
 import { confirmDanger } from '../utils/confirmDanger';
 import { defaultPagination } from '../utils/tablePagination';
 
-/** Gói còn trong khoảng bán (validFrom/validTo) — bỏ trống 1 hoặc cả 2 mốc = không giới hạn phía đó. */
+/**
+ * Gói còn trong khoảng bán (validFrom/validTo) — bỏ trống 1 hoặc cả 2 mốc = không giới hạn phía đó.
+ *
+ * Tách ra hàm riêng vì được dùng ở HAI chỗ: lọc gói trong form Đăng ký và trong form Gia hạn.
+ * Tham số 'day' bắt dayjs so sánh theo đơn vị ngày, bỏ qua giờ phút — thiếu nó thì gói bắt đầu
+ * bán từ hôm nay sẽ bị loại suốt cả ngày hôm nay.
+ *
+ * Lưu ý: đây chỉ là bộ lọc GIAO DIỆN cho gọn danh sách; backend vẫn kiểm tra lại khi tạo.
+ */
 const isPackageSellable = (p: ParkingPackage) => {
   const today = dayjs();
   if (p.validFrom && today.isBefore(dayjs(p.validFrom), 'day')) return false;
@@ -36,9 +68,12 @@ const isPackageSellable = (p: ParkingPackage) => {
 const { RangePicker } = DatePicker;
 
 const CustomerPackages: React.FC = () => {
+  /* ══ KHỐI 1 — STATE ═══════════════════════════════════════════════════════════════════ */
   const { t } = useLanguage();
 
-  const [customerPackages, setCustomerPackages] = useState<CustomerPackage[]>([]);
+  const [customerPackages, setCustomerPackages] = useState<CustomerPackage[]>([]);  // dữ liệu bảng
+  // BA danh mục phụ — nhiều nhất trong toàn bộ dự án, vì một dòng "gói đã bán" nối tới ba thực
+  // thể khác nhau: khách hàng, gói, và xe. Cả ba cần có sẵn để đổ vào các ô Select.
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [packages, setPackages] = useState<ParkingPackage[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -71,9 +106,14 @@ const CustomerPackages: React.FC = () => {
     toDate: undefined as string | undefined,
   });
 
+  // Theo dõi hai ô Select của form Đăng ký. Form.useWatch làm component vẽ lại mỗi khi giá trị
+  // đổi — cần thiết để danh sách xe và gói bên dưới lọc lại ngay (xem KHỐI 3).
   const selectedCustomerId = Form.useWatch('customerId', form);
   const selectedVehicleId = Form.useWatch('vehicleId', form);
 
+  /* ══ KHỐI 2 — ĐỌC DỮ LIỆU ═════════════════════════════════════════════════════════════ */
+
+  /** Tải gói đã bán (có lọc) + ba danh mục phụ. Bốn API độc lập nên gọi song song. */
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -104,6 +144,22 @@ const CustomerPackages: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [filters]);
 
+  /* ══ KHỐI 3 — CHUỖI BA Ô SELECT PHỤ THUỘC NHAU ════════════════════════════════════════
+     Ý tưởng: thu hẹp lựa chọn dần để người dùng KHÔNG THỂ chọn ra tổ hợp vô nghĩa.
+
+         chọn KHÁCH  ->  chỉ hiện XE của khách đó
+         chọn XE     ->  chỉ hiện GÓI dành cho đúng loại xe đó, và còn trong hạn bán
+
+     Không lọc như vậy thì nhân viên có thể bán "gói ô tô" cho một chiếc xe máy, và lỗi chỉ lộ
+     ra khi backend từ chối — người dùng phải làm lại từ đầu.                                  */
+
+  /**
+   * Dọn ô "Gói" khi đổi xe sang loại xe khác.
+   *
+   * Tình huống: đã chọn xe máy + gói tháng xe máy, rồi đổi sang xe ô tô. Ô "Gói" vẫn giữ gói
+   * xe máy cũ — nó đã biến mất khỏi danh sách hiển thị nhưng GIÁ TRỊ vẫn còn trong form, và
+   * bấm Lưu sẽ gửi đi một tổ hợp sai. Đoạn này xoá giá trị đó đi.
+   */
   useEffect(() => {
     const currentVehicle = vehicles.find((v) => v.id === selectedVehicleId);
     const currentPkg = packages.find((p) => p.id === form.getFieldValue('packageId'));
@@ -112,6 +168,8 @@ const CustomerPackages: React.FC = () => {
     }
   }, [selectedVehicleId, vehicles, packages, form]);
 
+  // Ba dòng thực hiện chuỗi lọc nói trên. `!selectedCustomerId ||` nghĩa là CHƯA chọn khách thì
+  // hiện hết — không có vế đó, danh sách sẽ rỗng khi mới mở modal và người dùng tưởng hỏng.
   const filteredVehicles = vehicles.filter((v) => !selectedCustomerId || v.customerId === selectedCustomerId);
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const filteredPackages = packages.filter((p) => (!selectedVehicle || p.vehicleTypeId === selectedVehicle.vehicleTypeId) && isPackageSellable(p));
@@ -119,7 +177,12 @@ const CustomerPackages: React.FC = () => {
   /* ── Ngày kết thúc: tự tính từ Gói + Ngày bắt đầu, nhưng cho phép admin sửa tay ─────
    * Chỉ auto-fill khi người dùng CHƯA từng tự sửa endDate trong lần mở modal này — tránh
    * ghi đè giá trị họ vừa chỉnh mỗi khi đổi gói/ngày bắt đầu. */
+  // `endDateTouched` là "cờ nhớ" người dùng đã tự sửa ngày kết thúc hay chưa. Mẫu này giải
+  // quyết mâu thuẫn kinh điển: vừa muốn tự điền cho tiện, vừa không được đè lên thứ người dùng
+  // vừa gõ. Đặt lại false mỗi lần đóng/mở modal.
   const [endDateTouched, setEndDateTouched] = useState(false);
+
+  /** Ngày kết thúc = ngày bắt đầu + số ngày của gói. Bỏ qua nếu người dùng đã tự sửa. */
   const recomputeEndDate = (packageId?: number, startDate?: Dayjs) => {
     if (endDateTouched) return;
     const pkg = packages.find((p) => p.id === packageId);
@@ -127,7 +190,13 @@ const CustomerPackages: React.FC = () => {
     form.setFieldValue('endDate', startDate.add(pkg.durationDays, 'day'));
   };
 
-  /* ── Create ───────────────────────────────────────────────────── */
+  /* ══ KHỐI 4 — ĐĂNG KÝ GÓI MỚI ═════════════════════════════════════════════════════════ */
+
+  /**
+   * Tạo gói cho khách. Backend chạy bảy điều kiện kiểm tra (xem phần đầu file) rồi mới ghi,
+   * đồng thời tự sinh một giao dịch thanh toán loại 'package' — đó là lý do màn hình Thanh
+   * toán có giao dịch mà không ai bấm tạo.
+   */
   const handleSubmit = async (values: CustomerPackageForm) => {
     try {
       await api.post('/customer-packages', {
@@ -135,6 +204,8 @@ const CustomerPackages: React.FC = () => {
         packageId: values.packageId,
         vehicleId: values.vehicleId,
         startDate: values.startDate.format('YYYY-MM-DD'),
+        // Không gửi endDate (undefined) thì backend tự tính từ durationDays của gói. Đây là
+        // đường an toàn hơn: để server tính thì mọi nơi ra cùng một kết quả.
         endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : undefined,
       });
       message.success('Đăng ký gói thành công');
@@ -148,7 +219,12 @@ const CustomerPackages: React.FC = () => {
     }
   };
 
-  /* ── Edit ─────────────────────────────────────────────────────── */
+  /* ══ KHỐI 5 — SỬA / HUỶ / GIA HẠN ═════════════════════════════════════════════════════
+     Ba thao tác trên gói ĐÃ BÁN. Điểm chung: không thao tác nào XOÁ dữ liệu, vì gói đã bán gắn
+     với tiền khách đã trả.                                                                   */
+
+  /** Mở modal sửa. Lưu ý form sửa KHÔNG cho đổi `packageId` — đổi gói thì giá đã thu không còn
+   *  khớp, trường hợp đó phải huỷ gói cũ rồi bán gói mới. */
   const handleEdit = (record: CustomerPackage) => {
     setEditingPkg(record);
     editForm.setFieldsValue({
@@ -183,6 +259,12 @@ const CustomerPackages: React.FC = () => {
   };
 
   /* ── Cancel ───────────────────────────────────────────────────── */
+  /**
+   * HUỶ gói — chỉ đổi trạng thái sang 'cancelled', không xoá dòng.
+   *
+   * Giữ lại vì: giao dịch thanh toán của gói này vẫn nằm trong sổ thu, báo cáo doanh thu kỳ đó
+   * đã tính nó. Xoá dòng gói thì phiếu thu trở thành mồ côi, không ai đối chiếu được.
+   */
   const handleCancelPackage = (record: CustomerPackage) => {
     confirmDanger({
       title: 'Xác nhận hủy gói',
@@ -204,6 +286,16 @@ const CustomerPackages: React.FC = () => {
    * Gói hết hạn → Gia hạn = tạo gói MỚI cùng khách/xe, bắt đầu từ hôm nay.
    * Gói cũ vẫn giữ trạng thái "Hết hạn" (đúng) để có lịch sử.
    * ─────────────────────────────────────────────────────────────── */
+  /**
+   * GIA HẠN — mở form tạo gói MỚI, điền sẵn khách/xe/gói của gói cũ, bắt đầu từ hôm nay.
+   *
+   * VÌ SAO TẠO MỚI CHỨ KHÔNG ĐẨY endDate CỦA GÓI CŨ RA XA (ý quan trọng, hay bị hỏi):
+   *   - Giữ được LỊCH SỬ: khách đã mua mấy lần, mỗi lần bao nhiêu tiền.
+   *   - Mỗi lần gia hạn là một lần THU TIỀN, phải sinh một phiếu thu riêng. Sửa endDate thì
+   *     tiền vào mà không có chứng từ tương ứng.
+   *   - Giá gói có thể đã đổi giữa hai kỳ; gói mới chốt theo giá mới, gói cũ giữ giá cũ.
+   * Gói cũ vẫn để nguyên trạng thái "Hết hạn" — đó là sự thật lịch sử, không phải lỗi.
+   */
   const openRenew = (record: CustomerPackage) => {
     setRenewingPkg(record);
     renewForm.setFieldsValue({
@@ -218,8 +310,9 @@ const CustomerPackages: React.FC = () => {
   const handleRenewSubmit = async (values: Record<string, unknown>) => {
     if (!renewingPkg) return;
     try {
-      // Always use customerId/vehicleId from the original expired package (not editable form fields)
-      // to avoid FK mismatch between customer and vehicle
+      // Lấy customerId/vehicleId từ GÓI CŨ, không lấy từ form. Lý do: hai ô đó trong form gia
+      // hạn chỉ để người dùng NHÌN cho biết đang gia hạn cho ai; nếu lấy theo form thì họ có
+      // thể đổi khách mà quên đổi xe, tạo ra cặp khách-xe không thuộc về nhau.
       await api.post('/customer-packages', {
         customerId: renewingPkg.customerId,
         packageId: values.packageId,
@@ -237,7 +330,9 @@ const CustomerPackages: React.FC = () => {
     }
   };
 
-  /* ── Import ─────────────────────────────────────────────────── */
+  /* ══ KHỐI 6 — NHẬP TỪ EXCEL ═══════════════════════════════════════════════════════════
+     Phức tạp nhất trong các màn hình nhập, vì mỗi dòng phải tra tới BA id từ ba giá trị người
+     dùng gõ: SĐT -> khách, biển số -> xe, tên gói -> gói.                                    */
   const importColumns: ColumnDef[] = [
     { key: 'customerPhone', label: 'SĐT khách hàng', required: true, example: '0912345678', note: 'Số điện thoại đã đăng ký trong hệ thống' },
     { key: 'licensePlate',  label: 'Biển số xe',      required: true, example: '29A12345',   note: 'Biển số xe đã đăng ký trong hệ thống' },
@@ -256,6 +351,8 @@ const CustomerPackages: React.FC = () => {
     {
       name: 'DS Khách hàng',
       headers: ['Họ tên', 'SĐT', 'Biển số xe'],
+      // flatMap ghép mỗi khách với từng xe của họ thành các dòng "khách - xe" phẳng, để người
+      // dùng copy đúng cặp SĐT/biển số. Cắt 200 dòng để file mẫu không phình to.
       rows: customers.flatMap((c) =>
         vehicles.filter((v) => v.customerId === c.id).map((v) => [c.fullName, c.phone ?? '', v.licensePlate])
       ).slice(0, 200),
@@ -271,6 +368,9 @@ const CustomerPackages: React.FC = () => {
       try {
         const customer = customers.find((c) => c.phone === row.customerPhone);
         if (!customer) { errors.push(`Dòng ${rowNum}: Không tìm thấy khách hàng SĐT "${row.customerPhone}"`); continue; }
+        // Hai điều kiện cùng lúc: biển số khớp (sau khi CHUẨN HOÁ giống lúc lưu — bỏ gạch,
+        // dấu cách, chuyển chữ in) VÀ xe phải thuộc đúng khách ở cột bên cạnh. Điều kiện thứ
+        // hai chặn việc bán nhầm gói của khách này cho xe của khách khác.
         const vehicle = vehicles.find((v) => v.licensePlate === row.licensePlate.replace(/[-\s.]/g, '').toUpperCase() && v.customerId === customer.id);
         if (!vehicle) { errors.push(`Dòng ${rowNum}: Không tìm thấy xe "${row.licensePlate}" của khách này`); continue; }
         const pkg = packages.find((p) => p.name.trim() === row.packageName.trim());
@@ -299,7 +399,14 @@ const CustomerPackages: React.FC = () => {
     setFilters({ search: '', status: undefined, packageId: undefined, vehicleTypeId: undefined, fromDate: undefined, toDate: undefined });
   };
 
-  /* ── Days remaining badge ─────────────────────────────────────── */
+  /* ══ KHỐI 7 — HIỂN THỊ ════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Huy hiệu "còn N ngày" cạnh trạng thái.
+   *
+   * Chỉ hiện khi còn <= 14 ngày, và đổi màu ở mốc 7 ngày (vàng = cần gọi khách gia hạn ngay).
+   * Còn nhiều ngày thì trả null — không hiện gì, để mắt tập trung vào các gói sắp hết.
+   */
   const daysRemaining = (endDate: string) => {
     const diff = dayjs(endDate).diff(dayjs(), 'day');
     if (diff < 0) return null;
@@ -308,7 +415,7 @@ const CustomerPackages: React.FC = () => {
     return null;
   };
 
-  /* ── Columns ─────────────────────────────────────────────────── */
+  /* ── Định nghĩa cột bảng ──────────────────────────────────────── */
   const columns = [
     {
       title: 'Khách hàng', key: 'customerName', width: 180, ellipsis: true,
@@ -328,6 +435,8 @@ const CustomerPackages: React.FC = () => {
     },
     {
       title: 'Kết thúc', dataIndex: 'endDate', key: 'endDate', width: 120, ellipsis: true,
+      // Ngày kết thúc đã qua -> tô đỏ. Nhìn lướt bảng là thấy ngay gói nào hết hạn, không cần
+      // đọc cột trạng thái.
       render: (d: string) => (
         <span style={{ color: dayjs(d).isBefore(dayjs()) ? 'var(--error)' : undefined }}>
           {dayjs(d).format('DD/MM/YYYY')}
@@ -352,6 +461,9 @@ const CustomerPackages: React.FC = () => {
               <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
             </Tooltip>
           </PermissionGate>
+          {/* Nút "Gia hạn" CHỈ hiện với gói đã hết hạn — gói đang chạy mà gia hạn thì hai gói
+              trùng thời gian, và backend sẽ từ chối (điều kiện thứ 7). Ẩn nút đi thì người dùng
+              không rơi vào lỗi đó. */}
           {(r.status === 'expired') && (
             <PermissionGate screen="customer-packages" action="create">
               <Tooltip title="Tạo gói mới kế tiếp cho khách/xe này">
@@ -366,6 +478,8 @@ const CustomerPackages: React.FC = () => {
               </Tooltip>
             </PermissionGate>
           )}
+          {/* Ngược lại, nút "Huỷ gói" chỉ hiện với gói CÒN hiệu lực. Huỷ một gói đã hết hạn
+              hoặc đã huỷ rồi là thao tác vô nghĩa. */}
           {r.status !== 'cancelled' && r.status !== 'expired' && (
             <PermissionGate screen="customer-packages" action="update">
               <Tooltip title="Hủy gói (giữ lịch sử)">
@@ -378,7 +492,11 @@ const CustomerPackages: React.FC = () => {
     },
   ];
 
-  /* ── Row class: highlight expired ───────────────────────────── */
+  /**
+   * Tô nền cả DÒNG theo tình trạng: hết hạn (một màu) / sắp hết trong 7 ngày (màu khác).
+   * Tô cả dòng thay vì chỉ một ô để nhìn từ xa vẫn thấy — đây là màn hình nhân viên dùng để
+   * lọc ra danh sách khách cần gọi điện nhắc gia hạn.
+   */
   const rowClassName = (r: CustomerPackage) => {
     if (r.status === 'expired') return 'row-expired';
     if (r.status === 'active') {
@@ -388,7 +506,9 @@ const CustomerPackages: React.FC = () => {
     return '';
   };
 
-  /* ── Vehicles watched in renew form ─────────────────────────── */
+  /* ── Chuỗi lọc cho form GIA HẠN ───────────────────────────────
+     Lặp lại đúng logic của KHỐI 3 nhưng cho `renewForm`. Phải tách riêng vì mỗi instance form
+     có state độc lập — dùng chung biến của form Đăng ký sẽ khiến hai modal ảnh hưởng nhau.  */
   const renewCustomerId = Form.useWatch('customerId', renewForm);
   const renewVehicles = vehicles.filter((v) => !renewCustomerId || v.customerId === renewCustomerId);
   const renewVehicleId = Form.useWatch('vehicleId', renewForm);

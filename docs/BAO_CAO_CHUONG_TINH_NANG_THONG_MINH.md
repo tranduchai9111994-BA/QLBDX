@@ -61,7 +61,7 @@ tiêu chí:
 |---|---|---|---|
 | 1 | Gợi ý gói dịch vụ theo tần suất sử dụng | Hệ khuyến nghị | `customerPackage.service.ts` |
 | 2 | Cảnh báo thông minh đa tầng | Hệ cảnh báo | `report.service.ts` → `getAlerts()` |
-| 3 | Tra cứu và tự điền thông minh theo biển số | Giao diện thích ứng ngữ cảnh | `parking.service.ts` → `smartLookup()` |
+| 3 | Gợi ý chỗ đỗ bằng thuật toán SAW (MCDA) | Ra quyết định đa tiêu chí + giao diện thích ứng | `utils/smartParkingAlgorithms.ts` + `parking.service.ts` → `smartLookup()` |
 | 4 | Tổng quan thông minh: so sánh và xu hướng | DSS – giai đoạn phát hiện | `report.service.ts` → `getInsights()` |
 | 5 | Phân tích và hỗ trợ ra quyết định | DSS – giai đoạn thiết kế phương án | `analytics.service.ts` → `getInsights()` |
 
@@ -844,83 +844,184 @@ diện kia ngay lập tức.
 
 ---
 
-## 4.8. Tính năng 3 — Tra cứu và tự điền thông minh
+## 4.8. Tính năng 3 — Gợi ý chỗ đỗ bằng thuật toán SAW
 
 ### 4.8.1. Bài toán
 
 Với khách quen, nhân viên phải lặp lại chuỗi thao tác: gõ biển số → tra khách hàng → chọn loại xe
 → chọn chỗ đỗ → lưu. Trong giờ cao điểm, chuỗi này tạo ra hàng đợi ở quầy.
 
-### 4.8.2. Cài đặt — suy ra thói quen từ lịch sử
+Phiên bản đầu của tính năng chỉ xét **một tiêu chí duy nhất**: khách hay đỗ khu nào nhất thì lấy
+chỗ đầu tiên còn trống trong khu đó. Cách này bỏ qua những yếu tố mà một nhân viên có kinh nghiệm
+vẫn cân nhắc: khu đó đang đông hay vắng, chỗ nào hợp loại xe hơn, khách hay đỗ vào khung giờ nào.
+Nó cũng không xếp hạng được các phương án, nên không có gì để giải thích cho khách.
 
-**Mã nguồn 4.11** — `backend/src/services/parking.service.ts` → `smartLookup()`
+### 4.8.2. Lựa chọn thuật toán
+
+Bài toán "chọn một phương án tốt nhất trong nhiều phương án, cân nhắc nhiều tiêu chí có tầm quan
+trọng khác nhau" chính là bài toán **ra quyết định đa tiêu chí (MCDA — Multi-Criteria Decision
+Analysis)**. Hệ thống áp dụng **SAW — Simple Additive Weighting**:
+
+- **Fishburn, P.C. (1967)**. *Additive Utilities with Incomplete Product Set*. Operations Research, 15(3), 537-542.
+- **Hwang, C.L. & Yoon, K. (1981)**. *Multiple Attribute Decision Making: Methods and Applications*. Springer-Verlag.
+
+Kèm bước tiền xử lý **Exponential Decay Weighting** (Holt, C.C., 1957/2004, *International Journal
+of Forecasting*, 20(1), 5-10) để tính mức ưa thích có suy giảm theo thời gian.
+
+SAW được chọn thay vì TOPSIS vì ba lý do, trong đó lý do quyết định là **tính giải thích được**:
+điểm SAW diễn giải được bằng một câu tiếng Việt mà nhân viên bãi xe đọc hiểu ngay, trong khi TOPSIS
+phải giải thích bằng khái niệm "khoảng cách Euclidean đến phương án lý tưởng" — trừu tượng với
+người vận hành. Lập luận đầy đủ xem `docs/DE_XUAT_THUAT_TOAN_GOI_Y_CHO_DO_THONG_MINH.md`.
+
+### 4.8.3. Năm tiêu chí
+
+| # | Tiêu chí | Chiều | Trọng số | Cách tính |
+|---|---|---|---|---|
+| C1 | Mức ưa thích chỗ đỗ | Benefit | 0.35 | Exponential Decay trên 30 lượt gần nhất, cộng điểm khu + điểm đúng chỗ |
+| C2 | Tỷ lệ còn trống của khu | Benefit | 0.25 | Số chỗ trống / tổng chỗ của khu |
+| C3 | Độ tương thích loại xe | Benefit | 0.20 | Khu chuyên đúng loại xe = 1.0; khu tổng hợp = 0.5 |
+| C4 | Phù hợp khung giờ quen | Benefit | 0.10 | Tỷ lệ lượt đỗ rơi vào khung giờ hiện tại (±1h) |
+| C5 | Mức độ đông đúc của khu | **Cost** | 0.10 | Số chỗ đang có xe / tổng chỗ của khu |
+
+### 4.8.4. Cài đặt
+
+**Mã nguồn 4.11** — `backend/src/utils/smartParkingAlgorithms.ts`
 
 ```ts
-// (1) Khu vực khách hay đỗ nhất, tính trên 30 lượt gần nhất
-const zoneCounts = new Map<string, number>();
-for (const r of recentRecords) {
-  const zoneName = r.parkingSpot?.zone?.name;
-  if (zoneName) zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1);
-}
-let preferredZone: string | null = null;
-let maxCount = 0;
-for (const [zone, count] of zoneCounts) {
-  if (count > maxCount) { maxCount = count; preferredZone = zone; }
+// (1) Tiền xử lý — Exponential Decay Weighting (Holt 1957)
+//     Lượt đỗ càng gần đây trọng số càng lớn: weight(i) = alpha * (1-alpha)^i
+export function calcZonePreference(recentRecords, alpha = 0.3) {
+  const scores = new Map<string, number>();
+  recentRecords.forEach((record, index) => {
+    const zoneName = record.parkingSpot?.zone?.name;
+    if (!zoneName) return;
+    const weight = alpha * Math.pow(1 - alpha, index);
+    scores.set(zoneName, (scores.get(zoneName) || 0) + weight);
+  });
+  return scores;
 }
 
-// (2) Lọc chỗ trống PHÙ HỢP với loại xe
-const compatibleSpots = availableSpots.filter((s) =>
-  isSpotCompatibleWithVehicleType(s, fullVehicle.vehicleType.name));
-
-// (3) Ưu tiên khu quen; nếu hết chỗ thì chọn khu khác VÀ GIẢI THÍCH LÝ DO
-let suggestedSpotId = null, suggestedSpotLabel = null, suggestedSpotNote = null;
-if (compatibleSpots.length > 0) {
-  const inPreferred = preferredZone
-    ? compatibleSpots.filter((s) => s.zone?.name === preferredZone)
-    : [];
-  const chosen = inPreferred[0] || compatibleSpots[0];
-  suggestedSpotId = chosen.id;
-  suggestedSpotLabel = `${chosen.zone?.name} — ${chosen.spotNumber}`;
-  if (preferredZone && inPreferred.length === 0) {
-    suggestedSpotNote = `${preferredZone} đã hết chỗ phù hợp, gợi ý ${chosen.zone?.name} thay thế`;
+// (2) SAW — chuẩn hoá về [0,1] rồi tính tổng có trọng số
+for (let j = 0; j < SAW_CRITERIA_COUNT; j++) {
+  const column = criteria.map((row) => row[j]);
+  const maxVal = Math.max(...column);
+  const minVal = Math.min(...column);
+  for (let i = 0; i < candidates.length; i++) {
+    normalized[i][j] = IS_BENEFIT[j]
+      ? (maxVal > 0 ? criteria[i][j] / maxVal : 0)           // benefit: chia cho lớn nhất
+      : (criteria[i][j] > 0 ? minVal / criteria[i][j] : 1);  // cost: lấy nhỏ nhất chia
   }
 }
+const totalScore = w.reduce((sum, weight, j) => sum + weight * normalized[i][j], 0);
+```
+
+**Mã nguồn 4.12** — `backend/src/services/parking.service.ts` → `smartLookup()`
+
+```ts
+// (3) Chấm điểm C1 ở HAI mức: điểm của khu + điểm của đúng chỗ đó
+const candidates = compatibleSpots.map((spot) => ({
+  spotId: spot.id,
+  zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
+  zoneAvailability: stats?.availability ?? 0,
+  typeMatchScore: calcTypeMatch(spot, fullVehicle.vehicleType.name),
+  peakHourFit: hourlyPattern.get(zoneName) ?? 0.5,
+  currentOccupancy: stats?.occupancy ?? 0,
+}));
+
+const sawResults = scoreSAW(candidates, weights);   // weights đọc từ hệ chuyên gia
+const bestSpot = sawResults[0];
 ```
 
 **Phân tích:**
 
-**(1)** Thói quen được suy ra bằng phép đếm tần suất trên 30 lượt gần nhất — một dạng thống kê mô
-tả đơn giản nhưng đủ chính xác cho mục đích gợi ý. Giới hạn 30 lượt bảo đảm gợi ý phản ánh thói
-quen **gần đây**, không bị kéo lệch bởi lịch sử xa.
+**(1)** Exponential Decay thay cho phép đếm tần suất đơn thuần. Với alpha = 0.3, lượt đỗ gần nhất có
+trọng số 0.300, lượt trước đó 0.210, rồi 0.147... Nhờ vậy khi khách đổi thói quen sang khu mới, hệ
+thống bám theo sau vài lượt thay vì phải đợi khu mới chiếm đa số trong 30 lượt.
 
-**(2)** Chỉ gợi ý chỗ mà xe thực sự đỗ vừa. Hàm `isSpotCompatibleWithVehicleType` nằm ở
-`utils/businessRules.ts`, so khớp nhóm kích thước xe với nhóm chỗ đỗ.
+**(2)** Phép chuẩn hoá đưa các tiêu chí có đơn vị khác nhau (điểm decay, tỷ lệ phần trăm, điểm
+0.5/1.0) về cùng thang [0, 1] để cộng được với nhau. Hai nhánh điều kiện tương ứng hai chiều tiêu
+chí: với tiêu chí benefit thì giá trị lớn nhất được 1 điểm, với tiêu chí cost thì giá trị nhỏ nhất
+được 1 điểm.
 
-**(3)** Đây là chi tiết thể hiện triết lý **giải thích được** đã nêu ở mục 4.2.2(c), áp dụng cả
-cho tính năng không dùng hệ chuyên gia. Khi khu quen hết chỗ, hệ thống **không im lặng** đổi sang
-khu khác mà kèm theo câu giải thích. Nhân viên đọc câu đó là trả lời được ngay cho khách đang thắc
-mắc vì sao hôm nay không được đỗ chỗ cũ.
+**(3)** Điểm C1 được cộng từ hai mức — điểm của khu và điểm của **đúng chỗ đó**. Chi tiết này không
+có trong thiết kế ban đầu mà phát sinh sau khi chạy thử trên dữ liệu thật: bốn tiêu chí C2-C5 đều
+là thuộc tính của khu, trong khi bộ lọc tương thích loại xe gần như luôn chỉ chừa lại một khu duy
+nhất, nên nếu C1 cũng chỉ ở mức khu thì **mọi chỗ trống đều bằng điểm nhau** và thuật toán thoái
+hoá về đúng hành vi cũ. Quá trình phát hiện và xử lý ghi ở
+`docs/THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
 
-### 4.8.3. Kết quả trả về
+### 4.8.5. Tính giải thích được
 
-Ngoài chỗ đỗ gợi ý, API còn trả về nhóm chỉ số hành vi để giao diện hiển thị:
+Mỗi kết quả kèm một câu giải thích sinh tự động, nêu hai tiêu chí đóng góp nhiều điểm nhất:
+
+> *"Điểm 1.00 — yếu tố chính: Mức ưa thích chỗ đỗ (35%), Tỷ lệ còn trống (25%)"*
+
+Khi khu quen đã hết chỗ, câu giải thích nói rõ lý do đổi khu thay vì im lặng:
+
+> *"Khu A đã hết chỗ phù hợp — Điểm 0.84 — yếu tố chính: Tỷ lệ còn trống (25%)..."*
+
+Khi thuật toán **không phân biệt được** (khách hoàn toàn mới, mọi chỗ cùng điểm), hệ thống cũng
+nói thẳng thay vì tạo cảm giác có căn cứ riêng:
+
+> *"Điểm 1.00 — 27 chỗ trống cùng mức điểm cao nhất, chọn chỗ đầu danh sách"*
+
+Sự trung thực này quan trọng về mặt phương pháp: một hệ thống khuyến nghị nói rõ khi nó không biết
+thì đáng tin hơn một hệ thống luôn tỏ ra chắc chắn.
+
+### 4.8.6. Trọng số cấu hình được qua Hệ chuyên gia
+
+Năm trọng số và hệ số alpha không viết cứng trong code mà lưu ở luật `PARKING_REC_WEIGHTS`, domain
+`parking_recommendation` của hệ chuyên gia (mục 4.2). Quản trị viên sửa trên màn **Cảnh báo → Cấu
+hình nâng cao**; hệ thống nạp lại cơ sở tri thức và áp dụng ngay, không cần biên dịch hay khởi động
+lại. Đây chính là tinh thần **Knowledge Acquisition** đã nêu ở mục 4.2, được áp dụng sang một tính
+năng không phải suy diễn luật.
+
+Hai lớp bảo vệ:
+
+- **Lúc ghi** — `validateRule()` chặn nếu tổng 5 trọng số khác 1.0 (sai số ±0.001) hoặc alpha nằm
+  ngoài khoảng (0, 1), kèm thông báo nêu rõ tổng hiện tại. Nếu không chặn, điểm SAW sẽ vượt ra ngoài
+  thang [0, 1] và câu giải thích in ra số vô nghĩa.
+- **Lúc đọc** — `getSawConfig()` bọc `try/catch` và rơi về bộ mặc định nếu luật hỏng, thiếu trường
+  hoặc bị tắt. Gợi ý chỗ đỗ chạy mỗi lần nhân viên gõ biển số, không được phép hỏng vì một dòng
+  cấu hình sai.
+
+### 4.8.7. Kết quả trả về
+
+Ngoài chỗ đỗ gợi ý, API còn trả về nhóm chỉ số hành vi và chi tiết chấm điểm:
 
 | Chỉ số | Ý nghĩa | Cách tính |
 |---|---|---|
 | `visitCount30Days` | Số lượt ghé 30 ngày | Đếm bản ghi |
 | `lastVisit` | Lần ghé gần nhất | Bản ghi mới nhất |
 | `avgDurationHours` | Thời gian đỗ trung bình | Trung bình cộng, làm tròn 1 chữ số thập phân |
-| `preferredZone` | Khu hay đỗ | Đếm tần suất theo khu |
+| `preferredZone` | Khu hay đỗ | Khu có điểm Exponential Decay cao nhất |
 | `hasActivePackage` / `packageExpiry` | Tình trạng gói | Truy vấn gói còn hiệu lực |
 | `isFrequent` | Khách thân thiết | `visitCount30Days >= 10` |
+| `scoringDetails` | Chi tiết thuật toán | Tên thuật toán, tham chiếu học thuật, trọng số đang dùng, alpha, số ứng viên, top 3 chỗ kèm điểm |
 
-Nhờ nhóm chỉ số này, nhân viên nhìn màn hình là biết đang phục vụ khách quen hay khách mới, gói
-của khách còn bao lâu — thông tin để chủ động mời gia hạn.
+Trường `scoringDetails` được giao diện hiển thị trong một panel gập tên **"Vì sao chọn chỗ này?"** —
+mặc định đóng để không làm rối màn hình nhập liệu hằng ngày, mở ra khi nhân viên muốn biết căn cứ.
 
-### 4.8.4. Hiệu quả
+### 4.8.8. Kiểm chứng
+
+Thuật toán nằm trong các hàm thuần tuý, không chạm cơ sở dữ liệu, nên kiểm thử được độc lập:
+`backend/src/utils/smartParkingAlgorithms.test.ts` gồm **23 ca**, chạy bằng `npm run test:saw`.
+Đáng chú ý:
+
+- Một ca lấy nguyên bộ số của ví dụ minh hoạ trong tài liệu thiết kế và kiểm tra kết quả ra đúng
+  0.762 / 0.693 / 0.683 — nếu công thức và tài liệu lệch nhau thì ca này báo lỗi.
+- Một ca **hồi quy** tái hiện tình huống mọi chỗ cùng điểm ở mục 4.8.4(3), chặn lỗi đó quay lại.
+- Các ca biên: xe chưa có lịch sử, chỉ còn một chỗ trống, không còn chỗ nào, đổi trọng số.
+
+Kiểm chứng trên hệ thống thật (21/09/2026): khi chỗ quen A09 của xe 51H4-23456 bị xe khác chiếm,
+hệ thống tự chuyển gợi ý sang A46 — chỗ khách hay đỗ thứ nhì — với điểm 1.000 / 0.969 / 0.960,
+chứng minh thuật toán phản ứng theo trạng thái bãi tại thời điểm tra cứu.
+
+### 4.8.9. Hiệu quả
 
 Với khách quen, chuỗi thao tác rút từ 5 bước xuống còn 2 bước: gõ biển số và bấm lưu. Loại xe và
-chỗ đỗ được điền tự động và có thể chỉnh lại nếu cần.
+chỗ đỗ được điền tự động và có thể chỉnh lại nếu cần — hệ thống gợi ý chứ không quyết định thay
+nhân viên.
 
 ---
 
@@ -1385,7 +1486,7 @@ tính giải thích được, vốn là yêu cầu bắt buộc của bài toán
 | Cảnh báo và tổng quan thông minh | `backend/src/services/report.service.ts` |
 | Xếp mức độ cảnh báo | `backend/src/services/alertRuleTier.service.ts` |
 | Phân tích hỗ trợ ra quyết định | `backend/src/services/analytics.service.ts` |
-| Tra cứu thông minh | `backend/src/services/parking.service.ts` → `smartLookup()` |
+| Gợi ý chỗ đỗ (SAW) | `backend/src/utils/smartParkingAlgorithms.ts` + `services/parking.service.ts` → `smartLookup()` |
 | Quản trị bộ luật (API) | `backend/src/services/expertRule.service.ts` |
 | Giao diện quản trị bộ luật | `frontend/src/components/ExpertRulesPanel.tsx` |
 | Giao diện cấu hình mức độ | `frontend/src/components/AlertSettingsPanel.tsx` |

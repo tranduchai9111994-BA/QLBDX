@@ -4,6 +4,24 @@
  * - Kéo/thả hoặc chọn file xlsx/xls/csv
  * - Preview dữ liệu trước khi nhập
  * - Gọi callback onImport(rows) để caller xử lý API
+ *
+ * ===========================================================================================
+ * Ý TƯỞNG: MỘT component dùng cho MỌI màn hình có nhập Excel (Khách hàng, Phương tiện, Gói,
+ * Đăng ký gói). Thay vì mỗi trang tự viết phần đọc file, xem trước và báo lỗi, tất cả gom vào
+ * đây; trang gọi chỉ cần khai báo hai thứ:
+ *     columns    - file Excel có những cột nào, cột nào bắt buộc
+ *     onImport   - làm gì với các dòng đọc được (gọi API nào)
+ * Đây là mẫu "đảo ngược điều khiển": component lo QUY TRÌNH, trang gọi lo NGHIỆP VỤ.
+ *
+ * BỐN BƯỚC người dùng đi qua, tương ứng bốn phần của file:
+ *   1. TẢI FILE MẪU  -> downloadTemplate()  : sinh file .xlsx nhiều sheet ngay trên trình duyệt
+ *   2. CHỌN/THẢ FILE -> parseFile()         : đọc file, đổi tiêu đề cột thành khoá dữ liệu
+ *   3. XEM TRƯỚC     -> previewCols + Table : nhìn lại trước khi ghi, ô thiếu bị tô đỏ
+ *   4. NHẬP          -> handleImport()      : gọi onImport rồi hiện bảng tổng kết
+ *
+ * Vì sao có bước 3: nhập Excel là thao tác ghi hàng loạt, sai một cột là hỏng cả trăm dòng.
+ * Cho xem trước để người dùng phát hiện lệch cột TRƯỚC khi dữ liệu vào cơ sở dữ liệu.
+ * ===========================================================================================
  */
 import React, { useState, useRef } from 'react';
 import {
@@ -17,17 +35,30 @@ import {
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../context/LanguageContext';
 
+/**
+ * Mô tả MỘT cột của file Excel. Trang gọi khai báo mảng các ColumnDef này.
+ *
+ * Cặp `key` / `label` là mấu chốt của cả cơ chế:
+ *   label = chữ người dùng THẤY trên file Excel ("Số điện thoại")
+ *   key   = tên field mà API cần      ("phone")
+ * parseFile() dùng cặp này để dịch ngược từ tiêu đề cột sang khoá dữ liệu.
+ */
 export interface ColumnDef {
-  key: string;         // field key (matches Excel header)
-  label: string;       // Vietnamese column header
-  required?: boolean;
-  example?: string;    // sample value for template row
-  choices?: string[];  // if set, listed in "Lựa chọn" sheet
-  note?: string;       // hint shown as header comment in template
+  key: string;         // tên field gửi cho API
+  label: string;       // tiêu đề cột hiện trên file Excel
+  required?: boolean;  // có dấu * trong file mẫu, và tô đỏ ở bảng xem trước nếu để trống
+  example?: string;    // giá trị mẫu điền sẵn ở dòng 2 của file mẫu
+  choices?: string[];  // có giá trị -> liệt kê ở sheet "Lựa chọn hợp lệ" để người dùng copy
+  note?: string;       // câu gợi ý, hiện ở sheet Lựa chọn và sheet Hướng dẫn
 }
 
+/**
+ * Sheet TRA CỨU kèm trong file mẫu — VD danh sách khách hàng, danh sách gói hiện có.
+ * Cần thiết vì file Excel của người dùng ghi tên/SĐT chứ không ghi id; không có sheet này họ
+ * phải mở song song màn hình khác để copy, rất dễ gõ sai rồi cả file báo lỗi.
+ */
 export interface ReferenceSheet {
-  name: string;        // sheet tab name
+  name: string;        // tên tab sheet
   headers: string[];
   rows: string[][];
 }
@@ -51,6 +82,12 @@ const { Dragger } = Upload;
 const ImportModal: React.FC<ImportModalProps> = ({
   open, title, columns, referenceSheets = [], onImport, onClose,
 }) => {
+  /* ══ STATE — ba giá trị này quyết định modal đang ở BƯỚC nào ══════════════════════════
+       parsedRows rỗng            -> bước 1-2: mời tải file mẫu / chọn file
+       parsedRows có, result null -> bước 3  : đang xem trước, chờ bấm Nhập
+       result khác null           -> bước 4  : đã nhập xong, hiện tổng kết
+     Suy ra bước từ dữ liệu thay vì nuôi thêm một state `step` riêng — bớt một thứ có thể lệch
+     với thực tế.                                                                             */
   const { t } = useLanguage();
   const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState('');
@@ -58,11 +95,24 @@ const ImportModal: React.FC<ImportModalProps> = ({
   const [result, setResult] = useState<ImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /* ── Template generation ─────────────────────────────────────── */
+  /* ══ BƯỚC 1 — SINH FILE MẪU ═══════════════════════════════════════════════════════════ */
+
+  /**
+   * Tạo file Excel mẫu NGAY TRÊN TRÌNH DUYỆT (không gọi server) gồm tối đa bốn loại sheet:
+   *   "Nhập dữ liệu"      - tiêu đề cột + một dòng ví dụ
+   *   "Lựa chọn hợp lệ"   - các giá trị được phép cho từng cột
+   *   các sheet tra cứu   - danh sách khách/gói/loại xe hiện có
+   *   "Hướng dẫn"         - năm quy tắc nhập
+   *
+   * Vì sao phải có file mẫu: nếu để người dùng tự tạo file, họ sẽ đặt tên cột khác đi và bước
+   * đọc file không khớp được cột nào. File mẫu bảo đảm tiêu đề cột đúng từ đầu.
+   */
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
     // Sheet 1: data entry
+    // Cột bắt buộc được gắn dấu * vào tiêu đề. Lúc đọc file, bước parseFile sẽ CẮT dấu * này
+    // đi trước khi so khớp — nên người dùng giữ nguyên hay xoá dấu * đều đọc được.
     const headers = columns.map((c) => {
       const star = c.required ? ' *' : '';
       return `${c.label}${star}`;
@@ -96,6 +146,8 @@ const ImportModal: React.FC<ImportModalProps> = ({
         choiceData.push([`${c.label}`, `(${c.note})`]);
       }
     });
+    // Chỉ tạo sheet "Lựa chọn" khi thật sự có cột cần nó. Sheet trống chỉ làm người dùng
+    // hoang mang không biết để làm gì.
     if (choiceData.length > 0) {
       const ws2 = XLSX.utils.aoa_to_sheet([['Cột', 'Giá trị hợp lệ (copy/paste chính xác)'], ...choiceData]);
       ws2['!cols'] = [{ wch: 28 }, { wch: 40 }];
@@ -130,31 +182,56 @@ const ImportModal: React.FC<ImportModalProps> = ({
     message.success(t('importTemplateDownloaded'));
   };
 
-  /* ── Parse uploaded file ─────────────────────────────────────── */
+  /* ══ BƯỚC 2 — ĐỌC FILE NGƯỜI DÙNG NỘP ═════════════════════════════════════════════════ */
+
+  /**
+   * Đọc file Excel/CSV thành mảng object.
+   *
+   * Toàn bộ xử lý nằm TRÊN TRÌNH DUYỆT, không tải file lên server. Ưu điểm: không tốn băng
+   * thông cho file hỏng, và người dùng thấy lỗi ngay lập tức.
+   *
+   * FileReader làm việc theo cơ chế BẤT ĐỒNG BỘ: `reader.readAsArrayBuffer` chỉ khởi động việc
+   * đọc, xử lý thật nằm trong `reader.onload` và chạy sau. Vì thế hàm này không thể trả về dữ
+   * liệu bằng return, mà phải gọi setState ở bên trong onload.
+   */
   const parseFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: 'array' });
+        // Luôn đọc sheet ĐẦU TIÊN — khớp với file mẫu, nơi "Nhập dữ liệu" là sheet đầu. Các
+        // sheet tra cứu/hướng dẫn nằm sau nên không bị đọc nhầm.
         const ws = wb.Sheets[wb.SheetNames[0]];
+        // `header: 1` -> trả về mảng-của-mảng (dòng 0 là tiêu đề) thay vì mảng object. Cần dạng
+        // này vì phải tự dịch tiêu đề sang khoá ở bước dưới.
         const raw: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
+        // < 2 dòng nghĩa là chỉ có tiêu đề, chưa có dữ liệu nào.
         if (raw.length < 2) {
           message.warning(t('importFileEmpty'));
           return;
         }
 
         // Map headers back to keys (strip * and trailing space)
+        // Chuẩn hoá tiêu đề người dùng nộp: cắt dấu * ở cuối và bỏ khoảng trắng thừa, để khớp
+        // được với `label` đã khai báo dù họ có sửa qua sửa lại.
         const headerRow = raw[0].map((h) => String(h ?? '').replace(/\s*\*$/, '').trim());
+        // Bảng dịch "tiêu đề tiếng Việt -> khoá API". Đây là bước then chốt biến file Excel của
+        // người dùng thành dữ liệu API hiểu được.
         const labelToKey: Record<string, string> = {};
         columns.forEach((c) => { labelToKey[c.label] = c.key; });
 
         const rows: Record<string, string>[] = [];
         for (let i = 1; i < raw.length; i++) {
           const row = raw[i];
-          if (!row || row.every((cell) => !cell)) continue; // skip empty
+          // Bỏ qua dòng trống. Rất hay gặp: người dùng xoá nội dung nhưng không xoá dòng, Excel
+          // vẫn lưu lại dòng rỗng đó và nếu không bỏ qua sẽ sinh hàng loạt lỗi "thiếu trường".
+          if (!row || row.every((cell) => !cell)) continue;
           const obj: Record<string, string> = {};
+          // Duyệt theo TIÊU ĐỀ THẬT trong file, không theo thứ tự `columns` đã khai báo. Nhờ
+          // vậy người dùng đảo thứ tự cột hoặc chèn thêm cột lạ vẫn đọc đúng — cột không khớp
+          // khoá nào thì `key` là undefined và bị bỏ qua.
           headerRow.forEach((h, ci) => {
             const key = labelToKey[h];
             if (key) obj[key] = row[ci] != null ? String(row[ci]).trim() : '';
@@ -175,10 +252,19 @@ const ImportModal: React.FC<ImportModalProps> = ({
       }
     };
     reader.readAsArrayBuffer(file);
-    return false; // prevent default upload
+    // Trả false để chặn Ant Design tự tải file lên server — ta tự xử lý hoàn toàn ở trình duyệt.
+    return false;
   };
 
-  /* ── Run import ──────────────────────────────────────────────── */
+  /* ══ BƯỚC 4 — CHẠY NHẬP ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Giao các dòng đã đọc cho trang gọi qua `onImport`, rồi hiện kết quả.
+   *
+   * Component này KHÔNG biết gì về API: nó không rõ đang nhập khách hàng hay gói dịch vụ. Toàn
+   * bộ phần đó nằm trong hàm `onImport` mà trang gọi truyền vào. Chính nhờ ranh giới này mà
+   * một component phục vụ được bốn màn hình khác nhau.
+   */
   const handleImport = async () => {
     if (parsedRows.length === 0) return;
     setImporting(true);
@@ -194,18 +280,28 @@ const ImportModal: React.FC<ImportModalProps> = ({
     }
   };
 
-  /* ── Preview columns ─────────────────────────────────────────── */
+  /* ══ BƯỚC 3 — CỘT BẢNG XEM TRƯỚC ══════════════════════════════════════════════════════
+     Dựng cột bảng xem trước từ chính `columns` đã khai báo — không viết tay ở đâu cả.        */
   const previewCols = columns.map((c) => ({
     title: c.label,
     dataIndex: c.key,
     key: c.key,
     width: 150,
+    // Ô TRỐNG ở cột BẮT BUỘC được tô thẻ đỏ ngay trong bảng xem trước. Đây là giá trị lớn nhất
+    // của bước xem trước: người dùng thấy đúng ô nào thiếu trước khi ghi, thay vì nhận về một
+    // danh sách lỗi theo số dòng rồi phải dò ngược trong file.
     render: (v: string) => {
       if (!v && c.required) return <Tag color="red">{t('importFieldMissing')}</Tag>;
       return v || <span style={{ color: 'var(--outline)' }}>-</span>;
     },
   }));
 
+  /**
+   * Đóng modal và DỌN SẠCH state.
+   *
+   * Bắt buộc phải dọn: component không bị huỷ khi đóng (chỉ ẩn đi), nên không xoá thì lần mở
+   * sau vẫn còn nguyên dữ liệu và bảng tổng kết của lần nhập trước.
+   */
   const handleClose = () => {
     setParsedRows([]);
     setFileName('');
@@ -223,8 +319,12 @@ const ImportModal: React.FC<ImportModalProps> = ({
       }
       open={open}
       onCancel={handleClose}
+      // Modal TỰ RỘNG RA khi đã có dữ liệu xem trước: lúc mới mở chỉ cần chỗ cho hai nút, còn
+      // lúc xem trước thì cần bề ngang cho bảng nhiều cột.
       width={parsedRows.length > 0 ? 900 : 520}
       footer={
+      // Chân modal đổi theo bước (xem phần STATE): đang xem trước thì hiện "Chọn file khác" +
+      // "Nhập", còn lại chỉ có nút Đóng.
         parsedRows.length > 0 && !result ? (
           <Space>
             <Button onClick={() => { setParsedRows([]); setFileName(''); }}>

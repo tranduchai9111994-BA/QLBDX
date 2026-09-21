@@ -6,6 +6,29 @@
  *   cơ cấu theo phương thức thanh toán, thống kê lượt ra ngoại lệ.
  *
  * Phần xuất file dùng frontend/src/utils/reportExport.ts.
+ *
+ * ===========================================================================================
+ * FILE DÀI NHẤT CỦA FRONTEND (~970 dòng). Đừng đọc tuần tự từ trên xuống — bám theo 8 khối:
+ *
+ *   KHỐI 1 - STATE           : khoảng ngày, cách nhóm, và 5 tập dữ liệu từ 5 API
+ *   KHỐI 2 - ĐỌC DỮ LIỆU     : fetchReports() gọi song song 5 API
+ *   KHỐI 3 - SỐ LIỆU DẪN XUẤT: cộng tổng, dựng dữ liệu biểu đồ, tìm kỳ/giờ cao điểm
+ *   KHỐI 4 - CỘT XEM TRƯỚC   : định nghĩa bảng hiện trong modal xem trước khi xuất
+ *   KHỐI 5 - MENU XUẤT FILE  : 5 lựa chọn Excel/CSV/In
+ *   KHỐI 6 - MỐC THỜI GIAN NHANH
+ *   KHỐI 7 - CỘT BẢNG DOANH THU
+ *   KHỐI 8 - GIAO DIỆN
+ *
+ * PHÂN BIỆT VỚI HAI MÀN HÌNH KHÁC (rất hay bị hỏi):
+ *   Tổng quan  - số liệu ĐANG DIỄN RA ngay lúc này
+ *   Báo cáo    - số liệu QUÁ KHỨ theo khoảng ngày, vẽ thành biểu đồ. NGƯỜI ĐỌC tự rút kết luận.
+ *   Phân tích  - HỆ THỐNG đọc số liệu rồi đề xuất hành động kèm lý do
+ * File này thuần trình bày số liệu: KHÔNG có hệ chuyên gia, KHÔNG có gợi ý.
+ *
+ * ĐIỂM THIẾT KẾ ĐÁNG NÊU: mọi lệnh xuất file đều đi qua một MODAL XEM TRƯỚC (`exportPreview`)
+ * hiện 10 dòng đầu và phần tóm tắt. Lý do: người dùng thường xuất file rồi mới phát hiện chọn
+ * nhầm khoảng ngày, phải làm lại từ đầu. Xem trước chặn việc đó ngay.
+ * ===========================================================================================
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -49,28 +72,50 @@ interface ExportPreview {
   run: () => void;
 }
 
+/**
+ * Tự chọn cách nhóm dữ liệu theo độ dài khoảng ngày.
+ *
+ * Vì sao cần: chọn khoảng một năm mà nhóm theo NGÀY thì biểu đồ có 365 cột chen chúc, không đọc
+ * được gì. Quá 60 ngày thì chuyển sang nhóm theo tháng. Người dùng vẫn đổi lại bằng tay được —
+ * đây chỉ là giá trị mặc định hợp lý, không phải ràng buộc.
+ */
 function autoGroupBy(from: Dayjs, to: Dayjs): GroupBy {
   const days = to.diff(from, 'day');
   if (days > 60) return 'month';
   return 'day';
 }
 
+/** Số đầy đủ kiểu Việt Nam: 1500000 -> "1.500.000". Dùng cho bảng và ô thống kê. */
 const fmt = (v: number) => Number(v || 0).toLocaleString('vi-VN');
+
+/**
+ * Số RÚT GỌN cho nhãn trục biểu đồ: 1500000 -> "1.5M", 25000 -> "25K".
+ * Cần bản riêng vì nhãn trục rất hẹp; để số đầy đủ thì các nhãn đè lên nhau.
+ */
 const fmtM = (v: number) =>
   v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(0)}K` : String(v);
 
 const Reports: React.FC = () => {
+  /* ══ KHỐI 1 — STATE ═══════════════════════════════════════════════════════════════════ */
   const { t } = useLanguage();
+
+  // Hai giá trị điều khiển toàn bộ màn hình. Đổi một trong hai là tải lại cả 5 API.
+  // Mặc định "từ đầu năm tới hôm nay, nhóm theo tháng" — góc nhìn hay dùng nhất.
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([dayjs().startOf('year'), dayjs()]);
   const [groupBy, setGroupBy] = useState<GroupBy>('month');
+
+  // --- Năm tập dữ liệu từ năm API khác nhau ---
   const [revenue, setRevenue] = useState<RevenueReport[]>([]);
   const [vehicleStats, setVehicleStats] = useState<VehicleStats[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodReport | null>(null);
   const [hourlyStats, setHourlyStats] = useState<HourlyStats[]>([]);
   const [exceptionStats, setExceptionStats] = useState<ExceptionStats | null>(null);
   const [loading, setLoading] = useState(false);
+  // Kiểu biểu đồ doanh thu do người dùng chọn. Ba kiểu cho ba cách đọc: cột để SO SÁNH giữa
+  // các kỳ, đường để thấy XU HƯỚNG, vùng để thấy ĐỘ LỚN tích luỹ.
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>('bar');
-  const [activePreset, setActivePreset] = useState<string>('Năm nay');
+  const [activePreset, setActivePreset] = useState<string>('Năm nay');  // nút mốc nhanh đang sáng
+  // Khác null = modal xem trước đang mở, và chính object này chứa mọi thứ cần vẽ trong modal.
   const [exportPreview, setExportPreview] = useState<ExportPreview | null>(null);
 
   const CHART_COLORS = useMemo(() => getChartColors(), []);
@@ -80,6 +125,17 @@ const Reports: React.FC = () => {
     transfer: chartColor.warning(),
   }), []);
 
+  /* ══ KHỐI 2 — ĐỌC DỮ LIỆU ═════════════════════════════════════════════════════════════ */
+
+  /**
+   * Gọi SONG SONG cả 5 API báo cáo.
+   *
+   * Vì sao 5 API riêng chứ không gộp một: mỗi cái là một phép tổng hợp khác nhau trên DB
+   * (GROUP BY theo kỳ / theo loại xe / theo giờ / theo phương thức). Tách riêng thì mỗi API
+   * đơn giản, dễ tối ưu và dễ dùng lại — VD /reports/revenue cũng được Dashboard dùng.
+   *
+   * Promise.all cho tổng thời gian chờ chỉ bằng API CHẬM NHẤT, thay vì tổng của cả năm.
+   */
   const fetchReports = async () => {
     setLoading(true);
     try {
@@ -108,6 +164,11 @@ const Reports: React.FC = () => {
 
   useEffect(() => { fetchReports(); }, [dateRange, groupBy]);
 
+  /**
+   * Đổi khoảng ngày -> đồng thời TỰ CHỌN LẠI cách nhóm cho hợp (xem autoGroupBy).
+   * Chỉ xử lý khi CẢ HAI đầu ngày đều có: người dùng đang chọn dở (mới bấm ngày đầu) thì chưa
+   * gọi API vội, tránh tải một lần vô ích.
+   */
   const handleDateChange = (dates: [Dayjs | null, Dayjs | null] | null) => {
     if (dates?.[0] && dates?.[1]) {
       const range: [Dayjs, Dayjs] = [dates[0], dates[1]];
@@ -116,16 +177,35 @@ const Reports: React.FC = () => {
     }
   };
 
+  /* ══ KHỐI 3 — SỐ LIỆU DẪN XUẤT ════════════════════════════════════════════════════════
+     Tính lại từ dữ liệu gốc, không lưu thành state — dữ liệu đổi thì các số này tự đúng theo.  */
+
+  /**
+   * Cộng tổng toàn kỳ cho các ô thống kê ở đầu trang.
+   *
+   * `Number(...)` bọc quanh mỗi giá trị là cần thiết: SQL Server trả kiểu decimal, Prisma
+   * chuyển thành CHUỖI để không mất độ chính xác. Cộng thẳng chuỗi thì "100" + "200" ra
+   * "100200" thay vì 300 — lỗi rất khó nhận ra vì vẫn hiện ra một con số trông hợp lý.
+   */
   const totals = useMemo(() => {
     const totalRevenue = revenue.reduce((s, r) => s + Number(r.totalRevenue), 0);
     const totalParkingRev = revenue.reduce((s, r) => s + Number(r.parkingRevenue), 0);
     const totalPackageRev = revenue.reduce((s, r) => s + Number(r.packageRevenue), 0);
     const totalTransactions = revenue.reduce((s, r) => s + Number(r.totalTransactions), 0);
     const totalVehicles = vehicleStats.reduce((s, v) => s + v.totalRecords, 0);
+    // Kiểm tra mẫu số trước khi chia — không có giao dịch nào thì phép chia cho 0 ra Infinity
+    // hoặc NaN và màn hình hiện "NaN đ".
     const avgTransaction = totalTransactions ? Math.round(totalRevenue / totalTransactions) : 0;
     return { totalRevenue, totalParkingRev, totalPackageRev, totalTransactions, totalVehicles, avgTransaction };
   }, [revenue, vehicleStats]);
 
+  /**
+   * Đổi dữ liệu API sang dạng Recharts hiểu được.
+   *
+   * Khoá của object chính là NHÃN hiện trong chú giải và tooltip, nên đặt thẳng tiếng Việt
+   * ('Gửi lẻ', 'Vé tháng') thay vì tên field tiếng Anh — bớt một bước dịch ở chỗ vẽ.
+   * Math.round vì biểu đồ không cần phần lẻ đồng.
+   */
   const chartData = revenue.map((r) => ({
     period: formatPeriodLabel(r.period, groupBy),
     'Gửi lẻ': Math.round(Number(r.parkingRevenue)),
@@ -134,11 +214,15 @@ const Reports: React.FC = () => {
     'Số GD': Number(r.totalTransactions),
   }));
 
+  // Bù đủ 24 giờ giống MgmtDashboard: backend chỉ trả về giờ CÓ xe, không bù thì trục hoành
+  // nhảy cóc và nhìn tưởng giờ nào cũng đông.
   const hourlyChartData = useMemo(() => {
     const map = new Map(hourlyStats.map((h) => [h.hour, h.count]));
     return Array.from({ length: 24 }, (_, i) => ({ hour: `${i}h`, count: map.get(i) || 0 }));
   }, [hourlyStats]);
 
+  // Kỳ doanh thu cao nhất và giờ đông khách nhất — hai con số "điểm nhấn" hiện dưới biểu đồ.
+  // `[...revenue]` tạo bản sao trước khi sort: sort() sửa thẳng mảng gốc, mà mảng gốc là state.
   const topPeriod = useMemo(() =>
     revenue.length ? [...revenue].sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue))[0] : null,
     [revenue]
@@ -148,6 +232,9 @@ const Reports: React.FC = () => {
     [hourlyStats]
   );
 
+  // Gom mọi thứ cần cho việc xuất file vào MỘT object, truyền nguyên cho các hàm trong
+  // utils/reportExport.ts. Nhờ vậy thêm một tập dữ liệu mới vào báo cáo chỉ phải sửa ở đây,
+  // không phải sửa chữ ký của từng hàm xuất.
   const exportPayload = {
     dateRange,
     groupBy,
@@ -161,6 +248,9 @@ const Reports: React.FC = () => {
   const periodLabel = `${dateRange[0].format('DD/MM/YYYY')} – ${dateRange[1].format('DD/MM/YYYY')}`;
   const groupByLabel = groupBy === 'day' ? 'Ngày' : groupBy === 'month' ? 'Tháng' : 'Năm';
 
+  /* ══ KHỐI 4 — CỘT CHO BẢNG XEM TRƯỚC ══════════════════════════════════════════════════
+     Bộ cột riêng cho modal xem trước, tách khỏi bộ cột của bảng chính (KHỐI 7): modal hẹp hơn
+     và chỉ cần những cột quan trọng nhất.                                                    */
   const revenuePreviewColumns = [
     { title: groupByLabel, dataIndex: 'period', key: 'period', width: 140, ellipsis: true, render: (v: string) => formatPeriodLabel(v, groupBy) },
     {
@@ -204,6 +294,13 @@ const Reports: React.FC = () => {
     { title: 'Giờ ra', dataIndex: 'exitTime', key: 'exitTime', width: 160, ellipsis: true, render: (v?: string) => v ? formatDateTime(v) : '-' },
   ];
 
+  /**
+   * Mở modal xem trước cho báo cáo CHECKOUT NGOẠI LỆ.
+   *
+   * "Ngoại lệ" = lượt xe ra bất thường (khách mất vé, vé hỏng, được miễn phí). Backend nhận ra
+   * chúng nhờ tiền tố "[NGOAI_LE:" gắn trong ghi chú lượt gửi. Đây là báo cáo quan trọng khi
+   * đối soát, vì mỗi ca ngoại lệ là một lần tiền không thu theo công thức thông thường.
+   */
   const previewExceptionExcel = () => {
     if (!exceptionStats?.totalCount) { message.warning('Không có dữ liệu ngoại lệ trong kỳ này'); return; }
     setExportPreview({
@@ -216,6 +313,8 @@ const Reports: React.FC = () => {
         { label: 'Tổng phí ghi nhận', value: `${fmt(exceptionStats.totalFeeImpact)} đ` },
       ],
       columns: exceptionPreviewColumns,
+      // Chỉ xem trước 10 dòng đầu, nhưng vẫn hiện TỔNG số dòng để người dùng biết file thật
+      // có bao nhiêu. Xem trước cả nghìn dòng thì modal treo, mà cũng không ai đọc hết.
       data: exceptionStats.records.slice(0, 10),
       totalRows: exceptionStats.records.length,
       confirmText: 'Tải xuống Excel',
@@ -223,6 +322,9 @@ const Reports: React.FC = () => {
     });
   };
 
+  /* ══ KHỐI 5 — MENU XUẤT FILE ══════════════════════════════════════════════════════════
+     Mỗi mục đều theo cùng ba bước: kiểm tra có dữ liệu -> setExportPreview(...) mở modal xem
+     trước -> người dùng bấm xác nhận thì hàm `run` mới thật sự tạo file.                     */
   const exportItems = [
     {
       key: 'excel',
@@ -345,6 +447,9 @@ const Reports: React.FC = () => {
     },
   ];
 
+  /* ══ KHỐI 6 — MỐC THỜI GIAN NHANH ═════════════════════════════════════════════════════
+     Các nút bấm một lần ra ngay khoảng ngày hay dùng, thay vì bấm lịch chọn hai đầu. Mỗi mốc
+     kèm sẵn cách nhóm hợp lý ("Tháng này" -> theo ngày, "Năm nay" -> theo tháng).             */
   const quickRanges = [
     { label: 'Tháng này', range: [dayjs().startOf('month'), dayjs()] as [Dayjs, Dayjs], group: 'day' as GroupBy },
     { label: 'Quý này', range: [dayjs().subtract(2, 'month').startOf('month'), dayjs()] as [Dayjs, Dayjs], group: 'month' as GroupBy },
@@ -354,11 +459,17 @@ const Reports: React.FC = () => {
     { label: 'Toàn bộ', range: [dayjs('2024-01-01'), dayjs()] as [Dayjs, Dayjs], group: 'month' as GroupBy },
   ];
 
+  // Tỷ trọng hai nguồn doanh thu: vé tháng và gửi lẻ.
+  // `parkingRatio` lấy 100 trừ đi thay vì tính riêng — bảo đảm hai số LUÔN cộng đủ 100%. Tính
+  // riêng cả hai rồi làm tròn có thể ra 49% + 52% = 101%, trông như hệ thống tính sai.
   const packageRatio = totals.totalRevenue ? Math.round((totals.totalPackageRev / totals.totalRevenue) * 100) : 0;
   const parkingRatio = 100 - packageRatio;
 
+  /* ══ KHỐI 7 — CỘT BẢNG DOANH THU (bảng chính) ═════════════════════════════════════════ */
   const revenueColumns = [
     {
+      // Tiêu đề cột đầu ĐỔI THEO cách nhóm đang chọn. Để cố định "Kỳ" thì người đọc phải nhìn
+      // sang ô chọn mới biết mỗi dòng là một ngày hay một tháng.
       title: groupBy === 'year' ? 'Năm' : groupBy === 'month' ? 'Tháng' : 'Ngày',
       dataIndex: 'period', key: 'period', width: 140, ellipsis: true,
       render: (d: string) => formatPeriodLabel(d, groupBy),
@@ -385,7 +496,11 @@ const Reports: React.FC = () => {
     <div>
       <h2 className="page-title">{t('pageReports')}</h2>
 
-      {/* ── Toolbar ── */}
+      {/* ══ KHỐI 8 — GIAO DIỆN ══════════════════════════════════════════════════════════
+          Thứ tự: thanh công cụ (chọn kỳ, cách nhóm, kiểu biểu đồ, nút xuất) -> các ô thống kê
+          tổng -> các biểu đồ -> các bảng số liệu -> modal xem trước khi xuất.                 */}
+
+      {/* ── Thanh công cụ ── */}
       <div className="toolbar" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
         <RangePicker
           format="DD/MM/YYYY"

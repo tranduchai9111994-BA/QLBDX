@@ -4,6 +4,29 @@
  * Tập trung vào xu hướng và hiệu quả kinh doanh: doanh thu theo thời gian, so sánh với kỳ trước,
  * giờ cao điểm, cơ cấu loại xe, cùng các gợi ý hành động do hệ chuyên gia sinh ra
  * (/api/reports/insights).
+ *
+ * ===========================================================================================
+ * SO VỚI OpsDashboard (bản vận hành) — khác nhau ở đâu:
+ *
+ *   Giống : bốn ô KPI, lấp đầy theo khu, danh sách xe đang trong bãi, cùng dùng hook
+ *           useDashboardData và cùng các hàm tiện ích trong utils/dashboardUtils.
+ *   Khác  : bản này THÊM doanh thu, so sánh tuần, biểu đồ xu hướng, cơ cấu loại xe và gợi ý
+ *           của hệ chuyên gia; BỎ phần "Ca của tôi".
+ *
+ * Tham số `useDashboardData(true)` là thứ quyết định: `true` = lấy thêm các API chỉ admin mới
+ * gọi được (doanh thu, thống kê, insights). OpsDashboard truyền `false`.
+ *
+ * PHÂN BIỆT VỚI TRANG PHÂN TÍCH (Analytics.tsx) — hay bị hỏi:
+ *   Trang này    - SNAPSHOT NHANH, liếc một cái là nắm tình hình, không cần chọn kỳ.
+ *   Trang Phân tích - đi sâu, chọn được kỳ tháng/quý/năm, có bảng phương án quyết định.
+ *
+ * Bố cục từ trên xuống:
+ *   1. Bốn ô KPI                       - xe đang đỗ, chỗ trống, lượt hôm nay, doanh thu
+ *   2. Ba thẻ nhận định + hai biểu đồ xu hướng 7 ngày  (phần "thông minh")
+ *   3. Lấp đầy theo khu + Cảnh báo ưu tiên
+ *   4. Xe đang trong bãi
+ *   5. Hai biểu đồ: lượt xe theo giờ hôm nay + cơ cấu loại xe 30 ngày
+ * ===========================================================================================
  */
 import React, { useMemo } from 'react';
 import {
@@ -29,25 +52,50 @@ import { getChartColors, chartColor } from '../../utils/chartTheme';
 
 /** Dashboard quản trị — snapshot nhanh; phân tích sâu chuyển sang trang Phân tích & Gợi ý (Q5). */
 const MgmtDashboard: React.FC = () => {
+  /* ══ KHỐI 1 — LẤY DỮ LIỆU ═════════════════════════════════════════════════════════════
+     `true` = lấy đủ bộ dữ liệu quản trị (xem phần đầu file).                                 */
   const navigate = useNavigate();
   const {
     data, vehicleStats, hourlyStats, parkedRecords, zones, alerts, insights,
     loading, refreshing, lastUpdated, fetchData,
   } = useDashboardData(true);
 
+  /* ══ KHỐI 2 — SỐ LIỆU DẪN XUẤT ════════════════════════════════════════════════════════ */
+
+  // Bảng màu biểu đồ đọc từ biến CSS của giao diện (utils/chartTheme.ts) nên biểu đồ tự đổi
+  // màu theo chế độ sáng/tối. useMemo để không đọc lại CSS mỗi lần vẽ.
   const COLORS = useMemo(() => getChartColors(), []);
 
+  /**
+   * Bù đủ 24 giờ cho biểu đồ cột.
+   *
+   * Backend chỉ trả về những giờ CÓ xe (VD 7h, 8h, 17h). Vẽ thẳng dữ liệu đó thì trục hoành
+   * nhảy cóc 7 -> 8 -> 17, nhìn tưởng giờ nào cũng đông. Ở đây dựng đủ mảng 0..23 rồi tra
+   * ngược lại, giờ nào không có thì count = 0 — biểu đồ mới phản ánh đúng khoảng vắng khách.
+   *
+   * Dùng Map thay vì .find() trong vòng lặp: Map tra thẳng theo khoá, còn find phải quét lại
+   * mảng cho từng giờ.
+   */
   const hourlyChartData = useMemo(() => {
     const map = new Map(hourlyStats.map((h) => [h.hour, h.count]));
     return Array.from({ length: 24 }, (_, hour) => ({ hour, count: map.get(hour) || 0 }));
   }, [hourlyStats]);
 
+  /**
+   * Tìm giờ đông nhất bằng reduce: giữ lại phần tử có count lớn hơn sau mỗi bước.
+   * Phải kiểm tra mảng rỗng trước, vì reduce không có giá trị khởi tạo hợp lệ khi chưa có dữ
+   * liệu (hourlyStats[0] sẽ là undefined).
+   */
   const peakHour = useMemo(() => {
     if (!hourlyStats.length) return null;
     return hourlyStats.reduce((best, cur) => (cur.count > best.count ? cur : best), hourlyStats[0]);
   }, [hourlyStats]);
 
+  // Giống hệt OpsDashboard — xem giải thích hai điều kiện "sắp đầy" ở file đó.
   const nearFullZones = zones.filter((z) => z.total > 0 && (z.available <= 2 || z.available / z.total <= 0.1));
+
+  // Đếm riêng cảnh báo mức NGUY HIỂM để tô đỏ nút "Cảnh báo" ở đầu trang. Mức độ do BỘ LUẬT
+  // của hệ chuyên gia quyết định, không viết cứng trong code này.
   const dangerAlerts = alerts.filter((a) => a.severity === 'danger').length;
 
   const sortedParked = useMemo(() =>
@@ -68,6 +116,8 @@ const MgmtDashboard: React.FC = () => {
         subtitle="Snapshot nhanh · xem Phân tích & Gợi ý để đi sâu"
         actions={
           <>
+            {/* Nút chuyển sang đỏ khi có cảnh báo mức nguy hiểm — dùng MÀU để phân biệt "có
+                việc gấp" với "có việc", thay vì bắt người xem đọc con số rồi tự đánh giá. */}
             <Button
               icon={<AlertOutlined />}
               onClick={() => navigate('/alerts')}
@@ -134,12 +184,22 @@ const MgmtDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* ── SMART INSIGHTS (DSS) ── */}
+      {/* ══ PHẦN "THÔNG MINH" — điểm nhấn của đồ án ═══════════════════════════════════════
+          Ba thẻ + hai biểu đồ dưới đây lấy từ MỘT API duy nhất /api/reports/insights. Backend
+          đo dữ liệu thật rồi đưa qua hệ chuyên gia (nhóm luật 'report') để sinh phần
+          `suggestions`. Ngưỡng nằm trong bảng ExpertRules chứ không viết cứng trong mã nguồn,
+          nên admin sửa ngưỡng trên giao diện là hệ thống áp dụng ngay.
+
+          Bọc trong `{insights && (...)}`: API này chỉ admin gọi được, thiếu dữ liệu thì ẩn cả
+          khối thay vì để màn hình lỗi.                                                        */}
       {insights && (
         <Row gutter={[14, 14]} style={{ marginTop: 14 }}>
           <Col xs={24} lg={8}>
             <Card className="dashboard-panel" title="So sánh tuần này vs tuần trước">
               <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                {/* So sánh theo PHẦN TRĂM thay vì số tuyệt đối: "tăng 12%" nói lên xu hướng
+                    ngay, còn "tăng 3.400.000đ" thì phải biết nền cũ bao nhiêu mới đánh giá được.
+                    Mũi tên lên/xuống và màu xanh/đỏ đổi theo dấu của con số. */}
                 <Statistic
                   title="Doanh thu"
                   value={insights.weekComparison.changePercent.revenue}
@@ -178,6 +238,8 @@ const MgmtDashboard: React.FC = () => {
               <div style={{ marginTop: 16, fontSize: '0.8rem', fontWeight: 600, color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>
                 Loại xe phổ biến
               </div>
+              {/* Chỉ ba loại xe phổ biến nhất — đủ để nắm cơ cấu, chi tiết đã có biểu đồ tròn
+                  ở cuối trang. */}
               {insights.topVehicleTypes.slice(0, 3).map((vt) => (
                 <div key={vt.type} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginTop: 4 }}>
                   <span>{vt.type}</span>
@@ -192,6 +254,10 @@ const MgmtDashboard: React.FC = () => {
                 <Empty description="Chưa có gợi ý nào — vận hành ổn định" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }} size="small">
+                  {/* Mỗi gợi ý do MỘT LUẬT của hệ chuyên gia sinh ra. Màu suy từ `s.type`:
+                      dấu hiệu xấu (giảm / cảnh báo / đỗ quá lâu) tô vàng, còn lại tô xanh
+                      thông tin. Danh sách rỗng KHÔNG phải lỗi — nghĩa là không luật nào cháy,
+                      tức vận hành đang bình thường. */}
                   {insights.suggestions.map((s, idx) => (
                     <Alert
                       key={idx}
@@ -206,7 +272,10 @@ const MgmtDashboard: React.FC = () => {
             </Card>
           </Col>
 
-          {/* Tách 2 chart 1-trục thay vì 1 chart 2-trục (B-05) */}
+          {/* Hai biểu đồ RIÊNG cho lượt xe và doanh thu, thay vì gộp một biểu đồ hai trục tung.
+              Lý do: hai đại lượng khác đơn vị (lượt / đồng) và chênh nhau hàng nghìn lần; vẽ
+              chung thì đường có giá trị nhỏ bị ép sát đáy, và người xem rất dễ đọc nhầm điểm
+              cắt nhau của hai đường thành một mối liên hệ không hề có. */}
           <Col xs={24} lg={12}>
             <Card className="dashboard-panel" title="Xu hướng lượt xe — 7 ngày gần nhất">
               <ResponsiveContainer width="100%" height={220}>
@@ -229,6 +298,8 @@ const MgmtDashboard: React.FC = () => {
                 <LineChart data={insights.dailyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" tickFormatter={(d) => new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} />
+                  {/* Rút gọn nhãn trục tiền: 2500000 -> "2500k". Để nguyên số đầy đủ thì nhãn
+                      dài tới mức đè lên nhau và chiếm hết bề ngang biểu đồ. */}
                   <YAxis tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                   <ReTooltip
                     labelFormatter={(d) => new Date(d).toLocaleDateString('vi-VN')}
@@ -295,6 +366,8 @@ const MgmtDashboard: React.FC = () => {
           >
             {alerts.length > 0 ? (
               <List
+                // Sáu cảnh báo ưu tiên nhất. Backend đã sắp theo mức độ nên cắt 6 phần tử đầu
+                // là lấy đúng những cái nặng nhất, không phải cắt ngẫu nhiên.
                 dataSource={alerts.slice(0, 6)}
                 renderItem={(item) => (
                   <List.Item
@@ -376,6 +449,8 @@ const MgmtDashboard: React.FC = () => {
       <Row gutter={[14, 14]} style={{ marginTop: 14 }}>
         <Col xs={24} lg={14}>
           <Card className="chart-card dashboard-panel" title="Lượt xe theo giờ hôm nay">
+            {/* Kiểm tra CÓ ÍT NHẤT MỘT giờ khác 0 trước khi vẽ. Không kiểm thì đầu ngày sẽ
+                hiện một biểu đồ 24 cột bằng 0 — trông như hỏng chứ không như "chưa có xe". */}
             {hourlyStats.some((h) => h.count > 0) ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={hourlyChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -406,7 +481,12 @@ const MgmtDashboard: React.FC = () => {
               <>
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
+                    {/* `innerRadius` khác 0 -> biểu đồ vành khuyên (donut) thay vì tròn đặc.
+                        Mắt người so sánh ĐỘ DÀI CUNG chính xác hơn so sánh diện tích, nên donut
+                        dễ đọc hơn hình tròn đặc. */}
                     <Pie data={vehicleStats} dataKey="totalRecords" nameKey="vehicleType" cx="50%" cy="50%" outerRadius={90} innerRadius={48} paddingAngle={2}>
+                      {/* `i % COLORS.length` cho màu quay vòng: bảng màu hết màu thì dùng lại từ
+                          đầu, không bị lỗi thiếu màu khi có nhiều loại xe hơn số màu. */}
                       {vehicleStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <ReTooltip
@@ -419,6 +499,8 @@ const MgmtDashboard: React.FC = () => {
                     <Legend verticalAlign="bottom" height={36} />
                   </PieChart>
                 </ResponsiveContainer>
+                {/* Bảng số liệu đặt ngay dưới biểu đồ tròn: biểu đồ cho thấy TỶ LỆ, bảng cho
+                    CON SỐ CHÍNH XÁC. Chỉ có biểu đồ thì không đọc được doanh thu từng loại. */}
                 <div className="dashboard-vehicle-table">
                   {vehicleStats.map((vs, i) => (
                     <div key={vs.vehicleType} className="dashboard-vehicle-row">

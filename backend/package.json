@@ -19,7 +19,8 @@
     "prisma:seed-permission-groups": "ts-node prisma/seedPermissionGroups.ts",
     "test": "ts-node --transpile-only src/utils/feeCalculator.test.ts",
     "test:fee": "ts-node --transpile-only src/utils/feeCalculator.test.ts",
-    "test:concurrency": "ts-node --transpile-only src/services/parking.concurrency.test.ts"
+    "test:concurrency": "ts-node --transpile-only src/services/parking.concurrency.test.ts",
+    "test:saw": "ts-node --transpile-only src/utils/smartParkingAlgorithms.test.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

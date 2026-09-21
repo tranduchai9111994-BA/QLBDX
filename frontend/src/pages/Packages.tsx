@@ -3,6 +3,25 @@
  *
  * Phân biệt với màn hình "Đăng ký gói": ở đây khai báo gói để bán, còn bên kia là ghi nhận khách
  * nào đã mua gói nào.
+ *
+ * ===========================================================================================
+ * HAI KHÁI NIỆM RẤT DỄ NHẦM — nắm chắc trước khi đọc code:
+ *
+ *                 | DANH MỤC GÓI (file này)      | GÓI KHÁCH ĐÃ MUA (CustomerPackages.tsx)
+ *   Bảng DB       | ParkingPackages              | CustomerPackages
+ *   Service       | package.service.ts           | customerPackage.service.ts
+ *   Nghĩa         | "Gói tháng xe máy - 300.000đ"| "Anh A mua gói đó cho xe 29A-12345,
+ *                 |  (mặt hàng bày trên kệ)      |   từ 1/9 đến 30/9" (hoá đơn đã bán)
+ *
+ * Ví von: file này là BẢNG GIÁ dán trên tường, file kia là các VÉ ĐÃ BÁN.
+ *
+ * Màn hình có cơ chế GIÁ HAI LỚP giống hệt Loại xe (VehicleTypes.tsx) — đọc phần đầu file đó
+ * để hiểu cặn kẽ. Ba modal: Thêm/Sửa, Đặt lịch đổi giá, Xem lịch sử giá.
+ *
+ * Riêng của màn hình này: "THỜI GIAN BÁN" (validFrom / validTo) — khoảng thời gian gói được
+ * phép bán, dùng cho gói khuyến mãi theo mùa. Đừng nhầm với `durationDays` (gói dùng được bao
+ * nhiêu ngày) hay với ngày bắt đầu/kết thúc của gói khách đã mua.
+ * ===========================================================================================
  */
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Card, Modal, Form, Input, InputNumber, Select, DatePicker, message, Tag, Space } from 'antd';
@@ -20,8 +39,11 @@ import { confirmDanger } from '../utils/confirmDanger';
 import { defaultPagination } from '../utils/tablePagination';
 
 const Packages: React.FC = () => {
+  /* ══ KHỐI 1 — STATE ═══════════════════════════════════════════════════════════════════ */
   const { t } = useLanguage();
   const [packages, setPackages] = useState<ParkingPackage[]>([]);
+  // Danh mục phụ: mỗi gói gắn với một loại xe, cần danh sách này để đổ vào ô Select và để tra
+  // id khi nhập từ Excel.
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [modal, setModal] = useState<boolean>(false);
@@ -38,9 +60,18 @@ const Packages: React.FC = () => {
     maxDuration: undefined as number | undefined,
   });
 
+  /* ══ KHỐI 2 — ĐỌC DỮ LIỆU ═════════════════════════════════════════════════════════════ */
+
+  /**
+   * Tải danh sách gói (có lọc) + danh mục loại xe.
+   *
+   * Cũng là một "điểm đồng bộ giá": backend chạy syncDuePackagePrices() trước khi trả dữ liệu,
+   * nên lịch đổi giá đã tới hạn được áp dụng ngay tại đây (xem pricing.service.ts).
+   */
   const fetchData = async () => {
     setLoading(true);
     try {
+      // includeInactive: màn hình quản trị phải thấy cả gói đã ngừng bán, để còn kích hoạt lại.
       const params: Record<string, string | number | boolean> = { includeInactive: true };
       if (filters.search) params.search = filters.search;
       if (filters.vehicleTypeId) params.vehicleTypeId = filters.vehicleTypeId;
@@ -78,13 +109,18 @@ const Packages: React.FC = () => {
   const handleSubmit = async (values: PackageForm) => {
     setSubmitting(true);
     try {
+      // Đổi hai ô ngày từ đối tượng dayjs sang chuỗi 'YYYY-MM-DD' trước khi gửi.
+      // Gửi `null` (không phải undefined) khi người dùng bỏ trống: null nghĩa là "xoá giới hạn
+      // này đi", còn undefined thì backend hiểu là "không đụng tới" và giới hạn cũ vẫn còn.
       const payload = {
         ...values,
         validFrom: values.validFrom ? (values.validFrom as Dayjs).format('YYYY-MM-DD') : null,
         validTo: values.validTo ? (values.validTo as Dayjs).format('YYYY-MM-DD') : null,
       };
       if (editing) {
-        // Preserve isActive so editing an inactive package doesn't re-activate it
+        // Gửi kèm `isActive` HIỆN TẠI của gói. Bắt buộc, vì form không có ô trạng thái nên
+        // không gửi thì backend nhận undefined và đặt về mặc định (đang bán) — hệ quả: sửa
+        // mô tả cho một gói đã ngừng bán lại vô tình bật nó bán trở lại.
         await api.put(`/packages/${editing.id}`, { ...payload, isActive: editing.isActive });
         message.success('Cập nhật thành công');
       } else {
@@ -129,8 +165,21 @@ const Packages: React.FC = () => {
     });
   };
 
+  /**
+   * NGỪNG ÁP DỤNG / KÍCH HOẠT LẠI gói — khác hẳn với Xoá.
+   *
+   *   Ngừng áp dụng : gói biến khỏi danh sách bán, NHƯNG khách đã mua vẫn dùng hết hạn bình
+   *                   thường và lịch sử doanh thu vẫn còn tên gói. Đây là thao tác thường dùng.
+   *   Xoá           : chỉ làm được với gói CHƯA AI MUA (backend chặn), ví dụ vừa tạo nhầm.
+   *
+   * Vì sao cần cả hai: bãi xe ngừng bán gói năm nhưng vẫn còn khách đang dùng gói năm — xoá đi
+   * thì các vé đó mất tham chiếu. Đây là mẫu "xoá mềm" quen thuộc trong hệ thống nghiệp vụ.
+   */
   const handleToggleActive = async (record: ParkingPackage, isActive: boolean) => {
     try {
+      // Gửi lại ĐẦY ĐỦ các field cũ kèm `isActive` mới, vì API là PUT (thay thế toàn bộ bản
+      // ghi) chứ không phải PATCH (sửa một phần). Gửi mỗi `isActive` sẽ xoá trắng các field
+      // còn lại.
       await api.put(`/packages/${record.id}`, {
         name: record.name,
         vehicleTypeId: record.vehicleTypeId,
@@ -147,6 +196,11 @@ const Packages: React.FC = () => {
     }
   };
 
+  /* ══ KHỐI 3 — GIÁ HAI LỚP ═════════════════════════════════════════════════════════════
+     Giống hệt VehicleTypes.tsx: bảng chính giữ giá hiện hành, bảng PackagePriceHistory lưu mọi
+     lần đổi kèm ngày hiệu lực và người đổi. Đọc phần đầu VehicleTypes.tsx để hiểu vì sao.    */
+
+  /** Mở form đặt lịch đổi giá, điền sẵn giá hiện tại và ngày hôm nay. */
   const openScheduleModal = (record: ParkingPackage) => {
     setScheduleTarget(record);
     scheduleForm.setFieldsValue({
@@ -155,6 +209,10 @@ const Packages: React.FC = () => {
     });
   };
 
+  /**
+   * Gửi lịch đổi giá -> POST /packages/:id/price-changes (GHI THÊM một dòng lịch sử).
+   * Khác với PUT /packages/:id ở handleSubmit (GHI ĐÈ giá hiện hành, áp dụng ngay).
+   */
   const handleScheduleSubmit = async (values: SchedulePriceChangeForm) => {
     if (!scheduleTarget) return;
     setScheduleSubmitting(true);
@@ -188,7 +246,7 @@ const Packages: React.FC = () => {
     }
   };
 
-  /* ── Import ─────────────────────────────────────────────────── */
+  /* ══ KHỐI 4 — NHẬP TỪ EXCEL ═══════════════════════════════════════════════════════════ */
   const importColumns: ColumnDef[] = [
     { key: 'name', label: 'Tên gói', required: true, example: 'Vé tháng xe máy' },
     { key: 'vehicleType', label: 'Loại xe', required: true, example: '',
@@ -218,6 +276,9 @@ const Packages: React.FC = () => {
       }
       const vt = vehicleTypes.find((vt) => vt.name.trim() === row.vehicleType.trim());
       if (!vt) { errors.push(`Dòng ${rowNum}: Không tìm thấy loại xe "${row.vehicleType}"`); continue; }
+      // Ô Excel luôn về dưới dạng CHUỖI, phải tự đổi sang số và tự kiểm tra.
+      // Number.isFinite bắt được cả ba trường hợp hỏng: chữ ("ba mươi" -> NaN), ô trống, và
+      // Infinity. Chỉ viết `!durationDays` thì lọt giá trị âm hoặc chuỗi lạ.
       const durationDays = Number(row.durationDays);
       const price = Number(row.price);
       if (!Number.isFinite(durationDays) || durationDays <= 0) {
@@ -259,6 +320,7 @@ const Packages: React.FC = () => {
     });
   };
 
+  /* ══ KHỐI 5 — ĐỊNH NGHĨA CỘT BẢNG ═════════════════════════════════════════════════════ */
   const columns = [
     { title: t('colPackage'), dataIndex: 'name', key: 'name', width: 200, ellipsis: true, render: (value: string) => <span style={{ fontWeight: 500 }}>{value}</span> },
     { title: t('colVehicleType'), key: 'vehicleTypeName', width: 150, ellipsis: true, render: (_: any, r: ParkingPackage) => r.vehicleType?.name || '-' },
@@ -270,10 +332,17 @@ const Packages: React.FC = () => {
     { title: t('fieldNote'), dataIndex: 'description', key: 'description', width: 250, ellipsis: true, render: (v?: string) => v || '-' },
     {
       title: 'Thời gian bán', key: 'validWindow', width: 190, ellipsis: true,
+      // Cột "Thời gian bán" — khoảng thời gian gói được phép bán (KHÔNG phải thời hạn sử dụng
+      // của gói). Ba trạng thái hiển thị:
+      //   không đặt giới hạn nào -> "Quanh năm"
+      //   chỉ đặt một đầu        -> đầu còn lại hiện dấu "…" (không giới hạn)
+      //   hôm nay ngoài khoảng   -> tô ĐỎ, báo gói đang không bán được dù trạng thái vẫn bật
       render: (_: any, r: ParkingPackage) => {
         if (!r.validFrom && !r.validTo) return <span style={{ color: 'var(--outline)' }}>Quanh năm</span>;
         const from = r.validFrom ? dayjs(r.validFrom).format('DD/MM/YYYY') : '…';
         const to = r.validTo ? dayjs(r.validTo).format('DD/MM/YYYY') : '…';
+        // Tham số 'day' bắt dayjs so sánh theo ĐƠN VỊ NGÀY, bỏ qua giờ phút. Thiếu nó thì gói
+        // có hiệu lực từ hôm nay sẽ bị coi là "chưa tới hạn" suốt cả ngày hôm nay.
         const outOfWindow = (r.validFrom && dayjs().isBefore(dayjs(r.validFrom), 'day')) || (r.validTo && dayjs().isAfter(dayjs(r.validTo), 'day'));
         return <span style={{ color: outOfWindow ? 'var(--error)' : undefined }}>{from} – {to}</span>;
       },
@@ -292,6 +361,8 @@ const Packages: React.FC = () => {
           <PermissionGate screen="packages" action="update" fallback={<Tag color="default">Chỉ quản trị được sửa</Tag>}>
             <Button icon={<ClockCircleOutlined />} onClick={() => openScheduleModal(r)} size="small">Đặt lịch đổi giá</Button>
             <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} size="small">Sửa</Button>
+            {/* Một chỗ, hai nút đối nghịch — đang bán thì hiện "Ngừng áp dụng", đã ngừng thì
+                hiện "Kích hoạt lại". Hiện cả hai cùng lúc sẽ luôn có một nút vô nghĩa. */}
             {r.isActive ? (
               <Button icon={<StopOutlined />} onClick={() => handleToggleActive(r, false)} size="small">Ngừng áp dụng</Button>
             ) : (
@@ -421,6 +492,8 @@ const Packages: React.FC = () => {
             <Input.TextArea rows={2} />
           </Form.Item>
           <div style={{ display: 'flex', gap: 12 }}>
+            {/* Hai ô "Thời gian bán" đều KHÔNG bắt buộc. Bỏ trống = không giới hạn đầu đó.
+                Dùng cho gói khuyến mãi theo mùa (VD chỉ bán trong tháng Tết). */}
             <Form.Item name="validFrom" label="Bán từ ngày" style={{ flex: 1 }} tooltip="Bỏ trống = bán ngay, không giới hạn ngày bắt đầu">
               <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Không giới hạn" />
             </Form.Item>

@@ -3,6 +3,27 @@
  *
  * Tập trung vào việc đang diễn ra ngay lúc này: xe đang đỗ, chỗ còn trống theo khu, xe đỗ quá lâu,
  * gói sắp hết hạn và tiền đã thu trong ca của chính mình.
+ *
+ * ===========================================================================================
+ * Ý TƯỞNG THIẾT KẾ — vì sao nhân viên và quản trị xem hai dashboard khác nhau:
+ *
+ *   Nhân viên hỏi: "Giờ tôi phải làm gì?"     -> cần số liệu HIỆN TẠI + nút bấm hành động
+ *   Quản trị hỏi : "Tháng này kinh doanh sao?" -> cần số liệu TỔNG HỢP theo thời gian
+ *
+ * Nhồi cả hai vào một trang thì nhân viên phải lướt qua biểu đồ doanh thu năm mới tới danh
+ * sách xe cần cho ra — mỗi lần trực quầy đều mất thời gian vô ích. Nên tách hai file, cùng
+ * dùng chung hook `useDashboardData` để không lặp phần gọi API.
+ *
+ * ĐIỂM ĐÁNG NÊU KHI BẢO VỆ: trang này CỐ Ý KHÔNG hiện doanh thu toàn bãi. Nhân viên chỉ thấy
+ * "Ca của tôi" — tiền do chính họ thu. Đây là nguyên tắc TỐI THIỂU QUYỀN BIẾT: mỗi người chỉ
+ * thấy đúng dữ liệu cần cho việc của mình.
+ *
+ * Bố cục từ trên xuống, xếp theo mức độ cần kíp:
+ *   1. Bốn ô KPI          - liếc một cái là biết tình hình
+ *   2. Ca của tôi         - đối soát tiền cuối ca
+ *   3. Lấp đầy theo khu + Gói sắp hết hạn
+ *   4. Xe đang trong bãi  - danh sách chi tiết nhất, để cuối
+ * ===========================================================================================
  */
 import React, { useMemo } from 'react';
 import {
@@ -22,6 +43,12 @@ import { useAuth } from '../../context/AuthContext';
 
 /** Dashboard nhân viên vận hành — không có doanh thu toàn bãi, chỉ đối soát ca của bản thân (Q1). */
 const OpsDashboard: React.FC = () => {
+  /* ══ KHỐI 1 — LẤY DỮ LIỆU ═════════════════════════════════════════════════════════════
+     Toàn bộ việc gọi API, tự làm mới định kỳ và quản lý cờ tải nằm trong hook dùng chung
+     `useDashboardData` (hooks/useDashboardData.ts). Tham số `false` = KHÔNG lấy phần dữ liệu
+     chỉ dành cho quản trị (doanh thu toàn bãi, xu hướng) — MgmtDashboard truyền `true`.
+     Nhờ tách hook mà hai dashboard dùng chung một nguồn dữ liệu, sửa cách gọi API chỉ sửa
+     một chỗ.                                                                                 */
   const { user } = useAuth();
   const navigate = useNavigate();
   const {
@@ -29,17 +56,33 @@ const OpsDashboard: React.FC = () => {
     loading, refreshing, lastUpdated, fetchData,
   } = useDashboardData(false);
 
+  /* ══ KHỐI 2 — SỐ LIỆU DẪN XUẤT ════════════════════════════════════════════════════════
+     Ba giá trị dưới đây KHÔNG lưu trong state, mà tính lại từ dữ liệu gốc mỗi lần vẽ.
+     Làm vậy để không bao giờ xảy ra cảnh state phụ lệch với dữ liệu gốc: dữ liệu đổi thì
+     các con số này tự đúng theo, không cần nhớ cập nhật.                                     */
+
+  // Sắp xếp xe vào SỚM NHẤT lên đầu — xe đỗ lâu nhất là thứ nhân viên cần để mắt trước.
+  // `[...parkedRecords]` tạo BẢN SAO trước khi sort: sort() sửa thẳng mảng gốc, mà mảng gốc
+  // là state của React — sửa trực tiếp thì React không nhận ra thay đổi và có thể vẽ sai.
   const sortedParked = useMemo(() =>
     [...parkedRecords].sort((a, b) => new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime()),
     [parkedRecords]);
 
+  // Đếm xe đỗ quá lâu. Ngưỡng LONG_PARKING_HOURS khai báo tập trung ở utils/dashboardUtils.ts
+  // và dùng chung với cảnh báo A-02 ở backend, nên hai nơi không bao giờ báo lệch nhau.
   const longParkedCount = sortedParked.filter((r) => hoursParkedRaw(r.entryTime) >= LONG_PARKING_HOURS).length;
+
+  // "Sắp đầy" = còn <= 2 chỗ HOẶC còn <= 10% tổng số chỗ. Hai điều kiện để đúng với cả khu
+  // nhỏ lẫn khu lớn: khu 10 chỗ còn 2 chỗ (20%) vẫn là sắp đầy, còn khu 200 chỗ thì 10% (20
+  // chỗ) mới đáng báo. Chỉ dùng một trong hai điều kiện sẽ sai ở một trong hai loại khu.
   const nearFullZones = zones.filter((z) => z.total > 0 && (z.available <= 2 || z.available / z.total <= 0.1));
 
   const lastUpdatedLabel = lastUpdated
     ? lastUpdated.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : '—';
 
+  // Chỉ chặn màn hình ở lần tải đầu. Các lần tự làm mới sau dùng cờ `refreshing` riêng, chỉ
+  // làm nút làm mới quay — nếu dùng chung `loading` thì cứ 90 giây màn hình lại trắng một cái.
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
 
   return (
@@ -48,9 +91,14 @@ const OpsDashboard: React.FC = () => {
         subtitle={`Ca vận hành · ${user?.fullName || ''}`}
         actions={
           <>
+            {/* Ba nút tắt tới đúng ba việc nhân viên làm cả ngày. Dashboard không chỉ để xem
+                mà còn là BÀN ĐIỀU KHIỂN: thấy vấn đề là bấm xử lý được ngay tại chỗ. */}
             <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/parking/entry')}>Xe vào</Button>
             <Button icon={<CarOutlined />} onClick={() => navigate('/parking/exit')}>Xe ra</Button>
             <Button icon={<EnvironmentOutlined />} onClick={() => navigate('/parking-spots')}>Sơ đồ bãi</Button>
+            {/* Nút này vừa hiện GIỜ CẬP NHẬT gần nhất, vừa bấm để làm mới tay. Hiện giờ cập
+                nhật là bắt buộc với màn hình tự làm mới: không có nó, nhân viên nhìn số liệu
+                mà không biết nó của lúc nào — số cũ 5 phút có thể dẫn tới xếp nhầm chỗ. */}
             <Tooltip title={`Tự động làm mới mỗi 90 giây · Cập nhật lúc ${lastUpdatedLabel}`}>
               <Button size="small" icon={<ReloadOutlined spin={refreshing} />} onClick={() => fetchData(true)} loading={refreshing}>
                 {lastUpdatedLabel}
@@ -69,6 +117,9 @@ const OpsDashboard: React.FC = () => {
               value={data?.currentlyParked || 0}
               prefix={<CarOutlined />}
             />
+            {/* Dòng chân mỗi ô KPI đổi nội dung theo tình hình: có vấn đề thì nêu vấn đề, không
+                thì nói rõ con số phía trên nghĩa là gì. Cùng một chỗ trên màn hình phục vụ hai
+                mục đích, không tốn thêm diện tích. */}
             <div className="dashboard-kpi-foot">
               {longParkedCount > 0
                 ? <span className="kpi-warn"><WarningOutlined /> {longParkedCount} xe đỗ &gt;{LONG_PARKING_HOURS}h</span>
@@ -113,7 +164,10 @@ const OpsDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* ── CA CỦA TÔI ── */}
+      {/* ══ CA CỦA TÔI — phần thay thế cho "doanh thu toàn bãi" của bản quản trị ═══════════
+          Dữ liệu do backend lọc theo ID người đang đăng nhập (lấy từ token), KHÔNG phải frontend
+          tự lọc. Nếu lọc ở frontend thì dữ liệu của cả bãi vẫn được gửi về máy nhân viên và mở
+          tab Network là xem được hết — ẩn trên giao diện không phải là bảo mật.                */}
       <Row gutter={[14, 14]} style={{ marginTop: 14 }}>
         <Col xs={24}>
           <Card
@@ -179,6 +233,10 @@ const OpsDashboard: React.FC = () => {
             ) : (
               <div className="dashboard-zone-list">
                 {zones.map((zone) => {
+                  // Ba mức màu theo tỷ lệ lấp đầy: >=90% đỏ, >=70% vàng, còn lại xanh.
+                  // Ngưỡng ở đây (90/70) chỉ để TÔ MÀU cho dễ nhìn, khác với ngưỡng
+                  // `nearFullZones` ở trên dùng để ĐẾM cảnh báo — hai việc khác nhau nên
+                  // không dùng chung một ngưỡng.
                   const statusColor = zone.fillRate >= 90 ? 'var(--error)' : zone.fillRate >= 70 ? 'var(--warning)' : 'var(--success)';
                   const tagColor = zone.fillRate >= 90 ? 'red' : zone.fillRate >= 70 ? 'orange' : 'green';
                   return (
@@ -210,8 +268,13 @@ const OpsDashboard: React.FC = () => {
           >
             {expiringPackages.length > 0 ? (
               <List
+                // Chỉ hiện 6 gói sắp hết hạn gần nhất. Dashboard là nơi LIẾC NHANH, danh sách
+                // dài thuộc về màn hình Gói khách hàng (có nút "Quản lý" dẫn sang).
                 dataSource={expiringPackages.slice(0, 6)}
                 renderItem={(pkg) => {
+                  // So ngày hết hạn với 0h00 HÔM NAY (setHours(0,0,0,0)), không phải với giờ
+                  // hiện tại. Nếu so với giờ hiện tại thì gói hết hạn cuối ngày hôm nay sẽ ra
+                  // "còn 0 ngày" hay "-1 ngày" tuỳ lúc mở màn hình — số nhảy lung tung.
                   const daysLeft = Math.ceil(
                     (new Date(pkg.endDate).getTime() - new Date().setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24)
                   );
@@ -251,11 +314,17 @@ const OpsDashboard: React.FC = () => {
           >
             {parkedRecords.length > 0 ? (
               <Row gutter={[12, 4]}>
+                {/* Chỉ hiện 16 xe (những xe vào sớm nhất, đã sắp xếp ở KHỐI 2). Bãi đông có thể
+                    có hàng trăm xe — vẽ hết sẽ làm trang dài lê thê và chậm. Phần còn lại có
+                    nút dẫn sang màn hình Xe ra. */}
                 {sortedParked.slice(0, 16).map((record) => {
                   const hrs = hoursParkedRaw(record.entryTime);
                   const isLong = hrs >= LONG_PARKING_HOURS;
                   return (
                     <Col xs={24} sm={12} md={8} lg={6} key={record.id}>
+                      {/* Xe đỗ quá ngưỡng được gắn thêm lớp CSS `parked-critical` để nổi bật
+                          hẳn lên — đây là thứ nhân viên phải xử lý (gọi chủ xe, kiểm tra xe bỏ
+                          quên), không nên lẫn vào các xe bình thường. */}
                       <div className={`dashboard-parked-item ${isLong ? 'parked-critical' : ''}`}>
                         <div className="dashboard-parked-plate">{record.licensePlate}</div>
                         <div className="dashboard-parked-meta">

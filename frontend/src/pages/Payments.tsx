@@ -4,6 +4,15 @@
  * Giao dịch được sinh TỰ ĐỘNG khi cho xe ra hoặc khi khách mua gói; màn hình này không tạo giao
  * dịch mới. Admin sửa được giao dịch ghi nhầm nhưng KHÔNG xoá được — dữ liệu thu tiền phải giữ
  * vết để đối soát.
+ *
+ * Vì sao KHÔNG có nút Xoá (câu hay bị hỏi): dữ liệu thu tiền là chứng từ. Xoá đi thì tổng
+ * doanh thu báo cáo hôm qua và hôm nay khác nhau mà không ai giải thích được. Ghi nhầm thì
+ * SỬA và bắt buộc ghi lý do vào ô Ghi chú - vẫn còn vết.
+ *
+ * Giao dịch đến từ HAI nguồn, phân biệt bằng cột `paymentType`:
+ *   'parking' - thu khi cho xe ra   (parking.service.ts -> completeExit)
+ *   'package' - thu khi bán gói     (customerPackage.service.ts)
+ * Vì thế biển số phải tra theo hai đường: `parkingRecord` hoặc `customerPackage.vehicle`.
  */
 import React, { useState, useEffect } from 'react';
 import { Table, Card, DatePicker, Select, Tag, Button, message, Input, InputNumber, Space, Modal, Form } from 'antd';
@@ -50,6 +59,17 @@ const Payments: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editForm] = Form.useForm();
 
+  /* ══ KHỐI 2 — DỰNG THAM SỐ LỌC ════════════════════════════════════════════════════════ */
+
+  /**
+   * Gom điều kiện lọc thành object query.
+   *
+   * Tách riêng thành hàm vì được dùng ở HAI chỗ với hai mục đích khác nhau:
+   *   fetchPayments() -> lấy một trang để hiện bảng
+   *   exportExcel()   -> lấy TOÀN BỘ kết quả để xuất file
+   * Nếu viết lặp ở cả hai nơi thì sửa bộ lọc chỉ sửa một chỗ, file Excel xuất ra sẽ lệch với
+   * bảng đang xem - loại lỗi rất khó phát hiện.
+   */
   const buildParams = (): Record<string, string> => {
     const params: Record<string, string> = {};
     if (filters.dateRange) {
@@ -64,6 +84,7 @@ const Payments: React.FC = () => {
     return params;
   };
 
+  /** Tải một TRANG giao dịch. Phân trang ở backend vì bảng giao dịch tăng mãi theo thời gian. */
   const fetchPayments = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
@@ -100,8 +121,12 @@ const Payments: React.FC = () => {
     });
   };
 
+  /** Đổi mã phương thức trong DB thành chữ tiếng Việt - dùng cho file Excel xuất ra. */
   const methodLabel = (m: string) => (m === 'cash' ? 'Tiền mặt' : m === 'transfer' ? 'Chuyển khoản' : 'Thẻ');
 
+  /* ══ KHỐI 3 — SỬA GIAO DỊCH ═══════════════════════════════════════════════════════════ */
+
+  /** Mở modal sửa, điền sẵn giá trị hiện tại. `editing` vừa là dữ liệu vừa là cờ mở modal. */
   const openEdit = (record: Payment) => {
     setEditing(record);
     editForm.setFieldsValue({
@@ -114,6 +139,8 @@ const Payments: React.FC = () => {
   const handleEditSave = async () => {
     if (!editing) return;
     try {
+      // validateFields() ném lỗi nếu form chưa hợp lệ -> nhảy thẳng xuống catch, KHÔNG gọi API.
+      // Gọi thủ công như vậy (thay vì dùng onFinish) vì nút Lưu nằm ở chân Modal, ngoài <Form>.
       const values = await editForm.validateFields();
       setSaving(true);
       await api.put(`/payments/${editing.id}`, values);
@@ -121,6 +148,10 @@ const Payments: React.FC = () => {
       setEditing(null);
       fetchPayments(pagination.current, pagination.pageSize);
     } catch (err: any) {
+      // Hai loại lỗi rơi chung vào một catch, phải phân biệt:
+      //   có `errorFields` -> lỗi validate form, Ant Design đã tô đỏ ô nhập rồi -> im lặng
+      //   không có         -> lỗi thật từ API -> hiện thông báo
+      // Thiếu dòng này thì người dùng bỏ trống ô số tiền sẽ thấy cả hai thông báo cùng lúc.
       if (err?.errorFields) return; // lỗi validate form, không phải lỗi API
       message.error(err?.response?.data?.message || 'Không cập nhật được giao dịch');
     } finally {
@@ -128,6 +159,15 @@ const Payments: React.FC = () => {
     }
   };
 
+  /* ══ KHỐI 4 — XUẤT EXCEL ══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Xuất file Excel từ tập kết quả ĐANG LỌC.
+   *
+   * Gọi lại API với pageSize rất lớn thay vì dùng mảng `payments` sẵn có, vì mảng đó chỉ chứa
+   * 20 dòng của trang đang xem - xuất ra sẽ thiếu. Người dùng lọc "tháng 9" thì mong file có
+   * đủ giao dịch tháng 9, không phải 20 dòng đầu.
+   */
   const exportExcel = async () => {
     setExporting(true);
     try {
@@ -135,6 +175,9 @@ const Payments: React.FC = () => {
       const res = await api.get<PaymentsResponse>('/payments', {
         params: { ...buildParams(), page: 1, pageSize: 100000 },
       });
+      // Đổi dữ liệu thô sang dạng người đọc: tiêu đề cột tiếng Việt, mã phương thức thành
+      // chữ, ngày giờ đã định dạng. Xuất thẳng dữ liệu API thì file toàn tên field tiếng Anh
+      // và id - người nhận file không hiểu gì.
       const data = res.data.data.map((p, i) => ({
         'STT': i + 1,
         'Biển số': p.parkingRecord?.licensePlate || p.customerPackage?.vehicle?.licensePlate || '-',
@@ -147,6 +190,8 @@ const Payments: React.FC = () => {
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Thanh toán');
+      // Gắn khoảng ngày vào tên file: tải nhiều lần sẽ không bị đè lên nhau, và mở thư mục
+      // Downloads là biết ngay file nào của kỳ nào.
       const fileName = `lich-su-thanh-toan${filters.dateRange ? `_${filters.dateRange[0].format('DDMMYYYY')}-${filters.dateRange[1].format('DDMMYYYY')}` : ''}.xlsx`;
       XLSX.writeFile(wb, fileName);
     } catch {
@@ -156,9 +201,12 @@ const Payments: React.FC = () => {
     }
   };
 
+  /* ══ KHỐI 5 — ĐỊNH NGHĨA CỘT BẢNG ═════════════════════════════════════════════════════ */
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60, ellipsis: true },
     {
+      // Biển số nằm ở HAI nơi khác nhau tuỳ nguồn giao dịch (xem phần đầu file), nên phải thử
+      // lần lượt cả hai bằng `||`. Giao dịch cũ thiếu liên kết thì hiện '-' thay vì lỗi.
       title: 'Biển số', key: 'licensePlate', width: 140,
       render: (_: any, r: Payment) => (r.parkingRecord?.licensePlate || r.customerPackage?.vehicle?.licensePlate) ? <Tag className="plate-tag">{r.parkingRecord?.licensePlate || r.customerPackage?.vehicle?.licensePlate}</Tag> : '-',
     },
@@ -191,6 +239,8 @@ const Payments: React.FC = () => {
     <div>
       <h2 className="page-title">Lịch sử thanh toán</h2>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        {/* `disabled` khi không có kết quả: chặn người dùng tải về một file Excel rỗng rồi
+            tưởng chức năng hỏng. */}
         <Button icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} disabled={pagination.total === 0}>
           Xuất Excel
         </Button>
@@ -288,6 +338,8 @@ const Payments: React.FC = () => {
                   <Select.Option value="transfer">Chuyển khoản</Select.Option>
                 </Select>
               </Form.Item>
+              {/* Ô ghi chú là chỗ lưu LÝ DO sửa - thứ thay thế cho việc xoá giao dịch. Nhờ nó
+                  mà sau này đối soát vẫn truy được vì sao số tiền bị đổi. */}
               <Form.Item name="notes" label="Ghi chú">
                 <Input.TextArea rows={3} maxLength={500} placeholder="Lý do chỉnh sửa, ghi chú..." />
               </Form.Item>

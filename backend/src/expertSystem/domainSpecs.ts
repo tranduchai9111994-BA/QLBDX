@@ -40,7 +40,20 @@ export const DOMAIN_ACTION_TYPE: Record<string, string> = {
   alert: 'alert',
   analytics: 'decision',
   report: 'suggestion',
+  parking_recommendation: 'config',
 };
+
+/**
+ * Tên 5 tiêu chí của thuật toán SAW (gợi ý chỗ đỗ) — thứ tự PHẢI khớp thứ tự trong
+ * utils/smartParkingAlgorithms.ts, vì trọng số được đọc ra theo đúng thứ tự này.
+ */
+export const SAW_WEIGHT_KEYS = [
+  'zonePreference',
+  'zoneAvailability',
+  'typeMatch',
+  'peakHourFit',
+  'occupancy',
+] as const;
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Mô tả form nhập luật cho giao diện quản trị.
@@ -189,6 +202,64 @@ export const DOMAIN_FORM_SPEC: Record<string, DomainFormSpec> = {
           { name: 'zoneName', description: 'Tên khu vực (chỉ dùng được ở loại "Khu vực đông")' },
           { name: 'zoneOccupancyPercent', description: 'Tỷ lệ lấp đầy của khu, đã quy ra % (chỉ dùng được ở loại "Khu vực đông")' },
         ],
+      },
+    ],
+  },
+
+  parking_recommendation: {
+    label: 'Gợi ý chỗ đỗ (thuật toán SAW)',
+    description:
+      'Trọng số 5 tiêu chí mà thuật toán SAW dùng để xếp hạng chỗ đỗ trống khi nhân viên nhập biển số. Tổng 5 trọng số phải bằng 1.0 — tăng trọng số nào thì tiêu chí đó chi phối kết quả gợi ý nhiều hơn.',
+    actionType: 'config',
+    facts: [
+      {
+        name: 'configOnly',
+        label: 'Không dùng điều kiện',
+        help: 'Luật này chỉ lưu tham số, không chạy qua máy suy diễn. Giữ nguyên điều kiện mặc định configOnly >= 0.',
+      },
+    ],
+    fields: [
+      {
+        name: 'zonePreference',
+        label: 'C1 — Mức ưa thích chỗ đỗ',
+        type: 'number',
+        required: true,
+        help: 'Khách hay đỗ khu nào và đúng chỗ nào gần đây (tính theo Exponential Decay). Mặc định 0.35.',
+      },
+      {
+        name: 'zoneAvailability',
+        label: 'C2 — Tỷ lệ còn trống của khu',
+        type: 'number',
+        required: true,
+        help: 'Ưu tiên khu còn nhiều chỗ, tránh dồn xe vào một khu. Mặc định 0.25.',
+      },
+      {
+        name: 'typeMatch',
+        label: 'C3 — Độ phù hợp loại xe',
+        type: 'number',
+        required: true,
+        help: 'Khu chuyên đúng loại xe được cộng điểm so với khu tổng hợp. Mặc định 0.20.',
+      },
+      {
+        name: 'peakHourFit',
+        label: 'C4 — Phù hợp khung giờ quen',
+        type: 'number',
+        required: true,
+        help: 'Khu khách hay đỗ vào đúng khung giờ hiện tại. Mặc định 0.10.',
+      },
+      {
+        name: 'occupancy',
+        label: 'C5 — Mức độ vắng của khu',
+        type: 'number',
+        required: true,
+        help: 'Khu đang ít xe được ưu tiên. Mặc định 0.10.',
+      },
+      {
+        name: 'decayAlpha',
+        label: 'Hệ số suy giảm α (0 < α < 1)',
+        type: 'number',
+        required: true,
+        help: 'α càng lớn thì các lượt đỗ gần đây càng áp đảo lượt cũ. Mặc định 0.3. Không tính vào tổng trọng số.',
       },
     ],
   },

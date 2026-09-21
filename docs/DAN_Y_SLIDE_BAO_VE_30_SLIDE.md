@@ -180,7 +180,7 @@ phải hiểu vì sao hệ thống báo thì mới tin và hành động theo."*
 |---|---|---|---|
 | 1 | Gợi ý gói dịch vụ | Hệ khuyến nghị | `customerPackage.service.ts` |
 | 2 | Cảnh báo thông minh đa tầng | Hệ cảnh báo | `report.service.ts` → `getAlerts()` |
-| 3 | Tra cứu & tự điền thông minh | Trải nghiệm thích ứng | `parking.service.ts` → `smartLookup()` |
+| 3 | Gợi ý chỗ đỗ bằng SAW (MCDA) | Trải nghiệm thích ứng | `smartParkingAlgorithms.ts` + `smartLookup()` |
 | 4 | Tổng quan thông minh | DSS — giai đoạn phát hiện | `report.service.ts` → `getInsights()` |
 | 5 | Phân tích & hỗ trợ quyết định | DSS — giai đoạn thiết kế | `analytics.service.ts` |
 
@@ -774,38 +774,46 @@ xuống còn 2.
 
 ---
 
-## Slide 22 — TN3: Gợi ý chỗ đỗ theo thói quen ⏱️ 65 giây 🔑
+## Slide 22 — TN3: Gợi ý chỗ đỗ bằng thuật toán SAW ⏱️ 75 giây 🔑
 
-`backend/src/services/parking.service.ts` → `smartLookup()`
+`backend/src/utils/smartParkingAlgorithms.ts` + `parking.service.ts` → `smartLookup()`
+
+**Thuật toán**: SAW — Simple Additive Weighting (Fishburn 1967; Hwang & Yoon 1981), có
+Exponential Decay Weighting (Holt 1957) làm bước tiền xử lý.
 
 ```ts
-// ① Khu vực khách hay đỗ nhất trong 30 lượt gần đây
-const zoneCounts = new Map<string, number>();
-for (const r of recentRecords) {
-  const zoneName = r.parkingSpot?.zone?.name;
-  if (zoneName) zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1);
-}
-let preferredZone = null, maxCount = 0;
-for (const [zone, count] of zoneCounts) if (count > maxCount) { maxCount = count; preferredZone = zone; }
+// ① Tiền xử lý — Exponential Decay: lượt gần đây trọng số lớn hơn lượt cũ
+const weight = alpha * Math.pow(1 - alpha, index);   // α = 0.3
 
-// ② Chỗ trống PHÙ HỢP loại xe
-const compatibleSpots = availableSpots.filter((s) =>
-  isSpotCompatibleWithVehicleType(s, fullVehicle.vehicleType.name));
+// ② Chấm điểm 2 mức: điểm KHU + điểm ĐÚNG CHỖ đó
+zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
 
-// ③ Ưu tiên khu quen; hết chỗ thì lấy chỗ khác + GIẢI THÍCH
-const inPreferred = preferredZone ? compatibleSpots.filter((s) => s.zone?.name === preferredZone) : [];
-const chosen = inPreferred[0] || compatibleSpots[0];
-if (preferredZone && inPreferred.length === 0) {
-  suggestedSpotNote = `${preferredZone} đã hết chỗ phù hợp, gợi ý ${chosen.zone?.name} thay thế`;
-}
+// ③ SAW — chuẩn hoá 5 tiêu chí về [0,1] rồi tính tổng có trọng số
+normalized[i][j] = isBenefit[j]
+  ? criteria[i][j] / maxVal        // benefit: càng cao càng tốt
+  : minVal / criteria[i][j];       // cost:    càng thấp càng tốt
+totalScore = w.reduce((sum, weight, j) => sum + weight * normalized[i][j], 0);
+
+// ④ Sinh câu GIẢI THÍCH — nêu 2 tiêu chí đóng góp nhiều điểm nhất
+// → "Điểm 1.00 — yếu tố chính: Mức ưa thích chỗ đỗ (35%), Tỷ lệ còn trống (25%)"
 ```
 
-**Nhấn dòng:** ③ — hai dòng cuối.
+**Trọng số lưu ở đâu**: luật `PARKING_REC_WEIGHTS` trong hệ chuyên gia — admin sửa trên giao diện,
+áp dụng ngay, không cần sửa code.
 
-**Nói:** Nhấn ③: *"Chi tiết em tâm đắc nhất ở đây là dòng cuối. Khi khu quen hết chỗ, hệ thống
-không im lặng đổi sang khu khác mà **nói rõ lý do**. Nhân viên đọc câu đó là giải thích được ngay
-với khách đang thắc mắc 'sao hôm nay không cho tôi đỗ chỗ cũ'. Cùng một triết lý giải thích được
-như phần hệ chuyên gia."*
+**Nhấn dòng:** ③ và ④.
+
+**Nói:** *"Đây là thuật toán ra quyết định đa tiêu chí SAW, được trích dẫn nhiều nhất trong ngành
+Operations Research. Em chọn nó thay vì TOPSIS vì một lý do: điểm SAW giải thích được bằng một câu
+tiếng Việt mà nhân viên bãi xe đọc hiểu ngay — dòng ④. TOPSIS thì phải nói 'khoảng cách Euclidean
+đến phương án lý tưởng', người vận hành không hành động được với câu đó.*
+
+*Và toàn bộ trọng số không nằm trong code — nó nằm trong hệ chuyên gia, admin tự chỉnh. Đúng tinh
+thần Knowledge Acquisition ở phần trước."*
+
+> **Nếu thầy hỏi "chạy thật có khác gì code cũ không?"** — có, và em đo được: khi chỗ quen A09 bị
+> chiếm, hệ thống tự chuyển sang A46 là chỗ khách hay đỗ thứ nhì, điểm 1.000 / 0.969 / 0.960.
+> Chi tiết quá trình phát hiện và xử lý ghi ở `docs/THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md`.
 
 ---
 

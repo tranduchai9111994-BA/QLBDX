@@ -84,7 +84,7 @@ thể hiện rõ nguyên tắc này.
 | # | File | Việc làm |
 |---|---|---|
 | 1 | [pages/ParkingEntry.tsx](../frontend/src/pages/ParkingEntry.tsx) | Nhập biển số → tra cứu thông minh → chọn chỗ |
-| 2 | `GET /api/parking/smart-lookup/:plate` | Tự điền loại xe, gợi ý chỗ đỗ theo thói quen khách |
+| 2 | `GET /api/parking/smart-lookup/:plate` | Tự điền loại xe, gợi ý chỗ đỗ bằng thuật toán SAW (xem `utils/smartParkingAlgorithms.ts`) |
 | 3 | `POST /api/parking/entry` | |
 | 4 | [validators/parking.validator.ts](../backend/src/validators/parking.validator.ts) | Kiểm tra định dạng biển số |
 | 5 | [services/parking.service.ts](../backend/src/services/parking.service.ts) → `entry()` | 5 bước kiểm tra rồi tạo bản ghi |

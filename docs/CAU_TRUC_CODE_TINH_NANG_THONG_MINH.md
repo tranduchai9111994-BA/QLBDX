@@ -84,19 +84,27 @@ Tất cả smart features đều tuân theo 3 pattern nhất quán:
 
 ---
 
-## 2. Smart Lookup — Tra cứu thông minh & auto-fill
+## 2. Smart Lookup — Gợi ý chỗ đỗ bằng thuật toán SAW
 
-**File:** `backend/src/services/parking.service.ts` → hàm `smartLookup()` (dòng 510–623)
+**Thuật toán:** `backend/src/utils/smartParkingAlgorithms.ts` — SAW + Exponential Decay (hàm thuần tuý)
+**Nghiệp vụ:** `backend/src/services/parking.service.ts` → hàm `smartLookup()` (dòng 763–947)
 **API:** `GET /api/parking/smart-lookup/:plate`
-**Frontend:** `frontend/src/pages/ParkingEntry.tsx` (dòng 112–145)
+**Frontend:** `frontend/src/pages/ParkingEntry.tsx`
+**Kiểm thử:** `backend/src/utils/smartParkingAlgorithms.test.ts` — `npm run test:saw` (23 ca)
 
 ### Mục đích
 Khi nhân viên nhập biển số xe vào, hệ thống tự động:
 - Nhận diện khách quen / khách mới
-- Gợi ý chỗ đỗ phù hợp nhất (auto-fill vào form)
+- **Chấm điểm và xếp hạng mọi chỗ trống** bằng SAW, gợi ý chỗ điểm cao nhất (auto-fill vào form)
+- **Giải thích được** vì sao chọn chỗ đó
 - Hiển thị lịch sử và thói quen đỗ xe
 
-### Code mẫu Backend — 5 bước suy luận song song
+> **Thuật toán quốc tế**: SAW — Simple Additive Weighting (Fishburn 1967; Hwang & Yoon 1981),
+> có Exponential Decay Weighting (Holt 1957) làm bước tiền xử lý.
+> Lý do chọn: `docs/DE_XUAT_THUAT_TOAN_GOI_Y_CHO_DO_THONG_MINH.md`.
+> Vấn đề gặp khi triển khai + cách xử lý: `docs/THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md`.
+
+### Code mẫu Backend — các bước suy luận
 
 ```typescript
 // File: parking.service.ts — hàm smartLookup()
@@ -145,43 +153,51 @@ const [visitCount30Days, recentRecords, activePkg, availableSpots] = await Promi
 
 **Giải thích:** Promise.all nhận 1 mảng các Promise, chạy tất cả đồng thời, trả về mảng kết quả theo đúng thứ tự. Nếu 4 query mỗi cái mất 50ms, chạy tuần tự sẽ mất 200ms; dùng Promise.all chỉ mất ~50ms.
 
-### Code mẫu — Tìm khu vực ưa thích (Mode calculation)
+### Code mẫu — Mức ưa thích chỗ đỗ (Exponential Decay Weighting)
 
 ```typescript
 // ═══════════════════════════════════════════════════════════════
-// Bước 2: Tìm khu vực xe đỗ nhiều nhất (Mode — giá trị xuất hiện nhiều nhất)
-// Ví dụ: 30 lượt gần nhất → Khu A: 18 lần, Khu B: 8 lần, Khu C: 4 lần
-//        → preferredZone = "Khu A"
+// Bước 2: Chấm điểm "khách hay đỗ đâu" — KHÔNG đếm tần suất đơn thuần
+//
+// Vấn đề của phép đếm: lượt đỗ 29 ngày trước có trọng số BẰNG lượt hôm qua,
+// nên khách đổi thói quen thì hệ thống phải đợi rất lâu mới bám theo.
+//
+// Exponential Decay (Holt 1957): weight(i) = alpha * (1-alpha)^i
+//   i = 0 là lượt gần nhất  → weight = 0.300
+//   i = 1                    → weight = 0.210
+//   i = 2                    → weight = 0.147 ...
 // ═══════════════════════════════════════════════════════════════
 
-const zoneCounts = new Map<string, number>();   // Map lưu {tên khu → số lần}
-for (const r of recentRecords) {
-  const zoneName = r.parkingSpot?.zone?.name;
-  if (zoneName) {
-    // Nếu khu chưa có trong Map → khởi tạo 0, rồi +1
-    zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1);
-  }
+export function calcZonePreference(recentRecords, alpha = 0.3) {
+  const scores = new Map<string, number>();
+  recentRecords.forEach((record, index) => {
+    const zoneName = record.parkingSpot?.zone?.name;
+    if (!zoneName) return;
+    const weight = alpha * Math.pow(1 - alpha, index);
+    scores.set(zoneName, (scores.get(zoneName) || 0) + weight);
+  });
+  return scores;
 }
 
-// Tìm khu có số lần lớn nhất
-let preferredZone: string | null = null;
-let maxCount = 0;
-for (const [zone, count] of zoneCounts) {
-  if (count > maxCount) {
-    maxCount = count;
-    preferredZone = zone;   // → Đây là khu vực yêu thích
-  }
-}
+// Hàm song song calcSpotPreference() chấm điểm cho TỪNG CHỖ ĐỖ cụ thể
+// (cùng công thức, gom theo parkingSpotId thay vì theo tên khu)
 ```
 
-**Giải thích:** Đây là thuật toán "tìm mode" — giá trị xuất hiện nhiều nhất trong một tập dữ liệu. Dùng `Map` để đếm tần suất (frequency counting), sau đó duyệt 1 vòng tìm max. Độ phức tạp O(n).
+**Giải thích:** `Math.pow(1 - alpha, index)` làm trọng số giảm theo cấp số nhân khi đi ngược về quá
+khứ. Độ phức tạp vẫn O(n) như phép đếm cũ, nhưng kết quả **tự thích nghi**: khách chuyển sang khu
+mới thì sau vài lượt khu mới đã vượt lên, không cần đợi chiếm đa số trong 30 lượt.
 
-### Code mẫu — Gợi ý chỗ đỗ thông minh (ưu tiên khu quen)
+**Vì sao phải chấm điểm ở cả mức từng chỗ đỗ?** Bốn tiêu chí còn lại (C2–C5) đều là thuộc tính của
+**khu**, mà bộ lọc tương thích loại xe gần như luôn chỉ chừa lại **một khu duy nhất**. Nếu điểm ưa
+thích cũng chỉ ở mức khu thì mọi chỗ trống đều bằng điểm nhau và thuật toán vô nghĩa. Đo được trên
+dữ liệu thật: cả 45 chỗ trống của Khu A cùng ra 1.00 điểm. Chi tiết:
+`THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
+
+### Code mẫu — SAW: chấm điểm và xếp hạng chỗ đỗ
 
 ```typescript
 // ═══════════════════════════════════════════════════════════════
-// Bước 3: Gợi ý chỗ đỗ — ưu tiên khu vực yêu thích, fallback khu khác
-// Logic: Lọc chỗ trống tương thích loại xe → ưu tiên khu quen → nếu hết thì khu khác
+// Bước 3: Xây danh sách ứng viên với 5 tiêu chí
 // ═══════════════════════════════════════════════════════════════
 
 // Lọc: chỉ giữ các chỗ trống phù hợp loại xe (xe máy ↔ khu xe máy, ô tô ↔ khu ô tô)
@@ -189,29 +205,103 @@ const compatibleSpots = availableSpots.filter((s) =>
   isSpotCompatibleWithVehicleType(s, fullVehicle.vehicleType.name)
 );
 
-let suggestedSpotId: number | null = null;
-let suggestedSpotLabel: string | null = null;
-let suggestedSpotNote: string | null = null;
+const candidates: SpotCandidate[] = compatibleSpots.map((spot) => {
+  const zoneName = spot.zone?.name || '';
+  const stats = zoneStats.get(zoneName);
+  return {
+    spotId: spot.id,
+    spotNumber: spot.spotNumber,
+    zoneName,
+    // C1 — ưa thích: điểm KHU + điểm ĐÚNG CHỖ đó
+    zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
+    zoneAvailability: stats?.availability ?? 0,          // C2 — tỷ lệ còn trống
+    typeMatchScore: calcTypeMatch(spot, vehicleTypeName), // C3 — hợp loại xe
+    peakHourFit: hourlyPattern.get(zoneName) ?? 0.5,      // C4 — hợp khung giờ
+    currentOccupancy: stats?.occupancy ?? 0,              // C5 — độ đông (cost)
+  };
+});
 
-if (compatibleSpots.length > 0) {
-  // Ưu tiên: lấy chỗ đỗ trong khu vực yêu thích
-  const inPreferred = preferredZone
-    ? compatibleSpots.filter((s) => s.zone?.name === preferredZone)
-    : [];
+// ═══════════════════════════════════════════════════════════════
+// Bước 4: SAW — chuẩn hoá về [0,1] rồi tính tổng có trọng số
+// ═══════════════════════════════════════════════════════════════
 
-  // Nếu khu yêu thích còn chỗ → chọn chỗ đầu tiên; không thì fallback khu khác
-  const chosen = inPreferred[0] || compatibleSpots[0];
-  suggestedSpotId = chosen.id;
-  suggestedSpotLabel = `${chosen.zone?.name} — ${chosen.spotNumber}`;
+for (let j = 0; j < SAW_CRITERIA_COUNT; j++) {
+  const column = criteria.map((row) => row[j]);
+  const maxVal = Math.max(...column);
+  const minVal = Math.min(...column);
 
-  // Thông báo nếu phải chuyển khu
-  if (preferredZone && inPreferred.length === 0) {
-    suggestedSpotNote = `${preferredZone} đã hết chỗ phù hợp, gợi ý ${chosen.zone?.name} thay thế`;
+  for (let i = 0; i < candidates.length; i++) {
+    normalized[i][j] = IS_BENEFIT[j]
+      ? (maxVal > 0 ? criteria[i][j] / maxVal : 0)           // benefit: cao = tốt
+      : (criteria[i][j] > 0 ? minVal / criteria[i][j] : 1);  // cost: thấp = tốt
+  }
+}
+
+// Score = tổng có trọng số, rồi xếp hạng giảm dần
+const totalScore = w.reduce((sum, weight, j) => sum + weight * normalized[i][j], 0);
+results.sort((a, b) => b.totalScore - a.totalScore);
+
+const bestSpot = sawResults[0];
+suggestedSpotId = bestSpot.spotId;
+suggestedSpotNote = bestSpot.explanation;
+```
+
+**Giải thích:** Đây là toàn bộ SAW gói trong ba chục dòng. Phép chuẩn hoá đưa các tiêu chí có đơn vị
+hoàn toàn khác nhau (điểm decay, tỷ lệ %, điểm 0.5/1.0) về cùng thang [0, 1] để cộng được với nhau.
+Độ phức tạp O(n×m) với n = số chỗ trống, m = 5 tiêu chí — toàn bộ tính trong bộ nhớ, **không phát
+sinh query DB nào**.
+
+Ba chi tiết dễ bị bỏ qua:
+- `maxVal > 0 ? ... : 0` — khi cả cột bằng 0 (xe mới chưa có lịch sử) thì tránh chia cho 0.
+- `criteria[i][j] > 0 ? minVal / ... : 1` — với tiêu chí cost, giá trị 0 là hoàn hảo (khu trống trơn).
+- Điểm SAW là **điểm tương đối trong nhóm**, không phải thang tuyệt đối. Chỗ tốt nhất trên mọi tiêu
+  chí luôn đạt đúng 1.00, kể cả khi nó thực sự là một chỗ tồi. Vì vậy câu giải thích không ghi
+  "1.00/1.00" mà báo rõ thế hoà khi nhiều chỗ cùng điểm.
+
+### Code mẫu — Sinh câu giải thích (explainability)
+
+```typescript
+// Nêu 2 tiêu chí đóng góp nhiều điểm nhất
+const topFactors = spot.normalizedScores
+  .map((s, idx) => ({ name: CRITERIA_LABELS[idx], contribution: s * weights[idx] }))
+  .filter((f) => f.contribution > 0)
+  .sort((a, b) => b.contribution - a.contribution)
+  .slice(0, 2);
+
+// → "Điểm 1.00 — yếu tố chính: Mức ưa thích chỗ đỗ (35%), Tỷ lệ còn trống (25%)"
+
+// Nhiều chỗ hoà điểm đầu bảng → nói thẳng, không vờ có căn cứ riêng
+if (spot.rank === 1 && tiedAtTop > 1) {
+  return `Điểm ${score} — ${tiedAtTop} chỗ trống cùng mức điểm cao nhất, chọn chỗ đầu danh sách`;
+}
+```
+
+**Giải thích:** Đây là phần phân biệt hệ thống khuyến nghị **giải thích được** với một mô hình hộp
+đen. Nhân viên đọc câu này là nói lại được với khách vì sao hôm nay gợi ý chỗ khác.
+
+### Code mẫu — Trọng số đọc từ Hệ chuyên gia (không hardcode)
+
+```typescript
+// parking.service.ts → getSawConfig()
+private async getSawConfig(): Promise<{ weights: number[]; alpha: number }> {
+  const fallback = { weights: DEFAULT_SAW_WEIGHTS, alpha: DEFAULT_DECAY_ALPHA };
+  try {
+    const rules = await knowledgeBase.getRulesByDomain('parking_recommendation');
+    const params = rules.find((r) => r.code === 'PARKING_REC_WEIGHTS')?.actions[0]?.params;
+    if (!params) return fallback;
+
+    const weights = SAW_WEIGHT_KEYS.map((key) => params[key]);
+    if (weights.some((w) => typeof w !== 'number' || Number.isNaN(w))) return fallback;
+    ...
+  } catch {
+    return fallback;   // luật hỏng/bị tắt → vẫn chạy được
   }
 }
 ```
 
-**Giải thích:** Logic 2 tầng ưu tiên: (1) Khu vực quen thuộc, (2) Khu bất kỳ còn trống. Kèm thông báo giải thích nếu phải "lệch khu" — giúp nhân viên hiểu tại sao gợi ý khác thường.
+**Giải thích:** Admin chỉnh 5 trọng số + hệ số alpha trên màn **Cảnh báo → Cấu hình nâng cao**, hệ
+thống áp dụng ngay. `validateRule()` chặn lưu nếu tổng 5 trọng số khác 1.0. Chiều đọc luôn có
+fallback vì hàm này chạy mỗi lần nhân viên gõ biển số — không được phép chết vì một dòng cấu hình sai.
 
 ### Code mẫu Frontend — Auto-fill form khi lookup thành công
 
@@ -998,9 +1088,9 @@ Nhân viên nhập biển số "51F-123.45"
 [Backend] smartLookup()
         ├─ findVehicleByNormalizedPlate() → tìm xe trong DB
         ├─ Promise.all → 4 query song song
-        ├─ Mode calculation → preferredZone = "Khu A"
+        ├─ Exponential Decay → điểm ưa thích khu + từng chỗ
         ├─ isSpotCompatibleWithVehicleType() → lọc chỗ phù hợp
-        └─ Ưu tiên khu quen → suggestedSpotId = 42
+        └─ SAW chấm điểm 5 tiêu chí → xếp hạng → suggestedSpotId = 42
         │
         ▼
 [Frontend] auto-fill form:
@@ -1078,7 +1168,9 @@ Admin mở trang Dashboard
 |---|---|---|---|
 | 1 | **Rolling Window 30 ngày** | Mọi nơi | Dữ liệu luôn "tươi", không bị pha loãng bởi lịch sử cũ |
 | 2 | **Promise.all** | smartLookup, getAlerts, getInsights | Giảm latency bằng query song song |
-| 3 | **Mode calculation (Map + max)** | preferredZone, dominantType | Tìm giá trị phổ biến nhất — O(n) |
+| 3 | **SAW — Simple Additive Weighting** | Gợi ý chỗ đỗ (`scoreSAW`) | Ra quyết định đa tiêu chí, O(n×m) — Fishburn 1967 |
+| 3b | **Exponential Decay Weighting** | Mức ưa thích chỗ đỗ (`calcZonePreference`) | Trọng số suy giảm theo thời gian, O(n) — Holt 1957 |
+| 3c | **Mode calculation (Map + max)** | dominantType | Tìm giá trị phổ biến nhất — O(n) |
 | 4 | **Histogram + constrained argmax** | peakHours | Tìm peak trong miền giới hạn |
 | 5 | **Tiered rule evaluation** | Rule Engine | First-match từ nghiêm trọng nhất |
 | 6 | **Contextual anomaly detection** | parkingAnomaly | So sánh với trung bình theo nhóm, không chung |

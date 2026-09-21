@@ -14,7 +14,7 @@
  * lại khi bấm lưu, nên dù bản sao này có lệch thì dữ liệu vẫn không sai.
  */
 import React, { useMemo, useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Card, message, Row, Col, Tag, Table, Alert } from 'antd';
+import { Form, Input, Select, Button, Card, message, Row, Col, Tag, Table, Alert, Collapse } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
 import { AxiosError } from 'axios';
 import api from '../api/axios';
@@ -341,9 +341,62 @@ const ParkingEntry: React.FC = () => {
                 <div style={{ fontSize: '0.85rem', marginTop: 6 }}>
                   Đã tự động chọn chỗ đỗ gợi ý: <b>{smartInsights.suggestedSpotLabel}</b>
                   {smartInsights.suggestedSpotNote && (
-                    <span style={{ color: 'var(--warning)' }}> — {smartInsights.suggestedSpotNote}</span>
+                    <span style={{ color: 'var(--on-surface-variant)' }}> — {smartInsights.suggestedSpotNote}</span>
                   )}
                 </div>
+              )}
+              {/* Chi tiết chấm điểm: mặc định gập lại để không làm rối màn hình nhập liệu hằng
+                  ngày, nhưng mở ra được khi nhân viên muốn biết vì sao hệ thống chọn chỗ này. */}
+              {smartInsights.scoringDetails && smartInsights.scoringDetails.topCandidates.length > 0 && (
+                <Collapse
+                  ghost
+                  size="small"
+                  style={{ marginTop: 8 }}
+                  items={[
+                    {
+                      key: 'scoring',
+                      label: (
+                        <span style={{ fontSize: '0.85rem' }}>
+                          Vì sao chọn chỗ này?
+                          <Tag color="blue" style={{ marginLeft: 8 }}>SAW</Tag>
+                        </span>
+                      ),
+                      children: (
+                        <>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--on-surface-variant)', marginBottom: 8 }}>
+                            Thuật toán <b>{smartInsights.scoringDetails.algorithm}</b> — chấm điểm{' '}
+                            {smartInsights.scoringDetails.candidateCount} chỗ trống trên 5 tiêu chí:
+                            chỗ ưa thích {Math.round(smartInsights.scoringDetails.weights.zonePreference * 100)}%,
+                            còn trống {Math.round(smartInsights.scoringDetails.weights.zoneAvailability * 100)}%,
+                            loại xe {Math.round(smartInsights.scoringDetails.weights.typeMatch * 100)}%,
+                            giờ quen {Math.round(smartInsights.scoringDetails.weights.peakHourFit * 100)}%,
+                            độ vắng {Math.round(smartInsights.scoringDetails.weights.occupancy * 100)}%.
+                          </div>
+                          <Table
+                            size="small"
+                            rowKey="spotId"
+                            dataSource={smartInsights.scoringDetails.topCandidates}
+                            pagination={false}
+                            columns={[
+                              { title: '#', key: 'rank', width: 40, render: (_: unknown, __: unknown, i: number) => i + 1 },
+                              { title: 'Chỗ đỗ', dataIndex: 'spotNumber', key: 'spotNumber' },
+                              { title: 'Khu', dataIndex: 'zone', key: 'zone' },
+                              {
+                                title: 'Điểm',
+                                dataIndex: 'score',
+                                key: 'score',
+                                render: (v: number) => v.toFixed(3),
+                              },
+                            ]}
+                          />
+                          <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: 8 }}>
+                            Tham chiếu: {smartInsights.scoringDetails.references.join(' · ')}
+                          </div>
+                        </>
+                      ),
+                    },
+                  ]}
+                />
               )}
             </Card>
           )}

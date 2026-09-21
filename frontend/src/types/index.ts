@@ -276,6 +276,30 @@ export interface SmartLookupInsights {
   suggestedSpotId: number | null;
   suggestedSpotLabel: string | null;
   suggestedSpotNote: string | null;
+  scoringDetails: SawScoringDetails | null;
+}
+
+/** Chi tiết chấm điểm của thuật toán SAW — phần giải thích vì sao hệ thống chọn chỗ đỗ này. */
+export interface SawScoringDetails {
+  algorithm: string;
+  references: string[];
+  weights: {
+    zonePreference: number;
+    zoneAvailability: number;
+    typeMatch: number;
+    peakHourFit: number;
+    occupancy: number;
+  };
+  decayAlpha: number;
+  /** Tổng số chỗ trống đã được chấm điểm. */
+  candidateCount: number;
+  topCandidates: {
+    spotId: number;
+    spotNumber: string;
+    zone: string;
+    score: number;
+    explanation: string;
+  }[];
 }
 
 export interface SmartLookupResult {

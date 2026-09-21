@@ -3,6 +3,23 @@
  *
  * Dữ liệu do middleware `activityLogger` phía backend tự ghi khi có thao tác thay đổi dữ liệu,
  * kèm cả lần đăng nhập thành công và thất bại. Màn hình này chỉ đọc, không sửa được nhật ký.
+ *
+ * ===========================================================================================
+ * ĐIỂM THIẾT KẾ ĐÁNG NÊU KHI BẢO VỆ — nhật ký được ghi ở đâu:
+ *
+ * KHÔNG rải lệnh ghi log vào từng controller. Chỉ cần khai báo MỘT middleware ở route:
+ *     router.post('/', auth, activityLogger('vehicle'), controller.create)
+ * là mọi thao tác của route đó tự được ghi lại.
+ *
+ * Hai chi tiết trong middlewares/activityLogger.ts đáng nhắc:
+ *   - Ghi ở sự kiện `finish` (sau khi đã trả lời người dùng) -> không ai phải chờ việc ghi log.
+ *   - Bỏ qua request GET và request thất bại -> bảng nhật ký không phình lên vô ích.
+ *
+ * Vì sao màn hình này CHỈ ĐỌC: nhật ký là bằng chứng. Cho sửa hay xoá thì nó không còn giá trị
+ * đối chiếu — người làm sai chỉ việc xoá dấu vết của mình.
+ *
+ * Màn hình có ba phần: ba ô đếm theo mã HTTP -> thanh lọc + hai nút xuất file -> bảng nhật ký.
+ * ===========================================================================================
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -24,6 +41,11 @@ import { formatDateTime } from '../utils/dateFormat';
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
+// Bảng tra cấu hình hiển thị cho từng loại hành động: màu, nhãn tiếng Việt, biểu tượng.
+// Gom vào một hằng số thay vì viết if/else trong hàm render — thêm loại hành động mới chỉ cần
+// thêm một dòng ở đây, không phải sửa chỗ nào khác.
+// Chú ý LOGIN_FAILED: đăng nhập THẤT BẠI cũng được ghi, và đó là điểm quan trọng — nhiều lần
+// thất bại liên tiếp từ một IP chính là dấu hiệu có người đang dò mật khẩu.
 const ACTION_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
   LOGIN:        { color: 'success',   label: 'Đăng nhập',          icon: <LoginOutlined /> },
   LOGIN_FAILED: { color: 'error',     label: 'ĐN thất bại',        icon: <WarningOutlined /> },
@@ -32,6 +54,8 @@ const ACTION_CONFIG: Record<string, { color: string; label: string; icon: React.
   DELETE:       { color: 'error',     label: 'Xóa',                icon: <DeleteOutlined /> },
 };
 
+// Tên bảng trong DB -> tên nghiệp vụ tiếng Việt. Nhật ký lưu tên bảng ('ParkingRecords') vì đó
+// là thứ backend biết chắc; việc dịch sang chữ người đọc hiểu là phần của giao diện.
 const ENTITY_LABELS: Record<string, string> = {
   Users:            'Người dùng',
   Customers:        'Khách hàng',
@@ -55,8 +79,11 @@ interface Filters {
 }
 
 const ActivityLogs: React.FC = () => {
-  const [data, setData] = useState<ActivityLog[]>([]);
+  /* ══ KHỐI 1 — STATE ═══════════════════════════════════════════════════════════════════ */
+  const [data, setData] = useState<ActivityLog[]>([]);   // chỉ chứa dòng của TRANG hiện tại
   const { t } = useLanguage();
+  // `total` = tổng số dòng khớp bộ lọc, do backend đếm. Cần cho thanh phân trang biết vẽ bao
+  // nhiêu số trang — `data.length` chỉ là 20 dòng đang xem.
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -69,6 +96,16 @@ const ActivityLogs: React.FC = () => {
   });
   const [searchInput, setSearchInput] = useState('');
 
+  /* ══ KHỐI 2 — ĐỌC DỮ LIỆU ═════════════════════════════════════════════════════════════ */
+
+  /**
+   * Tải một trang nhật ký. TOÀN BỘ việc lọc và phân trang làm ở BACKEND — bảng nhật ký là bảng
+   * lớn nhất hệ thống (ghi mỗi thao tác của mọi người dùng, tăng không ngừng), không thể tải
+   * về trình duyệt rồi lọc.
+   *
+   * Nhận `f: Filters` qua THAM SỐ thay vì đọc thẳng state `filters`: hàm nằm trong useCallback,
+   * đọc state trực tiếp sẽ dính giá trị cũ ở lần tạo hàm (bẫy "stale closure") và bảng lọc sai.
+   */
   const fetchLogs = useCallback(async (currentPage: number, f: Filters) => {
     setLoading(true);
     try {
@@ -80,6 +117,8 @@ const ActivityLogs: React.FC = () => {
       if (f.entity) params.entity = f.entity;
       if (f.username) params.username = f.username;
       if (f.dateRange) {
+        // startOf/endOf để lấy TRỌN hai ngày biên; toISOString để backend và SQL Server hiểu
+        // đúng mốc thời gian bất kể máy người dùng đang ở múi giờ nào.
         params.from = f.dateRange[0].startOf('day').toISOString();
         params.to = f.dateRange[1].endOf('day').toISOString();
       }
@@ -87,6 +126,8 @@ const ActivityLogs: React.FC = () => {
       setData(res.data.data);
       setTotal(res.data.total);
     } catch {
+      // Lỗi thì xoá trắng bảng thay vì giữ dữ liệu cũ. Với màn hình đối soát, hiện dữ liệu cũ
+      // mà người dùng tưởng là kết quả của bộ lọc mới thì nguy hiểm hơn là hiện bảng rỗng.
       setData([]);
     } finally {
       setLoading(false);
@@ -115,6 +156,11 @@ const ActivityLogs: React.FC = () => {
     setFilters(f => ({ ...f, entity: value }));
   };
 
+  /* ══ KHỐI 3 — XỬ LÝ BỘ LỌC ════════════════════════════════════════════════════════════
+     Mọi hàm đổi bộ lọc đều gọi `setPage(1)` trước. Bắt buộc: đang ở trang 9 mà lọc lại, kết
+     quả mới có thể chỉ còn 2 trang -> trang 9 rỗng, người dùng tưởng không có dữ liệu.       */
+
+  /** Tìm theo tên đăng nhập. Chỉ CHỐT khi bấm nút/Enter, không gọi API theo từng ký tự gõ. */
   const handleSearch = () => {
     setPage(1);
     setFilters(f => ({ ...f, username: searchInput.trim() }));
@@ -126,11 +172,28 @@ const ActivityLogs: React.FC = () => {
     setFilters({ dateRange: null, action: undefined, entity: undefined, username: '' });
   };
 
-  // counts for summary cards
+  /* ══ KHỐI 4 — BA Ô ĐẾM THEO MÃ HTTP ═══════════════════════════════════════════════════
+     Đếm trên `data` = CHỈ TRANG ĐANG XEM, không phải toàn bộ kết quả. Cần nhớ điều này khi
+     đọc số: đó là "trong 20 dòng đang hiện có mấy dòng lỗi", không phải thống kê toàn kỳ.
+
+     Phân theo mã HTTP vì mã đó cho biết ngay việc đó THÀNH CÔNG hay bị TỪ CHỐI:
+       2xx = làm được   |   4xx/5xx = bị chặn hoặc lỗi   |   không có mã = bản ghi cũ
+     Nhiều dòng 4xx của cùng một tài khoản là dấu hiệu họ đang cố làm việc ngoài quyền hạn.
+
+     `!== null && !== undefined` chứ không viết gọn `d.statusCode &&`: mã 0 là giá trị hợp lệ
+     về mặt kiểu, viết gọn sẽ loại nhầm.                                                      */
   const statusSuccess = data.filter(d => d.statusCode !== null && d.statusCode !== undefined && d.statusCode >= 200 && d.statusCode < 300).length;
   const statusFailed  = data.filter(d => d.statusCode !== null && d.statusCode !== undefined && d.statusCode >= 400).length;
   const statusOther   = data.filter(d => !d.statusCode).length;
 
+  /* ══ KHỐI 5 — XUẤT FILE ═══════════════════════════════════════════════════════════════
+     Hai định dạng cho hai nhu cầu: CSV nhẹ, mở được bằng mọi công cụ, hợp để nạp vào hệ thống
+     khác; Excel giữ được độ rộng cột, hợp để đọc và in.
+
+     Cả hai chỉ xuất TRANG ĐANG XEM (mảng `data`), khác với màn hình Thanh toán gọi lại API để
+     lấy toàn bộ. Cần biết giới hạn này khi dùng để đối soát.                                 */
+
+  /** Xuất CSV bằng tay, không cần thư viện. */
   const handleExportCsv = () => {
     if (!data.length) return;
     const header = ['Thời gian', 'Người dùng', 'Hành động', 'Đối tượng', 'Thực thể ID', 'IP', 'HTTP', 'Mô tả'];
@@ -144,10 +207,18 @@ const ActivityLogs: React.FC = () => {
       d.statusCode || '',
       d.details || '',
     ]);
+    // Hai xử lý bắt buộc của định dạng CSV:
+    //   1. Bọc mọi ô trong dấu nháy kép, và nhân đôi dấu nháy có sẵn ("" ). Không làm thì một
+    //      dấu phẩy trong phần Mô tả sẽ bị hiểu là dấu ngăn cột và cả dòng lệch hết.
     const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    //   2. '\uFEFF' (BOM) đặt ở đầu file: không có nó, Excel trên Windows mở file ra sẽ hiện
+    //      tiếng Việt thành ký tự rác kiểu "Ngu?i dùng".
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
+    // Mẹo tải file phía trình duyệt: tạo một thẻ <a> ẩn, gán đường dẫn tạm rồi "bấm" bằng mã.
     const a = document.createElement('a'); a.href = url; a.download = `activity-logs-${dayjs().format('YYYYMMDD')}.csv`; a.click();
+    // Thu hồi đường dẫn tạm sau khi dùng xong, nếu không dữ liệu file vẫn nằm trong bộ nhớ
+    // trình duyệt cho tới khi đóng tab (rò rỉ bộ nhớ nếu xuất nhiều lần).
     URL.revokeObjectURL(url);
   };
 
@@ -166,6 +237,8 @@ const ActivityLogs: React.FC = () => {
       d.details || '',
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // Tự tính độ rộng từng cột = độ dài lớn nhất giữa tiêu đề và mọi ô trong cột đó. Không có
+    // đoạn này thì Excel để mọi cột rộng bằng nhau và cột Nội dung bị cắt cụt thành "###".
     ws['!cols'] = headers.map((h, i) => ({
       wch: Math.max(h.length + 2, ...rows.map(r => String(r[i] ?? '').length + 1)),
     }));
@@ -174,6 +247,7 @@ const ActivityLogs: React.FC = () => {
     XLSX.writeFile(wb, `activity-logs-${dayjs().format('YYYYMMDD')}.xlsx`);
   };
 
+  /* ══ KHỐI 6 — ĐỊNH NGHĨA CỘT BẢNG ═════════════════════════════════════════════════════ */
   const columns: ColumnsType<ActivityLog> = [
     {
       title: t('colTime'),
@@ -272,6 +346,9 @@ const ActivityLogs: React.FC = () => {
       key: 'statusCode',
       width: 100,
       align: 'center',
+      // Hiện thẳng mã HTTP thay vì dịch thành chữ: mã là thứ đối chiếu được với log của server
+      // khi cần điều tra sự cố. Màu để liếc nhanh: <300 xanh, <400 vàng, còn lại đỏ.
+      // Bản ghi cũ chưa có mã thì hiện gạch ngang, không hiện số 0 gây hiểu nhầm.
       render: (code: number | null) => {
         if (!code) return <span style={{ color: 'var(--outline)' }}>—</span>;
         const color = code < 300 ? 'success' : code < 400 ? 'warning' : 'error';
