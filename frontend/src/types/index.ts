@@ -507,7 +507,21 @@ export interface AnalyticsInsights {
   dayOfWeekAnalysis: { day: string; avgVehicles: number; avgRevenue: number }[];
   hourlyAnalysis: { hour: number; avgVehicles: number }[];
   zoneEfficiency: { zone: string; totalSpots: number; avgOccupancy: number; revenue: number; revenuePerSpot: number }[];
+  algorithmEffectiveness: AlgorithmEffectiveness;
   decisions: AnalyticsDecision[];
+}
+
+/** Hiệu quả thực đo của thuật toán gợi ý chỗ đỗ SAW trong kỳ đang xem. */
+export interface AlgorithmEffectiveness {
+  algorithm: string;
+  /** Số lượt xe vào CÓ gợi ý — mẫu số của tỷ lệ. Lượt không có gợi ý không được tính. */
+  sampleSize: number;
+  /** Số lượt nhân viên giữ nguyên chỗ hệ thống gợi ý. */
+  acceptedCount: number;
+  /** Số lượt nhân viên tự chọn chỗ khác. */
+  overriddenCount: number;
+  /** Tỷ lệ chấp nhận (%). `null` nghĩa là kỳ này chưa có lượt nào có gợi ý để tính. */
+  acceptanceRate: number | null;
 }
 
 export interface AlertItem {

@@ -154,6 +154,90 @@ const Analytics: React.FC = () => {
             <Table columns={zoneColumns} dataSource={data.zoneEfficiency} rowKey="zone" pagination={false} size="small" />
           </Card>
 
+          {/* Hiệu quả THỰC ĐO của thuật toán gợi ý chỗ đỗ.
+              Ô chọn chỗ ở màn Xe vào chỉ được điền sẵn chứ không khoá, nhân viên đổi tuỳ ý — nên
+              tỷ lệ họ giữ nguyên gợi ý chính là đánh giá của người dùng thật cho thuật toán. */}
+          <Card
+            title={<span>🎯 Hiệu quả thuật toán gợi ý chỗ đỗ <Tag color="blue">SAW</Tag></span>}
+            style={{ marginTop: 14 }}
+          >
+            {data.algorithmEffectiveness.acceptanceRate === null ? (
+              // Phân biệt rõ "chưa có dữ liệu" với "0% chấp nhận" — hai chuyện khác hẳn nhau.
+              // Chỉ số này chỉ đo được từ lúc tính năng ghi lại gợi ý được cài, dữ liệu lịch sử
+              // cũ không có nên không tính vào.
+              <Empty
+                description={
+                  <span>
+                    Kỳ này chưa có lượt xe vào nào kèm gợi ý để tính.
+                    <br />
+                    <span style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)' }}>
+                      Chỉ số đo từ lúc bật tính năng ghi nhận gợi ý trở đi — các lượt đỗ trước đó
+                      không lưu lại chỗ hệ thống đã gợi ý nên không tính được.
+                    </span>
+                  </span>
+                }
+              />
+            ) : (
+              <Row gutter={[24, 16]} align="middle">
+                <Col xs={24} md={8}>
+                  <div style={{ textAlign: 'center' }}>
+                    <Progress
+                      type="dashboard"
+                      percent={data.algorithmEffectiveness.acceptanceRate}
+                      strokeColor={
+                        data.algorithmEffectiveness.acceptanceRate >= 70
+                          ? 'var(--success, #52c41a)'
+                          : data.algorithmEffectiveness.acceptanceRate >= 40
+                            ? 'var(--warning, #faad14)'
+                            : 'var(--error, #ff4d4f)'
+                      }
+                    />
+                    <div style={{ fontWeight: 600, marginTop: 8 }}>Tỷ lệ chấp nhận gợi ý</div>
+                  </div>
+                </Col>
+                <Col xs={24} md={16}>
+                  {/* Không dùng class info-row/info-label: trong design-system.css chúng chỉ có
+                      tác dụng bên trong .info-panel, đặt ở đây nhãn và giá trị sẽ dính vào nhau. */}
+                  {[
+                    { label: 'Thuật toán', value: data.algorithmEffectiveness.algorithm },
+                    { label: 'Số lượt có gợi ý (mẫu)', value: data.algorithmEffectiveness.sampleSize },
+                    { label: 'Nhân viên giữ nguyên gợi ý', value: data.algorithmEffectiveness.acceptedCount },
+                    { label: 'Nhân viên tự chọn chỗ khác', value: data.algorithmEffectiveness.overriddenCount },
+                  ].map((row) => (
+                    <div
+                      key={row.label}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: 16,
+                        padding: '8px 0',
+                        borderBottom: '1px solid var(--outline-variant, rgba(0,0,0,0.06))',
+                      }}
+                    >
+                      <span style={{ color: 'var(--on-surface-variant)' }}>{row.label}</span>
+                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{row.value}</span>
+                    </div>
+                  ))}
+                  <p style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)', marginTop: 12, marginBottom: 0 }}>
+                    Nhân viên tại quầy nắm rõ thực tế bãi nhất và được quyền đổi chỗ tuỳ ý, nên tỷ
+                    lệ họ giữ nguyên gợi ý phản ánh trực tiếp mức độ sát thực tế của thuật toán.
+                    Tỷ lệ thấp là dấu hiệu nên xem lại trọng số 5 tiêu chí ở màn Cảnh báo → Cấu
+                    hình nâng cao.
+                    {data.algorithmEffectiveness.sampleSize < 30 && (
+                      <>
+                        {' '}
+                        <b>
+                          Mẫu hiện còn nhỏ ({data.algorithmEffectiveness.sampleSize} lượt) — con số
+                          chưa đủ tin cậy để kết luận.
+                        </b>
+                      </>
+                    )}
+                  </p>
+                </Col>
+              </Row>
+            )}
+          </Card>
+
           <Card
             title={<span><BulbOutlined style={{ color: 'var(--warning)' }} /> Gợi ý quyết định <Tag color="purple">DSS</Tag></span>}
             style={{ marginTop: 14 }}

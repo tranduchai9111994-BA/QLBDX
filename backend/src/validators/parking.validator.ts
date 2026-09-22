@@ -19,6 +19,14 @@ export const parkingEntrySchema = z.object({
   licensePlate: z.string().min(1, 'Vui lòng nhập biển số xe').regex(licensePlateRegex, 'Biển số không đúng định dạng (VD: 29A87642)'),
   vehicleTypeId: z.number().int().positive('Vui lòng chọn loại xe'),
   parkingSpotId: z.number().int().positive('Vui lòng chọn chỗ đỗ'),
+  /**
+   * Chỗ đỗ mà thuật toán SAW đã gợi ý ở bước tra cứu biển số, do frontend gửi kèm.
+   *
+   * Chỉ để THỐNG KÊ (đo acceptance rate), không tham gia nghiệp vụ — nhân viên chọn chỗ nào thì
+   * xe đỗ chỗ đó, trường này không ảnh hưởng gì tới việc chốt chỗ. Vì vậy để optional: form nhập
+   * tay không qua tra cứu, hoặc xe lạ không có gợi ý, thì bỏ trống là hợp lệ.
+   */
+  suggestedSpotId: z.number().int().positive().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 

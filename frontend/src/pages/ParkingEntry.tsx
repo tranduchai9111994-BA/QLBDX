@@ -180,7 +180,17 @@ const ParkingEntry: React.FC = () => {
   const onFinish = async (values: ParkingEntryForm) => {
     setLoading(true);
     try {
-      await api.post('/parking/entry', { ...values, licensePlate: normalizePlate(values.licensePlate) });
+      // Gửi kèm chỗ đỗ mà thuật toán đã gợi ý, để backend đo được acceptance rate (tỷ lệ nhân
+      // viên giữ nguyên gợi ý). Trường thống kê thuần tuý: nhân viên chọn chỗ nào thì xe đỗ chỗ
+      // đó, `suggestedSpotId` không ảnh hưởng gì tới việc chốt chỗ.
+      //
+      // Lấy từ `smartInsights` chứ không nhớ riêng một biến: state này được xoá mỗi khi tra cứu
+      // biển số khác hoặc tra không ra xe, nên không có nguy cơ gửi nhầm gợi ý của xe trước đó.
+      await api.post('/parking/entry', {
+        ...values,
+        licensePlate: normalizePlate(values.licensePlate),
+        suggestedSpotId: smartInsights?.suggestedSpotId ?? null,
+      });
       message.success('Ghi nhận xe vào thành công!');
       form.resetFields();
       setVehicleInfo(null);

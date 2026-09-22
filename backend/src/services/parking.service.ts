@@ -473,6 +473,9 @@ export class ParkingService {
           licensePlate: normalizedPlate,
           vehicleTypeId: effectiveVehicleTypeId,
           parkingSpotId: data.parkingSpotId,
+          // Ghi lại gợi ý của thuật toán để sau này đo acceptance rate. Trường thống kê thuần
+          // tuý — không tham gia nghiệp vụ chốt chỗ ở trên.
+          suggestedSpotId: data.suggestedSpotId ?? null,
           notes: data.notes ?? null,
           createdBy: createdByUserId,
           hourlyRateApplied: effectiveHourlyRate,

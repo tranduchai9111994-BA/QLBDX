@@ -6,7 +6,7 @@
 >
 > **Phân biệt với tài liệu kia**: `DE_XUAT_THUAT_TOAN_GOI_Y_CHO_DO_THONG_MINH.md` là bản **thiết
 > kế** (chọn thuật toán nào và vì sao). Tài liệu này là bản **thực thi** (làm rồi thì vỡ ra
-> những gì, sửa thế nào). Ở cuối có mục 8 liệt kê những chỗ code đã đi khác thiết kế ban đầu.
+> những gì, sửa thế nào). Ở cuối có mục 9 liệt kê những chỗ code đã đi khác thiết kế ban đầu.
 >
 > **Ngày lập**: 21/09/2026 · **Trạng thái**: đã chạy và nghiệm thu trên hệ thống thật qua **2 vòng
 > kiểm chứng** (vòng 1: luồng thuận CRUD; vòng 2: các hướng biên — xem mục 5.3 và 5.3b)
@@ -434,11 +434,93 @@ cd frontend && npx tsc --noEmit         # không lỗi kiểu
 | Với **khách hoàn toàn mới**, C1 = 0 cho mọi ứng viên, mà C2–C5 đều ở mức khu → vẫn hoà điểm toàn phần | Chấp nhận được: không có dữ liệu thì không có căn cứ phân biệt. Câu giải thích nói rõ "N chỗ cùng mức điểm cao nhất" thay vì vờ có lý do |
 | Phân loại khu vẫn dựa trên **dò từ khoá trong tên khu** (kế thừa từ `businessRules.ts`) | Đặt tên khu sai quy ước thì C3 đoán sai. Hướng sửa gốc: thêm cột phân loại vào bảng `ParkingZone` |
 | C4 chỉ dùng lịch sử **của riêng xe đó** | Xe ít lịch sử thì C4 gần như vô nghĩa. Có thể mở rộng sang thống kê toàn bãi theo giờ |
-| Chưa đo được hiệu quả | Nên bổ sung chỉ số **acceptance rate** — % lượt nhân viên giữ nguyên chỗ hệ thống gợi ý — làm bằng chứng định lượng cho báo cáo |
+| ~~Chưa đo được hiệu quả~~ | **ĐÃ LÀM 22/09/2026** — chỉ số acceptance rate trên trang Phân tích, xem mục 8 |
 
 ---
 
-## 8. Những chỗ code đã đi khác tài liệu thiết kế ban đầu
+## 8. Đo hiệu quả thuật toán — chỉ số acceptance rate
+
+> Bổ sung ngày 22/09/2026.
+
+### 8.1. Ý tưởng
+
+**Acceptance rate = % lượt nhân viên GIỮ NGUYÊN chỗ mà thuật toán gợi ý.**
+
+Vì sao con số này đo được chất lượng thuật toán: ô chọn chỗ ở màn Xe vào chỉ được **điền sẵn**
+chứ không khoá — nhân viên đổi tuỳ ý. Mà nhân viên đứng tại quầy là người nắm rõ thực tế bãi nhất
+(xe cồng kềnh, khách đi cùng nhóm, chỗ đang có vũng nước...). Nên tỷ lệ họ chấp nhận gợi ý chính
+là **phiếu bầu của người dùng thật** cho thuật toán.
+
+Cách đọc: tỷ lệ cao nghĩa là gợi ý sát thực tế. Tỷ lệ thấp nghĩa là thuật toán đang bỏ sót yếu tố
+nào đó mà nhân viên nhìn thấy — lúc đó nên xem lại trọng số 5 tiêu chí.
+
+### 8.2. Vướng mắc: không đo được từ dữ liệu cũ
+
+Trước đây gợi ý được tính lúc tra cứu biển số rồi **bỏ đi**, không lưu ở đâu. Bảng `ParkingRecords`
+chỉ có `ParkingSpotId` (chỗ thực tế), không có chỗ nào ghi chỗ được gợi ý. Nên 43.783 bản ghi lịch
+sử **không dùng được** — chỉ số chỉ đo được từ lúc cài trở đi.
+
+Đây là hạn chế cố hữu, không phải thiếu sót của cách cài đặt: không thể tính ngược lại "lúc đó máy
+đã gợi ý gì" vì trạng thái bãi ở thời điểm đó đã không còn.
+
+### 8.3. Cách xử lý
+
+**Thêm cột `SuggestedSpotId`** vào `ParkingRecords` (migration `20260922000000_add_suggested_spot_id`).
+Ba quyết định thiết kế:
+
+| Quyết định | Lý do |
+|---|---|
+| Cho phép NULL | Bản ghi cũ, xe lạ không có gợi ý, hoặc nhân viên nhập tay không qua tra cứu |
+| **Không** đặt khoá ngoại tới `ParkingSpots` | Đây là ảnh chụp quyết định của thuật toán tại một thời điểm, mang tính lịch sử. Đặt khoá ngoại thì xoá một chỗ đỗ sẽ vướng ràng buộc lên toàn bộ lịch sử gợi ý |
+| Bản ghi NULL bị **loại khỏi** phép tính | Không có gợi ý thì không nói lên điều gì về chất lượng thuật toán — không được tính là "nhân viên từ chối gợi ý" |
+
+**Luồng dữ liệu**: frontend gửi kèm `suggestedSpotId` khi bấm Ghi nhận xe vào, lấy từ state
+`smartInsights` (state này bị xoá mỗi khi tra biển số khác, nên không gửi nhầm gợi ý của xe trước).
+Backend lưu vào bản ghi. Trường này **thuần thống kê** — không tham gia nghiệp vụ chốt chỗ.
+
+**Tính toán** ở `analytics.service.ts → getInsights()`, trả về trong trường `algorithmEffectiveness`:
+
+```ts
+const suggestionSampleSize = suggestedRecords.length;
+const acceptedCount = suggestedRecords.filter((r) => r.suggestedSpotId === r.parkingSpotId).length;
+```
+
+**Trả `null` chứ không trả 0** khi chưa có mẫu nào — để giao diện phân biệt được "chưa có dữ liệu"
+với "gợi ý bị từ chối hoàn toàn". Hai chuyện khác hẳn nhau.
+
+### 8.4. Hiển thị
+
+Trang **Quản trị → Phân tích & Gợi ý**, thẻ *"Hiệu quả thuật toán gợi ý chỗ đỗ"*:
+đồng hồ tỷ lệ (xanh ≥70%, vàng 40–70%, đỏ <40%), bảng số liệu (mẫu / giữ nguyên / đổi chỗ), và
+cảnh báo khi mẫu < 30 lượt rằng con số **chưa đủ tin cậy để kết luận**.
+
+Chưa có dữ liệu thì hiện thông báo giải thích rõ vì sao, không hiện 0%.
+
+### 8.5. Kiểm chứng (22/09/2026)
+
+| Bước | Cách làm | Kết quả |
+|---|---|---|
+| Chưa có dữ liệu | Gọi API ngay sau khi cài | `acceptanceRate: null`, `sampleSize: 0` ✓ |
+| Ca giữ nguyên gợi ý | Qua **giao diện**: tra `59G22334` → máy gợi ý B29 → bấm lưu | Ghi `suggestedSpotId=79, parkingSpotId=79` ✓ |
+| Ca đổi chỗ | Qua **API**: gợi ý C14 (id 94), chọn C11 (id 91) | Ghi `suggestedSpotId=94, parkingSpotId=91` ✓ |
+| Tính toán | Gọi lại API | `sampleSize: 2, acceptedCount: 1, acceptanceRate: 50` ✓ |
+| Giao diện | Mở trang Phân tích | Đồng hồ 50% màu vàng, đủ 4 dòng số liệu, có cảnh báo mẫu nhỏ ✓ |
+
+> **Ghi chú trung thực về ca "đổi chỗ"**: tạo bằng API chứ không bấm tay trên giao diện, vì dropdown
+> chọn chỗ của antd không điều khiển được ổn định qua công cụ tự động. Ca này **không đi qua đoạn
+> code mới nào ở frontend** — vẫn cùng một request, chỉ khác giá trị `parkingSpotId` do người dùng
+> chọn — nên kiểm bằng API là tương đương về mặt code được kiểm.
+
+### 8.6. Hạn chế của chính chỉ số này
+
+- **Chỉ thấy kết quả cuối**: nhân viên đổi chỗ rồi đổi lại về đúng gợi ý thì vẫn tính là "giữ nguyên".
+- **Không phân biệt lý do đổi**: đổi vì gợi ý dở, hay vì lý do ngoài dữ liệu (khách yêu cầu chỗ gần
+  cổng) đều tính như nhau. Tỷ lệ thấp là **dấu hiệu để xem lại**, không phải bằng chứng thuật toán sai.
+- **Cần thời gian tích luỹ**: dưới 30 lượt thì con số dao động mạnh, giao diện đã cảnh báo sẵn.
+
+---
+
+## 9. Những chỗ code đã đi khác tài liệu thiết kế ban đầu
 
 > **Cập nhật 21/09/2026**: toàn bộ các lệch dưới đây **đã được đồng bộ ngược vào tài liệu**. Bảng
 > này giữ lại như nhật ký thay đổi — để biết thiết kế ban đầu nói gì và vì sao phải đổi. Các file

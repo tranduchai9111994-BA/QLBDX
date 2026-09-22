@@ -848,13 +848,26 @@ Câu giải thích ngắn gọn của chỗ được chọn hiển thị ngay tr
 > Đã tự động chọn chỗ đỗ gợi ý: **Khu B — B29** — Điểm 1.00 — yếu tố chính: Mức ưa thích chỗ đỗ
 > (35%), Tỷ lệ còn trống (25%)
 
-### 8.2. Trang Analytics — hướng mở rộng (CHƯA làm)
+### 8.2. Trang Analytics — chỉ số acceptance rate (ĐÃ LÀM 22/09/2026)
 
-Có thể thêm 1 panel trên trang Analytics (`/analytics`) hiển thị:
-- Tên thuật toán đang dùng (SAW) và công thức `Score = Σ wⱼ × rᵢⱼ`
-- Trọng số hiện tại (đọc từ ExpertRules) — dạng biểu đồ cột để thấy tiêu chí nào đang chi phối
-- Thống kê 7 ngày qua: bao nhiêu % lượt nhân viên **giữ nguyên** chỗ hệ thống gợi ý
-  → đây là chỉ số đo chất lượng gợi ý (acceptance rate), dùng để bảo vệ hiệu quả thuật toán
+Thẻ **"Hiệu quả thuật toán gợi ý chỗ đỗ"** trên trang Phân tích (`/analytics`) hiển thị:
+
+- **Tỷ lệ chấp nhận gợi ý** — % lượt nhân viên giữ nguyên chỗ hệ thống gợi ý, dạng đồng hồ
+  (xanh ≥70%, vàng 40–70%, đỏ <40%)
+- Tên thuật toán, cỡ mẫu, số lượt giữ nguyên, số lượt đổi chỗ
+- Cảnh báo khi mẫu < 30 lượt rằng con số chưa đủ tin cậy
+
+Đây là chỉ số **định lượng** để đánh giá thuật toán: ô chọn chỗ chỉ được điền sẵn chứ không khoá,
+nhân viên đổi tuỳ ý — nên tỷ lệ họ chấp nhận chính là đánh giá của người dùng thật.
+
+**Cách cài**: thêm cột `SuggestedSpotId` vào `ParkingRecords` để ghi lại gợi ý của thuật toán tại
+thời điểm xe vào, rồi so với `ParkingSpotId` (chỗ thực tế). Chi tiết thiết kế, các quyết định về
+kiểu dữ liệu và kết quả kiểm chứng: `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 8.
+
+> **Giới hạn**: chỉ đo được từ ngày cài trở đi. Dữ liệu lịch sử không lưu gợi ý nên không tính được.
+
+**Hướng mở rộng tiếp (chưa làm)**: biểu đồ cột trọng số hiện tại để thấy tiêu chí nào đang chi phối;
+tách acceptance rate theo loại xe hoặc theo khung giờ để biết thuật toán yếu ở nhóm nào.
 
 ---
 
@@ -868,7 +881,7 @@ Có thể thêm 1 panel trên trang Analytics (`/analytics`) hiển thị:
 | **Giải thích được (Explainability)** | Trường `explanation` cho mỗi kết quả | "Điểm 0.76 — yếu tố chính: Mức ưa thích chỗ đỗ (35%)". Khi nhiều chỗ hoà điểm thì nói thẳng là hoà, không vờ có căn cứ |
 | **Thích nghi theo thời gian** | Exponential Decay + rolling window 30 ngày | Hành vi mới tự động ảnh hưởng mạnh hơn hành vi cũ |
 | **Cấu hình được** | Trọng số lưu trong ExpertRules, admin chỉnh qua UI | Mỗi bãi xe có thể đặt trọng số khác nhau — Knowledge Acquisition |
-| **Đo được hiệu quả** | Acceptance rate: % lượt nhân viên giữ nguyên gợi ý | Chỉ số định lượng để đánh giá thuật toán — **chưa cài, xem mục 8.2** |
+| **Đo được hiệu quả** | Acceptance rate: % lượt nhân viên giữ nguyên gợi ý | Chỉ số định lượng để đánh giá thuật toán — đã cài trên trang Phân tích, xem mục 8.2 |
 
 ---
 

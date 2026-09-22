@@ -248,6 +248,17 @@ model ParkingRecord {
   hourlyRateApplied Decimal?  @map("HourlyRateApplied") @db.Decimal(10, 2)
   dailyRateApplied  Decimal?  @map("DailyRateApplied") @db.Decimal(10, 2)
   status            String    @default("parked") @map("Status") @db.NVarChar(20)
+  /// Chỗ đỗ mà thuật toán SAW đã GỢI Ý lúc ghi nhận xe vào — dùng để đo acceptance rate
+  /// (tỷ lệ nhân viên giữ nguyên gợi ý). So với `parkingSpotId` (chỗ đỗ THỰC TẾ) để biết
+  /// nhân viên có đổi hay không.
+  ///
+  /// Cố ý KHÔNG đặt khoá ngoại: đây là ảnh chụp quyết định của thuật toán tại một thời điểm,
+  /// mang tính lịch sử, không dùng để tra ngược lại chỗ đỗ.
+  ///
+  /// Null khi: bản ghi có trước tính năng này, hoặc hệ thống không đưa ra gợi ý nào (xe lạ),
+  /// hoặc nhân viên nhập tay không qua bước tra cứu biển số. Các bản ghi null bị loại khỏi
+  /// phép tính acceptance rate.
+  suggestedSpotId   Int?      @map("SuggestedSpotId")
   notes             String?   @map("Notes") @db.NVarChar(500)
   createdBy         Int?      @map("CreatedBy")
   createdAt         DateTime  @default(now()) @map("CreatedAt")

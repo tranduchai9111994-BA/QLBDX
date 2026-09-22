@@ -53,7 +53,15 @@ export class AnalyticsService {
     const { start, end, label } = rangeForPeriod(period);
     const daysInRange = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
 
-    const [allRecords, completedRecords, zones, occupancyRecords, since30Records, activePackageCustomerIds] = await Promise.all([
+    const [
+      allRecords,
+      completedRecords,
+      zones,
+      occupancyRecords,
+      since30Records,
+      activePackageCustomerIds,
+      suggestedRecords,
+    ] = await Promise.all([
       prisma.parkingRecord.findMany({
         where: { entryTime: { gte: start, lte: end } },
         select: { entryTime: true },
@@ -87,6 +95,14 @@ export class AnalyticsService {
       prisma.customerPackage.findMany({
         where: { status: 'active', startDate: { lte: end }, endDate: { gte: end } },
         select: { customerId: true },
+      }),
+      // Các lượt xe vào trong kỳ mà hệ thống CÓ đưa ra gợi ý chỗ đỗ — mẫu số của acceptance rate.
+      // Lọc suggestedSpotId khác null ngay ở truy vấn: bản ghi không có gợi ý (dữ liệu trước khi
+      // có tính năng này, xe lạ, hoặc nhân viên nhập tay) không nói lên điều gì về chất lượng
+      // thuật toán nên phải loại khỏi phép tính, không được tính là "từ chối gợi ý".
+      prisma.parkingRecord.findMany({
+        where: { entryTime: { gte: start, lte: end }, suggestedSpotId: { not: null } },
+        select: { suggestedSpotId: true, parkingSpotId: true },
       }),
     ]);
 
@@ -294,12 +310,42 @@ export class AnalyticsService {
       });
     }
 
+    // --- Hiệu quả thuật toán gợi ý chỗ đỗ (SAW) ---------------------------------------------
+    //
+    // ACCEPTANCE RATE = % lượt nhân viên GIỮ NGUYÊN chỗ mà thuật toán gợi ý.
+    //
+    // Vì sao chỉ số này đo được chất lượng thuật toán: nhân viên đứng tại quầy là người nắm rõ
+    // thực tế bãi nhất (xe cồng kềnh, khách đi cùng nhóm, chỗ đang có vũng nước...). Họ được
+    // quyền đổi chỗ tuỳ ý — ô chọn chỗ chỉ được điền sẵn chứ không khoá. Nên tỷ lệ họ chấp nhận
+    // gợi ý chính là "phiếu bầu" của người dùng thật cho thuật toán.
+    //
+    // Cách đọc con số: tỷ lệ cao nghĩa là gợi ý sát thực tế; tỷ lệ thấp nghĩa là thuật toán đang
+    // bỏ sót yếu tố nào đó mà nhân viên nhìn thấy — lúc đó nên xem lại trọng số 5 tiêu chí.
+    //
+    // LƯU Ý khi đọc: chỉ tính trên các lượt CÓ gợi ý (mẫu số = suggestedRecords.length). Toàn bộ
+    // bản ghi trước khi có tính năng này không lưu gợi ý nên không nằm trong phép tính — kỳ nào
+    // chưa phát sinh lượt nào có gợi ý thì trả về null chứ không trả 0, để giao diện phân biệt
+    // được "chưa có dữ liệu" với "gợi ý bị từ chối hoàn toàn".
+    const suggestionSampleSize = suggestedRecords.length;
+    const acceptedCount = suggestedRecords.filter((r) => r.suggestedSpotId === r.parkingSpotId).length;
+    const algorithmEffectiveness = {
+      algorithm: 'SAW — Simple Additive Weighting',
+      sampleSize: suggestionSampleSize,
+      acceptedCount,
+      overriddenCount: suggestionSampleSize - acceptedCount,
+      acceptanceRate:
+        suggestionSampleSize > 0
+          ? Math.round((acceptedCount / suggestionSampleSize) * 1000) / 10
+          : null,
+    };
+
     return {
       period: label,
       summary,
       dayOfWeekAnalysis,
       hourlyAnalysis,
       zoneEfficiency,
+      algorithmEffectiveness,
       decisions,
     };
   }
