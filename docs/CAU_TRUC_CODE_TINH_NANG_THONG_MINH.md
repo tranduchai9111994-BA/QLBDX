@@ -188,9 +188,10 @@ khứ. Độ phức tạp vẫn O(n) như phép đếm cũ, nhưng kết quả *
 mới thì sau vài lượt khu mới đã vượt lên, không cần đợi chiếm đa số trong 30 lượt.
 
 **Vì sao phải chấm điểm ở cả mức từng chỗ đỗ?** Bốn tiêu chí còn lại (C2–C5) đều là thuộc tính của
-**khu**, mà bộ lọc tương thích loại xe gần như luôn chỉ chừa lại **một khu duy nhất**. Nếu điểm ưa
-thích cũng chỉ ở mức khu thì mọi chỗ trống đều bằng điểm nhau và thuật toán vô nghĩa. Đo được trên
-dữ liệu thật: cả 45 chỗ trống của Khu A cùng ra 1.00 điểm. Chi tiết:
+**khu**, nên mọi chỗ nằm trong cùng một khu bằng điểm nhau. Nếu điểm ưa thích cũng chỉ ở mức khu
+thì thuật toán không phân biệt được chỗ nào với chỗ nào. Bộ lọc loại xe càng làm rõ vấn đề vì nó
+thu hẹp ứng viên về rất ít khu (Khu A cho xe hai bánh, Khu B cho ô tô, Khu C cho xe lớn, Khu D
+nhận mọi loại). Đo được trên dữ liệu thật: cả 45 chỗ trống của Khu A cùng ra 1.00 điểm. Chi tiết:
 `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
 
 ### Code mẫu — SAW: chấm điểm và xếp hạng chỗ đỗ

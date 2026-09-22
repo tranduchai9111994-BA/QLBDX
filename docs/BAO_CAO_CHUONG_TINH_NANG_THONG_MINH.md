@@ -883,6 +883,11 @@ người vận hành. Lập luận đầy đủ xem `docs/DE_XUAT_THUAT_TOAN_GOI
 | C4 | Phù hợp khung giờ quen | Benefit | 0.10 | Tỷ lệ lượt đỗ rơi vào khung giờ hiện tại (±1h) |
 | C5 | Mức độ đông đúc của khu | **Cost** | 0.10 | Số chỗ đang có xe / tổng chỗ của khu |
 
+> **Hạn chế đã ghi nhận**: C2 và C5 đo cùng một đại lượng (`occupancy = 1 − availability`), tức vi
+> phạm giả định "các tiêu chí độc lập" mà tài liệu học thuật về SAW đã nêu. Hệ thống đã cân nhắc và
+> quyết định giữ nguyên vì khi mọi ứng viên cùng một khu thì hai tiêu chí này không ảnh hưởng thứ
+> hạng. Phân tích đầy đủ: `docs/THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 4.1.
+
 ### 4.8.4. Cài đặt
 
 **Mã nguồn 4.11** — `backend/src/utils/smartParkingAlgorithms.ts`
@@ -945,10 +950,10 @@ chí: với tiêu chí benefit thì giá trị lớn nhất được 1 điểm, 
 
 **(3)** Điểm C1 được cộng từ hai mức — điểm của khu và điểm của **đúng chỗ đó**. Chi tiết này không
 có trong thiết kế ban đầu mà phát sinh sau khi chạy thử trên dữ liệu thật: bốn tiêu chí C2-C5 đều
-là thuộc tính của khu, trong khi bộ lọc tương thích loại xe gần như luôn chỉ chừa lại một khu duy
-nhất, nên nếu C1 cũng chỉ ở mức khu thì **mọi chỗ trống đều bằng điểm nhau** và thuật toán thoái
-hoá về đúng hành vi cũ. Quá trình phát hiện và xử lý ghi ở
-`docs/THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
+là thuộc tính của khu, nên **mọi chỗ trong cùng một khu bằng điểm nhau**. Nếu C1 cũng chỉ ở mức
+khu thì thuật toán không phân biệt được chỗ nào với chỗ nào và thoái hoá về đúng hành vi cũ. Đo
+trên dữ liệu thật: cả 45 chỗ trống của Khu A cùng đạt 1.00 điểm. Quá trình phát hiện và xử lý ghi
+ở `docs/THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
 
 ### 4.8.5. Tính giải thích được
 

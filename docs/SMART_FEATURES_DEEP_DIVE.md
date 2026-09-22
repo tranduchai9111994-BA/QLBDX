@@ -193,8 +193,9 @@ Khi nhân viên gõ xong biển số ở màn Xe vào, hệ thống gọi `smart
    ```ts
    zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
    ```
-   Phải có thành phần "đúng chỗ" thì thuật toán mới phân biệt được các chỗ trong cùng một khu — lý do đầy đủ
-   xem `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
+   Phải có thành phần "đúng chỗ" thì thuật toán mới phân biệt được các chỗ trong cùng một khu: bốn
+   tiêu chí còn lại đều là thuộc tính của khu nên chúng bằng nhau ở mọi chỗ trong khu đó. Lý do đầy
+   đủ kèm số liệu đo được: `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 3.1.
 4. **Gói dịch vụ đang hiệu lực** (`hasActivePackage`, `packageExpiry`) — tra `CustomerPackage` còn hạn.
 5. **Gợi ý chỗ đỗ cụ thể** (`suggestedSpotId`) — đây là bước "thông minh" nhất, và là nơi chạy thuật toán
    ra quyết định đa tiêu chí **SAW (Simple Additive Weighting)** — Fishburn 1967; Hwang & Yoon 1981.
@@ -209,6 +210,9 @@ Khi nhân viên gõ xong biển số ở màn Xe vào, hệ thống gọi `smart
    | C3 — Độ tương thích loại xe | Benefit | 0.20 |
    | C4 — Phù hợp khung giờ quen | Benefit | 0.10 |
    | C5 — Mức độ đông đúc của khu | Cost | 0.10 |
+
+   > C2 và C5 đo cùng một đại lượng (`occupancy = 1 − availability`) — hạn chế đã ghi nhận, quyết
+   > định giữ nguyên. Xem `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 4.1.
 
    Công thức: chuẩn hoá mọi tiêu chí về [0,1] (benefit chia cho max, cost lấy min chia cho giá trị), rồi
    `Score = Σ (wⱼ × rᵢⱼ)`. Chỗ điểm cao nhất được gợi ý.

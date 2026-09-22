@@ -83,8 +83,19 @@ Hai sự thật cộng lại:
    C1 (khu ưa thích), C2 (tỷ lệ trống của khu), C3 (loại xe của khu), C4 (giờ quen ở khu),
    C5 (độ đông của khu) — mọi chỗ trong cùng một khu có giá trị y hệt nhau.
 
-2. **Bộ lọc tương thích loại xe gần như luôn chỉ chừa lại đúng MỘT khu.**
-   Đo trên dữ liệu thật:
+2. **Bộ lọc tương thích loại xe thu hẹp ứng viên về rất ít khu.**
+   Mỗi khu được suy ra một nhóm từ tên khu (`getSpotCategory`):
+
+   | Khu | Nhóm | Nhận loại xe |
+   |---|---|---|
+   | Khu A | `two-wheel` | xe máy, xe máy điện |
+   | Khu B | `car` | ô tô con, ô tô điện, xe bán tải |
+   | Khu C | `large-car` | xe tải, xe khách |
+   | Khu D | `any` | **mọi loại xe** (tên "Khu D" không khớp từ khoá nào) |
+
+   Nên về nguyên tắc ứng viên trải trên **hai khu**: khu chuyên dụng + Khu D. Nhưng đo trên dữ
+   liệu thật lúc phát hiện lỗi, Khu D **đang đầy 100%** (0/10 chỗ trống), nên thực tế chỉ còn
+   một khu:
 
    | Biển số | Loại xe | Số ứng viên sau lọc | Khu |
    |---|---|---|---|
@@ -93,7 +104,11 @@ Hai sự thật cộng lại:
    | 51FB5566 | Xe khách | 19 | chỉ Khu C (Khu C trống đúng 19) |
 
    Con số ứng viên **khớp chính xác** số chỗ trống của một khu → xác nhận toàn bộ ứng viên nằm
-   trong một khu duy nhất.
+   trong một khu duy nhất tại thời điểm đó.
+
+   > Kể cả khi Khu D có chỗ trống, lập luận vẫn đúng: phần lớn ứng viên vẫn dồn vào khu chuyên
+   > dụng, và **trong nội bộ mỗi khu** thì C2–C5 vẫn bằng nhau ở mọi chỗ. Không có tín hiệu ở
+   > mức từng chỗ đỗ thì các chỗ cùng khu vẫn hoà điểm.
 
 Khi mọi ứng viên có 5 giá trị tiêu chí giống hệt nhau, phép chuẩn hoá của SAW cho ra kết quả:
 
@@ -319,13 +334,50 @@ hệ thống chặn với thông báo:
 | C4 | Phù hợp khung giờ quen | Benefit | 0.10 | Giờ vào của 30 lượt gần nhất (±1h, vòng tròn) |
 | C5 | Mức độ đông đúc của khu | **Cost** | 0.10 | Toàn bộ bảng `ParkingSpot` |
 
-> **Ghi chú trung thực về C2 và C5**: hiện `occupancy = 1 − availability`, nên hai tiêu chí này là
-> **cùng một đại lượng** nhìn từ hai chiều. Về mặt mô hình, C2 và C5 đang đếm trùng: tổng ảnh
-> hưởng của "khu còn bao nhiêu chỗ" thực chất là 0.25 + 0.10 = 0.35 chứ không phải 0.25. Điều này
-> không gây sai kết quả (chỉ là phân bổ trọng số), nhưng nếu muốn mô hình sạch thì nên **bỏ C5 và
-> dồn trọng số vào C2**, hoặc định nghĩa lại C5 thành một đại lượng khác thật sự (ví dụ tốc độ lấp
-> đầy của khu trong 1 giờ qua). Chưa làm vì đó là thay đổi mô hình, cần thống nhất với tài liệu
-> thiết kế trước.
+### 4.1. C2 và C5 đo cùng một đại lượng — đã cân nhắc, quyết định GIỮ NGUYÊN
+
+Trong code, `occupancy = 1 − availability`. Nghĩa là C2 và C5 là **cùng một con số nhìn từ hai
+phía**, không phải hai tiêu chí độc lập. Đây là vi phạm giả định "các tiêu chí độc lập" mà tài
+liệu học thuật về SAW đã nêu (xem `NGUON_GOC_THUAT_TOAN_SAW.md` mục 5.3).
+
+**Ba hệ quả đã đo được:**
+
+**(a) Bảng trọng số không phản ánh đúng ảnh hưởng thật.** Tài liệu ghi "khu còn trống: 0.25",
+nhưng ảnh hưởng thật là 0.25 + 0.10 = **0.35**. Admin muốn tắt hẳn yếu tố này phải đặt **cả hai**
+C2 và C5 về 0; đặt mỗi C2 = 0 vẫn còn 0.10 ảnh hưởng.
+
+**(b) Vách đứng khi có khu trống hoàn toàn.** Đây là hệ quả cụ thể nhất. Công thức chuẩn hoá tiêu
+chí cost là `min(x) ÷ x`. Nếu một khu trống 100% thì `occupancy = 0`, kéo `min = 0`, khiến **mọi
+khu khác đều nhận 0 điểm** ở C5 bất kể chúng vắng đến đâu:
+
+```
+Khu A: độ đông 0.10 (vắng 90%)  →  C2 chuẩn hoá = 0.900   C5 chuẩn hoá = 0.000  ← vô lý
+Khu D: độ đông 0.00 (vắng 100%) →  C2 chuẩn hoá = 1.000   C5 chuẩn hoá = 1.000
+```
+
+C5 lúc đó biến từ thang đo liên tục thành công tắc bật/tắt "có phải khu trống nhất không". C2
+không có vấn đề này vì dùng `x ÷ max(x)`, mà `max` không bao giờ bằng 0 khi còn chỗ trống.
+
+**(c) Điểm yếu khi bảo vệ.** Nếu bị hỏi "hệ thống có vi phạm giả định tiêu chí độc lập không",
+câu trả lời trung thực là **có, và rõ ràng nhất có thể**.
+
+**Quyết định: giữ nguyên 5 tiêu chí.** Lý do:
+
+- Hai hệ quả (a) và (b) **chỉ phát sinh khi ứng viên trải trên từ hai khu trở lên**. Khi mọi ứng
+  viên cùng một khu — tình huống thường gặp nhất — C2 và C5 bằng nhau ở mọi ứng viên, chuẩn hoá
+  thành 1 cho tất cả, và chỉ đóng góp một hằng số 0.35 vào mọi chỗ. **Không ảnh hưởng thứ hạng.**
+- Đã đo thử kịch bản hai khu với cả hai cách tính (giữ C5 và gộp vào C2): **không có đảo hạng**,
+  chênh lệch điểm dưới 0.01.
+- Sửa là thay đổi mô hình đã mô tả trong toàn bộ tài liệu và báo cáo, đổi lại lợi ích thực tế nhỏ.
+
+**Đã cân nhắc và loại hai phương án:**
+
+| Phương án | Vì sao không chọn |
+|---|---|
+| Bỏ C5, dồn w₅ vào C2 (còn 4 tiêu chí) | Xoá được cả ba hệ quả, nhưng phải sửa mô hình + form admin + validate + toàn bộ tài liệu, trong khi lợi ích đo được gần như bằng 0 ở dữ liệu hiện tại |
+| Định nghĩa lại C5 thành đại lượng khác thật (VD tốc độ lấp đầy khu trong 1 giờ qua) | Hay hơn về mô hình và giữ được con số 5 tiêu chí, nhưng phải viết truy vấn mới, định nghĩa lại ý nghĩa và kiểm thử lại từ đầu |
+
+**Nếu sau này quyết định sửa**, phương án bỏ C5 là đường ngắn nhất và xoá luôn được vách đứng ở (b).
 
 ---
 
@@ -430,9 +482,9 @@ cd frontend && npx tsc --noEmit         # không lỗi kiểu
 
 | Giới hạn | Ảnh hưởng thực tế |
 |---|---|
-| C2 và C5 đo cùng một đại lượng (mục 4) | Trọng số phân bổ chưa sạch về mặt mô hình, không sai kết quả |
+| C2 và C5 đo cùng một đại lượng (mục 4.1) | Đã cân nhắc kỹ, **quyết định giữ nguyên**. Không ảnh hưởng thứ hạng khi ứng viên cùng một khu. Rủi ro còn lại: "vách đứng" ở C5 khi có khu trống 100% — xem mục 4.1(b) |
 | Với **khách hoàn toàn mới**, C1 = 0 cho mọi ứng viên, mà C2–C5 đều ở mức khu → vẫn hoà điểm toàn phần | Chấp nhận được: không có dữ liệu thì không có căn cứ phân biệt. Câu giải thích nói rõ "N chỗ cùng mức điểm cao nhất" thay vì vờ có lý do |
-| Phân loại khu vẫn dựa trên **dò từ khoá trong tên khu** (kế thừa từ `businessRules.ts`) | Đặt tên khu sai quy ước thì C3 đoán sai. Hướng sửa gốc: thêm cột phân loại vào bảng `ParkingZone` |
+| Phân loại khu vẫn dựa trên **dò từ khoá trong tên khu** (kế thừa từ `businessRules.ts`) | Đặt tên khu sai quy ước thì C3 đoán sai. Ví dụ thật: tên "Khu D" không khớp từ khoá nào nên rơi vào nhóm `any` — nhận mọi loại xe, có thể ngoài ý định thiết kế bãi. Hướng sửa gốc: thêm cột phân loại vào bảng `ParkingZone` |
 | C4 chỉ dùng lịch sử **của riêng xe đó** | Xe ít lịch sử thì C4 gần như vô nghĩa. Có thể mở rộng sang thống kê toàn bãi theo giờ |
 | ~~Chưa đo được hiệu quả~~ | **ĐÃ LÀM 22/09/2026** — chỉ số acceptance rate trên trang Phân tích, xem mục 8 |
 

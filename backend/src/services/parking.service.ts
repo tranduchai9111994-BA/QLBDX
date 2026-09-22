@@ -841,8 +841,8 @@ export class ParkingService {
     // Decay) nên lượt đỗ gần đây ảnh hưởng mạnh hơn lượt cũ.
     //
     // Chấm ở HAI mức rồi cộng lại: điểm của khu + điểm của đúng chỗ đó. Bốn tiêu chí còn lại
-    // đều là thuộc tính của khu, trong khi bộ lọc loại xe gần như luôn chỉ chừa lại một khu —
-    // nếu C1 cũng chỉ ở mức khu thì mọi ứng viên bằng điểm nhau và thuật toán vô nghĩa
+    // đều là thuộc tính của khu, nên trong cùng một khu chúng bằng nhau ở mọi chỗ — nếu C1 cũng
+    // chỉ ở mức khu thì các chỗ cùng khu bằng điểm nhau và thuật toán không phân biệt được
     // (xem phần giải thích ở calcSpotPreference).
     const zonePreferences = calcZonePreference(recentRecords, alpha);
     const spotPreferences = calcSpotPreference(recentRecords, alpha);

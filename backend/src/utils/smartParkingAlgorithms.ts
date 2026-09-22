@@ -109,9 +109,11 @@ export function calcZonePreference(
 /**
  * Cùng công thức Exponential Decay nhưng chấm điểm cho TỪNG CHỖ ĐỖ cụ thể thay vì cả khu.
  *
- * VÌ SAO CẦN HÀM NÀY — bốn tiêu chí C2–C5 đều là thuộc tính của KHU, nên mọi chỗ trong cùng một
- * khu có giá trị y hệt nhau. Mà bộ lọc tương thích loại xe (isSpotCompatibleWithVehicleType)
- * gần như luôn chỉ chừa lại đúng một khu (xe máy → Khu A, ô tô → Khu B, xe khách → Khu C).
+ * VÌ SAO CẦN HÀM NÀY — bốn tiêu chí C2–C5 đều là thuộc tính của KHU, nên mọi chỗ NẰM TRONG
+ * CÙNG MỘT KHU có giá trị y hệt nhau. Mà bộ lọc tương thích loại xe
+ * (isSpotCompatibleWithVehicleType) thường thu hẹp ứng viên về một hoặc hai khu, và phần lớn
+ * ứng viên dồn vào khu chuyên dụng của loại xe đó.
+ *
  * Hệ quả đo được trên dữ liệu thật: cả 45 chỗ trống của Khu A cùng ra 1.00 điểm, SAW không phân
  * biệt được chỗ nào với chỗ nào và rơi về đúng hành vi cũ (lấy chỗ đầu danh sách).
  *

@@ -186,13 +186,23 @@ export function calcZonePreference(
 
 ### 3.6. Chấm điểm ở mức từng chỗ đỗ — bắt buộc phải có
 
-Chỉ chấm điểm ở mức **khu** là chưa đủ. Bốn tiêu chí còn lại (C2–C5) đều là thuộc tính của khu, mà
-bộ lọc tương thích loại xe gần như luôn chỉ chừa lại **một khu duy nhất** (xe máy → Khu A, ô tô →
-Khu B, xe khách → Khu C). Khi đó mọi ứng viên có 5 giá trị tiêu chí giống hệt nhau, phép chuẩn hoá
-của SAW cho ra `r = 1` ở mọi ô, và **mọi chỗ đều đạt đúng 1.00 điểm** — thuật toán thoái hoá về
-đúng hành vi của code cũ.
+Chỉ chấm điểm ở mức **khu** là chưa đủ. Bốn tiêu chí còn lại (C2–C5) đều là thuộc tính của khu,
+nên **mọi chỗ nằm trong cùng một khu có 5 giá trị tiêu chí giống hệt nhau**. Phép chuẩn hoá của
+SAW khi đó cho ra `r = 1` ở mọi ô, và các chỗ cùng khu đều đạt đúng 1.00 điểm — thuật toán thoái
+hoá về đúng hành vi của code cũ (lấy chỗ đầu danh sách).
 
-Đo trên dữ liệu thật: cả 45 chỗ trống của Khu A cùng ra 1.00 điểm.
+Bộ lọc tương thích loại xe càng làm vấn đề rõ hơn, vì nó thu hẹp ứng viên về rất ít khu:
+
+| Khu | Nhóm suy ra từ tên khu | Nhận loại xe |
+|---|---|---|
+| Khu A | `two-wheel` | xe máy, xe máy điện |
+| Khu B | `car` | ô tô con, ô tô điện, xe bán tải |
+| Khu C | `large-car` | xe tải, xe khách |
+| Khu D | `any` | **mọi loại xe** — tên "Khu D" không khớp từ khoá nào |
+
+Về nguyên tắc ứng viên trải trên hai khu (khu chuyên dụng + Khu D), nhưng phần lớn dồn vào khu
+chuyên dụng. Đo trên dữ liệu thật lúc phát hiện lỗi — Khu D đang đầy 100% — thì cả 45 chỗ trống
+của Khu A cùng ra 1.00 điểm.
 
 Vì vậy điểm "đúng chỗ" — dữ kiện duy nhất ở mức từng chỗ mà dữ liệu hiện có cung cấp được — là thứ
 phá được thế hoà đó. Nghiệp vụ cũng đúng: khách quen thường quay lại đúng chỗ cũ.
@@ -252,6 +262,13 @@ Mỗi chỗ đỗ trống được chấm điểm trên **nhiều tiêu chí**, 
 | C3 | **Độ tương thích loại xe** | typeMatch | = 1 nếu zone chuyên cho loại xe này, 0.5 nếu zone tổng hợp | Benefit | w₃ = 0.20 |
 | C4 | **Phù hợp khung giờ quen** | peakHourFit | = tỷ lệ lượt đỗ của zone rơi vào khung giờ hiện tại (±1h, tính **vòng tròn** — 23h và 0h là hai khung liền kề) trong 30 lượt gần nhất | Benefit | w₄ = 0.10 |
 | C5 | **Mức độ đông đúc hiện tại** | currentOccupancy | = số xe đang đỗ / tổng chỗ trong zone | Cost (thấp = tốt) | w₅ = 0.10 |
+
+> **Lưu ý về C2 và C5**: trong code `occupancy = 1 − availability`, nên hai tiêu chí này đo **cùng
+> một đại lượng** nhìn từ hai chiều — vi phạm giả định "các tiêu chí độc lập" của SAW. Đã cân nhắc
+> và **quyết định giữ nguyên**: khi mọi ứng viên cùng một khu (tình huống thường gặp nhất) thì C2
+> và C5 bằng nhau ở mọi ứng viên nên không ảnh hưởng thứ hạng; kịch bản hai khu đã đo thử, không
+> có đảo hạng. Phân tích đầy đủ ba hệ quả và hai phương án đã loại:
+> `THUAT_TOAN_SAW_VAN_DE_VA_CACH_XU_LY.md` mục 4.1.
 
 > **Ghi chú**: Trọng số w₁–w₅ lưu vào `ExpertRules` (domain = `parking_recommendation`)
 > để admin chỉnh được, đúng tinh thần "cấu hình được, không hardcode" (xem mục 7).
