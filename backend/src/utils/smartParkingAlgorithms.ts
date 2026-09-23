@@ -249,32 +249,41 @@ export function calcHourlyPattern(
  *   Bước 2: Score_i = Σ (w_j × r_ij)
  *   Bước 3: xếp hạng giảm dần theo Score
  *
- * ── HIỂU BẰNG VÍ DỤ ĐỜI THƯỜNG ──────────────────────────────────────────────
- * Y hệt cách người ta chọn phòng trọ. Có 3 phòng, quan tâm 2 điều là tiền và
- * khoảng cách:
+ * ── VÍ DỤ CHẠY TAY, 3 chỗ trống, trọng số mặc định ──────────────────────────
+ * Giá trị thô nhận được (chưa chấm điểm gì):
  *
- *     Phòng A: 3 triệu, 8 km     Phòng B: 5 triệu, 2 km     Phòng C: 4 triệu, 5 km
+ *           C1     C2    C3    C4    C5
+ *          zPref  trống  loại  giờ   đông
+ *   A-05   0.52   0.30   1.0   0.8   0.70
+ *   B-12   0.38   0.60   0.5   0.9   0.40
+ *   C-03   0.10   0.80   1.0   0.6   0.20
  *
- * Không thể cộng thẳng "3 triệu + 8 km" vì hai thứ khác đơn vị. Nên làm 3 bước:
+ * Không thể cộng thẳng 5 con số này: chúng khác đơn vị (điểm decay, tỷ lệ %,
+ * điểm 0.5/1.0). Nên phải qua 3 bước:
  *
- *   1. QUY VỀ THANG CHUNG — lấy cái tốt nhất từng mặt làm chuẩn 10 điểm.
- *      Tiền: A rẻ nhất → 10đ; C = 3/4 → 7,5đ; B = 3/5 → 6đ.
- *      (tiền càng THẤP càng tốt nên lấy nhỏ nhất chia cho từng số)
- *      Khoảng cách: B gần nhất → 10đ; C = 2/5 → 4đ; A = 2/8 → 2,5đ.
+ *   1. CHUẨN HOÁ — lấy chỗ tốt nhất từng cột làm chuẩn 1 điểm.
+ *      C1 (cao là tốt): lớn nhất 0.52 → A-05 = 1.00, B-12 = 0.38/0.52 = 0.73, C-03 = 0.19
+ *      C5 (thấp là tốt): nhỏ nhất 0.20 → C-03 = 1.00, B-12 = 0.20/0.40 = 0.50, A-05 = 0.29
+ *      ...tương tự cho C2, C3, C4.
  *
- *   2. NÓI RÕ CÁI NÀO QUAN TRỌNG HƠN — VD tiền 70%, khoảng cách 30%.
+ *   2. NHÂN TRỌNG SỐ — w = [0.35, 0.25, 0.20, 0.10, 0.10], tức "khách hay đỗ
+ *      đúng chỗ đó" quan trọng gấp hơn 3 lần "khu đang vắng".
  *
- *   3. NHÂN RỒI CỘNG:
- *      A = 10×70% + 2,5×30% = 7,75   ← chọn A
- *      B =  6×70% + 10 ×30% = 7,20
- *      C = 7,5×70% + 4 ×30% = 6,45
+ *   3. CỘNG LẠI rồi xếp hạng:
+ *      A-05 = 0.35×1.00 + 0.25×0.38 + 0.20×1.00 + 0.10×0.89 + 0.10×0.29 = 0.762  ← gợi ý
+ *      B-12 = 0.35×0.73 + 0.25×0.75 + 0.20×0.50 + 0.10×1.00 + 0.10×0.50 = 0.693
+ *      C-03 = 0.35×0.19 + 0.25×1.00 + 0.20×1.00 + 0.10×0.67 + 0.10×1.00 = 0.683
  *
- * Hàm này làm đúng 3 bước đó, chỉ khác: 5 mặt thay vì 2, vài chục chỗ đỗ thay
- * vì 3 phòng, và dùng thang 1 thay vì thang 10.
+ * A-05 thắng vì mạnh nhất ở tiêu chí nặng ký nhất (thói quen khách), dù thua ở
+ * "còn trống" — đó chính là ý nghĩa của trọng số: cho phép mặt mạnh bù mặt yếu
+ * theo đúng tỷ lệ mình đặt ra.
+ *
+ * Bộ số này có một ca kiểm thử canh riêng trong smartParkingAlgorithms.test.ts:
+ * sửa công thức làm lệch kết quả là `npm run test:saw` đỏ ngay.
  * ────────────────────────────────────────────────────────────────────────────
  *
- * @param candidates Danh sách ứng viên đã tính sẵn giá trị thô 5 tiêu chí ("các phòng trọ").
- * @param weights    Mảng 5 trọng số ("70% - 30%"), tổng nên bằng 1.0 để điểm nằm trong [0,1].
+ * @param candidates Danh sách chỗ đỗ ứng viên, đã tính sẵn giá trị thô 5 tiêu chí.
+ * @param weights    Mảng 5 trọng số, tổng nên bằng 1.0 để điểm nằm trong [0,1].
  * @returns Mảng MỚI đã sắp xếp giảm dần theo điểm (không sửa mảng đầu vào).
  */
 export function scoreSAW(
@@ -287,7 +296,7 @@ export function scoreSAW(
   const w = weights.length === SAW_CRITERIA_COUNT ? weights : DEFAULT_SAW_WEIGHTS;
 
   // Gom dữ liệu thành BẢNG SỐ: mỗi dòng một chỗ đỗ, mỗi cột một tiêu chí.
-  // Phải gom thành bảng vì bước chuẩn hoá cần so sánh THEO CỘT ("phòng nào rẻ nhất") —
+  // Phải gom thành bảng vì bước chuẩn hoá cần so sánh THEO CỘT ("chỗ nào ở khu trống nhất") —
   // dữ liệu nằm rải rác trong từng object thì không so được.
   //
   //          C1     C2    C3    C4    C5
@@ -308,8 +317,8 @@ export function scoreSAW(
   // Vòng ngoài chạy TỪNG CỘT (từng tiêu chí) — xử lý xong cột "tiền" mới sang cột "khoảng cách".
   for (let j = 0; j < SAW_CRITERIA_COUNT; j++) {
     const column = criteria.map((row) => row[j]); // rút cả cột j ra thành một dãy
-    const maxVal = Math.max(...column); // "phòng nào tốt nhất ở mặt này"
-    const minVal = Math.min(...column); // "phòng nào thấp nhất ở mặt này"
+    const maxVal = Math.max(...column); // chỗ tốt nhất ở tiêu chí này
+    const minVal = Math.min(...column); // chỗ có giá trị thấp nhất ở tiêu chí này
 
     // Vòng trong chạy TỪNG CHỖ ĐỖ trong cột đó.
     for (let i = 0; i < candidates.length; i++) {
@@ -325,7 +334,7 @@ export function scoreSAW(
         normalized[i][j] = maxVal > 0 ? criteria[i][j] / maxVal : 0;
       } else {
         // Càng thấp càng tốt → lấy giá trị nhỏ nhất chia cho từng giá trị.
-        // Đúng như tính tiền phòng trọ: phòng 3 triệu được 1 điểm, phòng 5 triệu được 3/5 = 0.6.
+        // VD cột C5: khu vắng nhất có độ đông 0.20 → được 1 điểm; khu độ đông 0.40 được 0.20/0.40 = 0.5.
         //
         // Nhánh `: 1` cho trường hợp giá trị bằng 0 — khu trống trơn, tức hoàn hảo ở tiêu chí
         // "độ vắng", nên cho thẳng điểm tối đa thay vì chia cho 0.
@@ -338,7 +347,7 @@ export function scoreSAW(
   // `.reduce` nghĩa là "gom cả dãy thành MỘT con số" — ở đây là phép cộng dồn.
   // Trải ra cho chỗ A-05 sẽ là:
   //     0 + 0.35×1.00 + 0.25×0.38 + 0.20×1.00 + 0.10×0.89 + 0.10×0.29 = 0.762
-  // Giống hệt "10×70% + 2,5×30% = 7,75" ở ví dụ phòng trọ.
+  // Khớp với ví dụ chạy tay ở đầu hàm.
   const results: ScoredSpot[] = candidates.map((candidate, i) => ({
     ...candidate,
     normalizedScores: normalized[i],
