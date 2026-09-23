@@ -858,10 +858,15 @@ export class ParkingService {
     const zoneStats = calcZoneStats(allSpots);
     const hourlyPattern = calcHourlyPattern(recentRecords, now.getHours());
 
+    // Loại bỏ chỗ mà xe không đỗ vừa (xe tải vào chỗ xe máy). Lọc TRƯỚC khi chấm điểm, vì chấm
+    // điểm cho chỗ không đỗ được vừa tốn công vừa có nguy cơ nó thắng và gợi ý sai.
     const compatibleSpots = availableSpots.filter((s) =>
       isSpotCompatibleWithVehicleType(s, fullVehicle.vehicleType.name)
     );
 
+    // Lập "phiếu chấm điểm" cho từng chỗ trống: đổ 5 con số thô vào, chưa tính điểm gì cả.
+    // Toàn bộ việc chuẩn hoá và cộng trọng số nằm trong scoreSAW() — tách như vậy để thuật toán
+    // là hàm thuần tuý (không chạm DB), nhờ đó kiểm thử được độc lập bằng npm run test:saw.
     const candidates: SpotCandidate[] = compatibleSpots.map((spot) => {
       const zoneName = spot.zone?.name || '';
       const stats = zoneStats.get(zoneName);
@@ -869,16 +874,23 @@ export class ParkingService {
         spotId: spot.id,
         spotNumber: spot.spotNumber,
         zoneName,
+        // C1 — cộng HAI mức: điểm của cả khu + điểm của riêng chỗ này.
+        // Thiếu vế sau thì mọi chỗ trong cùng một khu bằng điểm nhau (xem calcSpotPreference).
         zonePreference: (zonePreferences.get(zoneName) || 0) + (spotPreferences.get(spot.id) || 0),
+        // C2 — tỷ lệ chỗ trống của khu. `?? 0` phòng khi khu không có trong bảng thống kê.
         zoneAvailability: stats?.availability ?? 0,
+        // C3 — khu chuyên đúng loại xe được 1.0, khu tổng hợp được 0.5.
         typeMatchScore: calcTypeMatch(spot, fullVehicle.vehicleType.name),
-        // Khu chưa từng xuất hiện trong lịch sử của xe này thì không có căn cứ để nói hợp hay
+        // C4 — khu chưa từng xuất hiện trong lịch sử của xe này thì không có căn cứ để nói hợp hay
         // không hợp khung giờ — cho điểm trung tính 0.5 thay vì 0 để không phạt oan khu mới.
         peakHourFit: hourlyPattern.get(zoneName) ?? 0.5,
+        // C5 — mức độ đông của khu. Đây là tiêu chí DUY NHẤT càng thấp càng tốt (cost).
         currentOccupancy: stats?.occupancy ?? 0,
       };
     });
 
+    // Chấm điểm + xếp hạng. Trả về mảng đã sắp giảm dần nên phần tử [0] là chỗ tốt nhất.
+    // `?? null` cho trường hợp bãi hết sạch chỗ phù hợp — mảng rỗng, không có gì để gợi ý.
     const sawResults = scoreSAW(candidates, weights);
     const bestSpot = sawResults[0] ?? null;
 

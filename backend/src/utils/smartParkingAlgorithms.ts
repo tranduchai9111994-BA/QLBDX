@@ -93,13 +93,29 @@ export function calcZonePreference(
   recentRecords: Array<{ parkingSpot?: { zone?: { name: string } | null } | null }>,
   alpha: number = DEFAULT_DECAY_ALPHA,
 ): Map<string, number> {
+  // Map là "quyển sổ hai cột": cột trái tên khu, cột phải điểm tích luỹ.
   const scores = new Map<string, number>();
+  // Alpha nằm ngoài khoảng (0,1) thì công thức vô nghĩa (trọng số âm hoặc không giảm) → dùng mặc định.
   const a = alpha > 0 && alpha < 1 ? alpha : DEFAULT_DECAY_ALPHA;
 
   recentRecords.forEach((record, index) => {
     const zoneName = record.parkingSpot?.zone?.name;
-    if (!zoneName) return;
+    if (!zoneName) return; // bản ghi thiếu khu (dữ liệu cũ/hỏng) thì bỏ qua, không làm hỏng tổng
+
+    // `index` là THỨ TỰ TỪ MỚI TỚI CŨ: 0 là lượt gần nhất, 1 là lượt trước đó...
+    // Mảng đã được sắp entryTime giảm dần từ trước khi truyền vào — nếu ai đó đổi thứ tự sắp xếp
+    // ở tầng truy vấn thì công thức này lập tức chấm ngược, ưu tiên lượt đỗ CŨ NHẤT.
+    //
+    // Math.pow(1-a, index) là phép luỹ thừa: (1-a) nhân với chính nó `index` lần.
+    // Với a = 0.3 thì trọng số giảm dần theo cấp số nhân khi đi ngược về quá khứ:
+    //     lượt gần nhất  0.3 × 0.7⁰ = 0.300
+    //     lượt trước đó  0.3 × 0.7¹ = 0.210
+    //     lượt trước nữa 0.3 × 0.7² = 0.147 ...
+    // Nhờ vậy khách đổi thói quen sang khu mới thì sau vài lượt khu mới đã vượt lên, không phải
+    // đợi nó chiếm đa số trong cả 30 lượt như cách đếm tần suất cũ.
     const weight = a * Math.pow(1 - a, index);
+
+    // Cộng dồn vào khu tương ứng. `|| 0` để lần đầu gặp khu đó thì bắt đầu từ 0 thay vì undefined.
     scores.set(zoneName, (scores.get(zoneName) || 0) + weight);
   });
 
@@ -233,8 +249,32 @@ export function calcHourlyPattern(
  *   Bước 2: Score_i = Σ (w_j × r_ij)
  *   Bước 3: xếp hạng giảm dần theo Score
  *
- * @param candidates Danh sách ứng viên đã tính sẵn giá trị thô 5 tiêu chí.
- * @param weights    Mảng 5 trọng số, tổng nên bằng 1.0 để điểm nằm trong [0,1].
+ * ── HIỂU BẰNG VÍ DỤ ĐỜI THƯỜNG ──────────────────────────────────────────────
+ * Y hệt cách người ta chọn phòng trọ. Có 3 phòng, quan tâm 2 điều là tiền và
+ * khoảng cách:
+ *
+ *     Phòng A: 3 triệu, 8 km     Phòng B: 5 triệu, 2 km     Phòng C: 4 triệu, 5 km
+ *
+ * Không thể cộng thẳng "3 triệu + 8 km" vì hai thứ khác đơn vị. Nên làm 3 bước:
+ *
+ *   1. QUY VỀ THANG CHUNG — lấy cái tốt nhất từng mặt làm chuẩn 10 điểm.
+ *      Tiền: A rẻ nhất → 10đ; C = 3/4 → 7,5đ; B = 3/5 → 6đ.
+ *      (tiền càng THẤP càng tốt nên lấy nhỏ nhất chia cho từng số)
+ *      Khoảng cách: B gần nhất → 10đ; C = 2/5 → 4đ; A = 2/8 → 2,5đ.
+ *
+ *   2. NÓI RÕ CÁI NÀO QUAN TRỌNG HƠN — VD tiền 70%, khoảng cách 30%.
+ *
+ *   3. NHÂN RỒI CỘNG:
+ *      A = 10×70% + 2,5×30% = 7,75   ← chọn A
+ *      B =  6×70% + 10 ×30% = 7,20
+ *      C = 7,5×70% + 4 ×30% = 6,45
+ *
+ * Hàm này làm đúng 3 bước đó, chỉ khác: 5 mặt thay vì 2, vài chục chỗ đỗ thay
+ * vì 3 phòng, và dùng thang 1 thay vì thang 10.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * @param candidates Danh sách ứng viên đã tính sẵn giá trị thô 5 tiêu chí ("các phòng trọ").
+ * @param weights    Mảng 5 trọng số ("70% - 30%"), tổng nên bằng 1.0 để điểm nằm trong [0,1].
  * @returns Mảng MỚI đã sắp xếp giảm dần theo điểm (không sửa mảng đầu vào).
  */
 export function scoreSAW(
@@ -243,8 +283,16 @@ export function scoreSAW(
 ): ScoredSpot[] {
   if (candidates.length === 0) return [];
 
+  // Người gọi đưa thiếu/thừa trọng số thì dùng bộ mặc định, thay vì để công thức chạy lệch cột.
   const w = weights.length === SAW_CRITERIA_COUNT ? weights : DEFAULT_SAW_WEIGHTS;
 
+  // Gom dữ liệu thành BẢNG SỐ: mỗi dòng một chỗ đỗ, mỗi cột một tiêu chí.
+  // Phải gom thành bảng vì bước chuẩn hoá cần so sánh THEO CỘT ("phòng nào rẻ nhất") —
+  // dữ liệu nằm rải rác trong từng object thì không so được.
+  //
+  //          C1     C2    C3    C4    C5
+  //   A-05  0.52   0.30   1.0   0.8   0.70
+  //   B-12  0.38   0.60   0.5   0.9   0.40
   const criteria: number[][] = candidates.map((c) => [
     c.zonePreference, // C1 — benefit
     c.zoneAvailability, // C2 — benefit
@@ -253,27 +301,44 @@ export function scoreSAW(
     c.currentOccupancy, // C5 — cost
   ]);
 
-  // Bước 1: chuẩn hoá theo từng cột tiêu chí
+  // ── BƯỚC 1: chuẩn hoá — "quy về thang chung, lấy cái tốt nhất làm chuẩn" ──
+  // Tạo sẵn bảng kết quả cùng kích thước, điền 0, rồi ghi đè từng ô bên dưới.
   const normalized: number[][] = candidates.map(() => new Array(SAW_CRITERIA_COUNT).fill(0));
 
+  // Vòng ngoài chạy TỪNG CỘT (từng tiêu chí) — xử lý xong cột "tiền" mới sang cột "khoảng cách".
   for (let j = 0; j < SAW_CRITERIA_COUNT; j++) {
-    const column = criteria.map((row) => row[j]);
-    const maxVal = Math.max(...column);
-    const minVal = Math.min(...column);
+    const column = criteria.map((row) => row[j]); // rút cả cột j ra thành một dãy
+    const maxVal = Math.max(...column); // "phòng nào tốt nhất ở mặt này"
+    const minVal = Math.min(...column); // "phòng nào thấp nhất ở mặt này"
 
+    // Vòng trong chạy TỪNG CHỖ ĐỖ trong cột đó.
     for (let i = 0; i < candidates.length; i++) {
+      // IS_BENEFIT trả lời: cột này càng CAO càng tốt, hay càng THẤP càng tốt?
+      // Bốn tiêu chí đầu càng cao càng tốt; riêng C5 (khu đang đông) thì ngược lại.
       if (IS_BENEFIT[j]) {
-        // Cả cột bằng 0 (VD xe mới chưa có lịch sử → C1 = 0) thì mọi ứng viên cùng 0 điểm
-        // ở tiêu chí này, quyết định nhường cho 4 tiêu chí còn lại.
+        // Càng cao càng tốt → chia cho giá trị lớn nhất. Chỗ tốt nhất được 1, chỗ bằng nửa được 0.5.
+        //
+        // Dấu `? :` đọc là "nếu ... thì ... không thì ...". Ở đây hỏi maxVal > 0 để tránh
+        // phép chia 0/0 (ra NaN, hỏng toàn bộ điểm) khi CẢ CỘT đều bằng 0 — xảy ra thật với
+        // xe mới chưa có lịch sử nên C1 = 0 ở mọi ứng viên. Lúc đó mọi chỗ cùng 0 điểm ở tiêu
+        // chí này, quyết định nhường cho 4 tiêu chí còn lại.
         normalized[i][j] = maxVal > 0 ? criteria[i][j] / maxVal : 0;
       } else {
-        // Cost: 0 là hoàn hảo (khu trống trơn) → quy ước r = 1.
+        // Càng thấp càng tốt → lấy giá trị nhỏ nhất chia cho từng giá trị.
+        // Đúng như tính tiền phòng trọ: phòng 3 triệu được 1 điểm, phòng 5 triệu được 3/5 = 0.6.
+        //
+        // Nhánh `: 1` cho trường hợp giá trị bằng 0 — khu trống trơn, tức hoàn hảo ở tiêu chí
+        // "độ vắng", nên cho thẳng điểm tối đa thay vì chia cho 0.
         normalized[i][j] = criteria[i][j] > 0 ? minVal / criteria[i][j] : 1;
       }
     }
   }
 
-  // Bước 2 + 3: tính điểm rồi xếp hạng
+  // ── BƯỚC 2: nhân trọng số rồi cộng lại ──────────────────────────────────
+  // `.reduce` nghĩa là "gom cả dãy thành MỘT con số" — ở đây là phép cộng dồn.
+  // Trải ra cho chỗ A-05 sẽ là:
+  //     0 + 0.35×1.00 + 0.25×0.38 + 0.20×1.00 + 0.10×0.89 + 0.10×0.29 = 0.762
+  // Giống hệt "10×70% + 2,5×30% = 7,75" ở ví dụ phòng trọ.
   const results: ScoredSpot[] = candidates.map((candidate, i) => ({
     ...candidate,
     normalizedScores: normalized[i],
@@ -282,10 +347,18 @@ export function scoreSAW(
     explanation: '',
   }));
 
+  // ── BƯỚC 3: xếp hạng ────────────────────────────────────────────────────
+  // `b - a` là GIẢM DẦN (điểm cao đứng trước). Viết nhầm thành `a - b` là hệ thống gợi ý chỗ
+  // TỆ NHẤT mà không báo lỗi gì — không có test nào bắt được, nên đừng đụng vào dòng này.
+  // Sau dòng này, results[0] chính là chỗ được gợi ý.
   results.sort((a, b) => b.totalScore - a.totalScore);
 
   // Đếm số chỗ cùng hoà điểm cao nhất, để câu giải thích nói thật khi thuật toán không phân
   // biệt được (VD xe mới hoàn toàn: mọi chỗ trong khu đều như nhau).
+  //
+  // Không so bằng `===` mà so "chênh nhau dưới 0.000000001", vì máy tính lưu số thập phân
+  // không chính xác tuyệt đối: hai phép tính cho cùng kết quả trên giấy có thể ra 0.7 và
+  // 0.7000000000000001 trong bộ nhớ, `===` sẽ bảo chúng khác nhau.
   const topScore = results[0].totalScore;
   const tiedAtTop = results.filter((r) => Math.abs(r.totalScore - topScore) < 1e-9).length;
 
@@ -319,6 +392,11 @@ function buildExplanation(spot: ScoredSpot, weights: number[], tiedAtTop: number
     return `Điểm ${score} — ${tiedAtTop} chỗ trống cùng mức điểm cao nhất, chọn chỗ đầu danh sách`;
   }
 
+  // Tìm 2 tiêu chí đóng góp NHIỀU ĐIỂM NHẤT vào tổng. Đọc chuỗi 4 bước từ trên xuống:
+  //   .map    — với mỗi tiêu chí, tính xem nó góp bao nhiêu điểm (điểm chuẩn hoá × trọng số)
+  //   .filter — bỏ những tiêu chí góp 0 điểm, nêu ra cũng vô nghĩa
+  //   .sort   — xếp tiêu chí góp nhiều nhất lên đầu
+  //   .slice  — lấy 2 cái đầu; nêu cả 5 thì câu giải thích dài, nhân viên không đọc
   const topFactors = spot.normalizedScores
     .map((s, idx) => ({ name: CRITERIA_LABELS[idx], contribution: s * weights[idx] }))
     .filter((f) => f.contribution > 0)
